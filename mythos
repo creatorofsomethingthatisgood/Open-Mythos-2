@@ -1,22 +1,23 @@
-#!/usr/bin/env python3
+#!/home/anonymous0304/Mythos/amd-vulkan-llm-project1/venv/bin/python3
 """
-Mythos CLI wrapper — works from any directory.
-Just type `mythos` and the interface launches.
+Mythos CLI — type `mythos` in any terminal to launch the interface.
+
+Works just like `claude` — no arguments needed, drops you straight into chat.
 """
 import os
 import sys
 from pathlib import Path
 
-# Find the project root (where this script lives)
+# The project root is wherever this script lives
 _SCRIPT_DIR = Path(__file__).resolve().parent
 
-# Set MYTHOS_ROOT so the chat launcher can find config.yaml, prompts/, etc.
-os.environ["MYTHOS_ROOT"] = str(_SCRIPT_DIR)
+# Set MYTHOS_ROOT so the chat launcher finds config.yaml, prompts/, etc.
+os.environ.setdefault("MYTHOS_ROOT", str(_SCRIPT_DIR))
 
-# Make sure the project root is on sys.path so mythos_cli/, engine/, ui/ resolve
-_ROOT_STR = str(_SCRIPT_DIR)
-if _ROOT_STR not in sys.path:
-    sys.path.insert(0, _ROOT_STR)
+# Make sure the project root is on sys.path for engine/ and ui/ imports
+_root_str = str(_SCRIPT_DIR)
+if _root_str not in sys.path:
+    sys.path.insert(0, _root_str)
 
 from mythos_cli.main import cli_main
 

@@ -12,11 +12,12 @@ import yaml
 from .platform_utils import get_backend_name, get_default_gpu_layers, get_setup_script
 
 try:
-    from llama_cpp import Llama
-    LLAMA_CPP_AVAILABLE = True
+ from llama_cpp import Llama
+ LLAMA_CPP_AVAILABLE = True
 except ImportError:
-    LLAMA_CPP_AVAILABLE = False
-    logging.warning(f"llama-cpp-python not available. Run {get_setup_script()} first.")
+ LLAMA_CPP_AVAILABLE = False
+ Llama = None  # type: ignore[assignment,misc]
+ logging.warning(f"llama-cpp-python not available. Run {get_setup_script()} first.")
 
 from .model_manager import ModelManager
 
@@ -71,7 +72,7 @@ class InferenceEngine:
             logger.error(f"Failed to load config: {e}")
             return {}
     
-    def _load_model(self) -> Llama:
+    def _load_model(self) -> "Llama":
         """
         Load the GGUF model with optimal settings for AMD hardware
         
