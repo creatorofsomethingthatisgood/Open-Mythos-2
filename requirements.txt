@@ -1,0 +1,32 @@
+# Core LLM inference
+llama-cpp-python>=0.2.0
+
+# Model management
+huggingface_hub>=0.20.0
+
+# Configuration
+pyyaml>=6.0
+
+# Terminal UI
+rich>=13.0
+
+# Web UI
+gradio>=4.0
+
+# RAG (Retrieval-Augmented Generation)
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+
+# Document processing
+PyPDF2>=3.0.0
+
+# Utilities
+numpy>=1.24.0
+tqdm>=4.65.0
+
+# Optional: Fine-tuning (CPU-compatible)
+# torch>=2.0.0
+# transformers>=4.36.0
+# peft>=0.7.0
+# datasets>=2.16.0
+# accelerate>=0.25.0

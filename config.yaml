@@ -1,0 +1,88 @@
+# Mythos Local - Configuration File
+# Edit these settings to customize your LLM experience
+
+model:
+  # Primary model configuration
+  name: "qwen2.5-7b-instruct"
+  path: "models/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+  repo_id: "bartowski/Qwen2.5-7B-Instruct-GGUF"
+  filename: "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+  
+  # Fallback models (tried in order if primary is unavailable)
+  fallbacks:
+    - name: "mistral-7b-instruct-v0.3"
+      path: "models/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
+      repo_id: "bartowski/Mistral-7B-Instruct-v0.3-GGUF"
+      filename: "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
+    - name: "llama-3.1-8b-instruct"
+      path: "models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+      repo_id: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
+      filename: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+  
+  # Context and performance settings
+  context_length: 8192
+  n_gpu_layers: 0      # -1 for all layers on GPU, 0 for CPU only, or specific number
+  n_threads: 0         # 0 = auto-detect (uses half of available cores)
+  n_batch: 512         # Batch size for prompt processing
+  use_mmap: true       # Memory-map model file (faster loading on Linux)
+  use_mlock: false     # Lock model in RAM (prevents swapping, use if you have enough RAM)
+  rope_freq_base: 0.0  # 0.0 = auto, adjust for extended context
+
+generation:
+  # Generation parameters
+  temperature: 0.7     # 0.0 = deterministic, 2.0 = very creative
+  top_p: 0.9          # Nucleus sampling threshold
+  top_k: 40           # Top-k sampling
+  repeat_penalty: 1.1 # Penalize repetition (1.0 = no penalty)
+  max_tokens: 2048    # Maximum tokens to generate
+  stream: true        # Stream tokens as they're generated
+  stop_sequences:     # Stop generation at these sequences
+    - "<|im_end|>"
+    - "<|endoftext|>"
+    - "</s>"
+
+system:
+  # System prompt configuration
+  # Available prompts:
+  #   - prompts/default.txt (general purpose, enhanced for coding)
+  #   - prompts/coding.txt (ELITE 5-pass verification coding mode)
+  #   - prompts/code_review.txt (systematic code review)
+  #   - prompts/debugging.txt (methodical bug hunting)
+  #   - prompts/creative.txt (storytelling and creative writing)
+  #   - prompts/analytical.txt (deep analysis and reasoning)
+  #   - prompts/roleplay.txt (character roleplay)
+  # Switch with: /system coding (in terminal) or dropdown (in web UI)
+  prompt_file: "prompts/default.txt"
+  self_reflect: false      # Enable self-reflection quality pass (slower but higher quality)
+  thinking_mode: false     # Show internal reasoning process
+  
+rag:
+  # Retrieval-Augmented Generation settings
+  enabled: false
+  docs_dir: "rag_docs"
+  chunk_size: 500          # Tokens per chunk
+  chunk_overlap: 50        # Overlap between chunks
+  top_k: 3                 # Number of chunks to retrieve
+  embedding_model: "all-MiniLM-L6-v2"  # Sentence transformer model
+  persist_dir: "chroma_db" # ChromaDB persistence directory
+
+memory:
+  # Conversation memory settings
+  save_conversations: true
+  conversations_dir: "conversations"
+  max_history_turns: 50    # Maximum turns to keep in memory
+  auto_summarize: true     # Summarize old context when full
+  
+ui:
+  # User interface settings
+  mode: "terminal"         # "terminal" or "web"
+  web_port: 7860
+  web_share: false         # Create public Gradio link
+  terminal_theme: "monokai" # Terminal color theme
+  show_timing: true        # Display generation speed
+
+logging:
+  # Logging configuration
+  level: "INFO"            # DEBUG, INFO, WARNING, ERROR
+  file: "mythos.log"
+  console: true

@@ -1,0 +1,93 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+*.cover
+.hypothesis/
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+ENV/
+
+# --- Local LLM artifacts (download via setup scripts) ---
+models/*.gguf
+models/*.bin
+models/*.safetensors
+models/.cache/
+!models/.gitkeep
+
+# Hugging Face / sentence-transformers cache (see config.yaml hf_cache_dir)
+.cache/
+
+# RAG vector store (rebuilt with rag-index)
+chroma_db/
+
+# --- Runtime data ---
+mythos.log
+*.log
+
+# Saved chats (keep directory placeholder)
+conversations/*.json
+!conversations/.gitkeep
+
+# Benchmark outputs
+benchmarks/*
+!benchmarks/.gitkeep
+
+# LoRA training outputs
+lora/*
+!lora/.gitkeep
+
+# User-provided RAG documents (optional)
+rag_docs/*
+!rag_docs/.gitkeep
+
+# --- Secrets & keys (never commit) ---
+.env
+.env.*
+!.env.example
+*.pem
+**/flow_keys/
+**/private_key*.pem
+
+# Local Mythos CLI test config
+.mythos-test/
+
+# --- OS & editors ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+*.sublime-*
+
+# Common build/install artifacts (when indexing external repos via RAG)
+**/node_modules/
+**/.next/
+**/dist/
+**/build/
+**/coverage/
+**/.vercel/
+**/.pytest_cache/
+**/.venv/
+**/.ruff_cache/

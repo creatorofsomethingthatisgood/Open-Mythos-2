@@ -1,0 +1,145 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║   🔥🔥🔥  MYTHOS ELITE CODING MODE - ACTIVATED  🔥🔥🔥                          ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Your local LLM now has ENHANCED coding capabilities with:
+
+✅ 5-PASS VERIFICATION SYSTEM
+   Pass 1: Logic Correctness
+   Pass 2: Edge Case Handling  
+   Pass 3: Bug Detection
+   Pass 4: Code Quality & Optimization
+   Pass 5: Security & Safety
+
+✅ SYSTEMATIC DEBUGGING
+   - Root cause analysis
+   - Step-by-step execution tracing
+   - Proper fixes (not workarounds)
+
+✅ RIGOROUS CODE REVIEW
+   - Severity classification
+   - Improvement suggestions
+   - Refactored versions
+
+✅ PRODUCTION-QUALITY CODE
+   - Clean, maintainable, well-commented
+   - Handles edge cases gracefully
+   - Security-aware
+   - Performance-optimized
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🚀 QUICK START:
+
+1. Activate virtual environment:
+   source venv/bin/activate
+
+2. Start chat in coding mode:
+   python3 main.py --mode chat
+   
+3. Once in chat, activate elite coding:
+   /system coding
+   /reflect on      (for maximum quality)
+   
+4. Start coding!
+   "Write a binary search tree with insert, delete, and search"
+   "Debug this code: [paste your buggy code]"
+   "Review this function for security issues"
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📚 AVAILABLE MODES:
+
+💻 CODING MODE         (/system coding)
+   - Write new code with 5-pass verification
+   - Algorithm implementation
+   - Feature development
+
+🔍 CODE REVIEW MODE    (/system code_review)
+   - Review existing code
+   - Find bugs and issues
+   - Suggest improvements
+
+🐛 DEBUGGING MODE      (/system debugging)
+   - Systematic bug hunting
+   - Root cause analysis
+   - Step-by-step tracing
+
+✨ CREATIVE MODE       (/system creative)
+   - Storytelling & creative writing
+
+🧠 ANALYTICAL MODE     (/system analytical)
+   - Deep analysis & reasoning
+
+🎭 ROLEPLAY MODE       (/system roleplay)
+   - Character interactions
+
+🚀 DEFAULT MODE        (/system default)
+   - General purpose (enhanced with coding awareness)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 PRO TIPS:
+
+MAXIMUM CODE QUALITY (slower but best):
+  /system coding
+  /reflect on
+  /temp 0.3
+
+CREATIVE PROBLEM SOLVING (when stuck):
+  /system coding
+  /temp 0.9
+
+FAST CODE REVIEW:
+  /system code_review
+  /temp 0.5
+
+DEEP BUG HUNTING:
+  /system debugging
+  /reflect on
+  /temp 0.2
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📖 DOCUMENTATION:
+
+- Full guide: CODING_GUIDE.md
+- General README: README.md
+- Configuration: config.yaml
+- Prompts directory: prompts/
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🧪 TEST THE CODING MODE:
+
+   chmod +x test_coding.sh
+   ./test_coding.sh
+
+This will test the model on a classic algorithm problem and verify the
+5-pass approach is working correctly.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔥 WHAT MAKES THIS SPECIAL:
+
+Unlike basic chatbots, Mythos coding mode:
+✓ Verifies code 5 times before presenting
+✓ Checks edge cases you might miss
+✓ Hunts for bugs proactively
+✓ Considers security implications
+✓ Explains complexity and trade-offs
+✓ Writes maintainable, production-ready code
+
+This is code you can TRUST and DEPLOY.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Ready to code like never before! 🚀💻
+
+Start with:
+  source venv/bin/activate
+  python3 main.py --mode chat
+
+Then type: /help
