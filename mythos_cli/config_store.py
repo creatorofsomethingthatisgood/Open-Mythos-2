@@ -119,25 +119,69 @@ def init_config(quiet: bool = False) -> Dict[str, Any]:
 
 
 def _patch_llm_config_for_user(llm_path: Path) -> None:
-    """Point default model path to ~/.mythos/models and RAG persist to user home."""
+    """Point models, cache, and data dirs to ~/.config/mythos (shared across clones)."""
     with open(llm_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
 
+    home = mythos_home()
     model = cfg.setdefault("model", {})
     name = model.get("filename", "Qwen2.5-7B-Instruct-Q4_K_M.gguf")
     model["path"] = str(models_hint_dir() / name)
 
     rag = cfg.setdefault("rag", {})
     rag["persist_dir"] = str(chroma_root())
-    rag["hf_cache_dir"] = str(mythos_home() / "cache" / "huggingface")
-    rag["docs_dir"] = str(mythos_home() / "scan_target")
-    rag["enabled"] = True
+    rag["hf_cache_dir"] = str(home / "cache" / "huggingface")
+    rag["docs_dir"] = str(home / "rag_docs")
+    rag["enabled"] = rag.get("enabled", False)
+
+    mem = cfg.setdefault("memory", {})
+    mem["conversations_dir"] = str(home / "conversations")
 
     sys_cfg = cfg.setdefault("system", {})
-    sys_cfg["prompt_file"] = str(PROMPTS_DIR / "security_audit.txt")
+    default_prompt = PROMPTS_DIR / "default.txt"
+    if default_prompt.exists():
+        sys_cfg["prompt_file"] = str(default_prompt)
+
+    log_cfg = cfg.setdefault("logging", {})
+    log_cfg["file"] = str(home / "mythos.log")
 
     with open(llm_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
+
+
+def migrate_repo_models_to_user_home() -> None:
+    """Link or reuse GGUF files from a repo checkout into ~/.config/mythos/models."""
+    dest_dir = models_hint_dir()
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    repo_models = PACKAGE_ROOT / "models"
+    if not repo_models.is_dir():
+        return
+    for src in repo_models.glob("*.gguf"):
+        target = dest_dir / src.name
+        if target.exists():
+            continue
+        try:
+            target.symlink_to(src.resolve())
+        except OSError:
+            pass
+
+
+def resolve_chat_config(explicit: Optional[str] = None) -> Path:
+    """Config file for chat/web: user home first, then repo config.yaml."""
+    if explicit and explicit != "config.yaml":
+        return Path(explicit).expanduser().resolve()
+
+    ensure_initialized()
+    migrate_repo_models_to_user_home()
+    user_llm = llm_config_path()
+    if user_llm.exists():
+        return user_llm
+
+    repo_cfg = PACKAGE_ROOT / "config.yaml"
+    if repo_cfg.exists():
+        return repo_cfg.resolve()
+
+    return user_llm
 
 
 def list_scan_paths(config: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:

@@ -69,46 +69,50 @@ fi
 echo "Activating virtual environment..."
 source venv/bin/activate
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/install-common.sh
+source "$SCRIPT_DIR/scripts/install-common.sh"
+
 # Upgrade pip
 echo "Upgrading pip..."
 pip install --upgrade pip setuptools wheel
 
-# Try installing llama-cpp-python with Vulkan
-echo ""
-echo "==================================================================="
-echo "  Building llama-cpp-python (this may take several minutes)..."
-echo "==================================================================="
-echo ""
-
 VULKAN_SUCCESS=0
 
-echo "Attempting Vulkan build for AMD GPU acceleration..."
-if CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python --no-cache-dir 2>&1 | tee /tmp/vulkan_build.log; then
-    if grep -q "error" /tmp/vulkan_build.log; then
-        echo -e "${RED}✗ Vulkan build completed with errors${NC}"
-    else
-        echo -e "${GREEN}✓ Vulkan backend installed successfully${NC}"
-        VULKAN_SUCCESS=1
-    fi
+if llama_cpp_import_ok; then
+    echo -e "${GREEN}✓ llama-cpp-python already installed (skipping rebuild)${NC}"
+    VULKAN_SUCCESS=1
 else
-    echo -e "${RED}✗ Vulkan build failed${NC}"
-fi
-
-# Fallback to OpenBLAS if Vulkan failed
-if [ $VULKAN_SUCCESS -eq 0 ]; then
     echo ""
-    echo "Falling back to OpenBLAS (CPU-only) backend..."
-    pip uninstall -y llama-cpp-python 2>/dev/null || true
-    CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python --no-cache-dir
-    echo -e "${GREEN}✓ OpenBLAS (CPU) backend installed successfully${NC}"
-    echo -e "${YELLOW}Note: Running on CPU only. Performance will be slower.${NC}"
+    echo "==================================================================="
+    echo "  Building llama-cpp-python (first run only — may take several minutes)..."
+    echo "==================================================================="
+    echo ""
+
+    echo "Attempting Vulkan build for AMD GPU acceleration..."
+    if CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python --no-cache-dir 2>&1 | tee /tmp/vulkan_build.log; then
+        if grep -q "error" /tmp/vulkan_build.log; then
+            echo -e "${RED}✗ Vulkan build completed with errors${NC}"
+        else
+            echo -e "${GREEN}✓ Vulkan backend installed successfully${NC}"
+            VULKAN_SUCCESS=1
+        fi
+    else
+        echo -e "${RED}✗ Vulkan build failed${NC}"
+    fi
+
+    if [ $VULKAN_SUCCESS -eq 0 ]; then
+        echo ""
+        echo "Falling back to OpenBLAS (CPU-only) backend..."
+        pip uninstall -y llama-cpp-python 2>/dev/null || true
+        CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python --no-cache-dir
+        echo -e "${GREEN}✓ OpenBLAS (CPU) backend installed successfully${NC}"
+        echo -e "${YELLOW}Note: Running on CPU only. Performance will be slower.${NC}"
+    fi
 fi
 
-# Install remaining Python dependencies
-echo ""
-echo "Installing Python dependencies..."
-pip install -r requirements.txt
-echo -e "${GREEN}✓ Python dependencies installed${NC}"
+install_mythos_python_deps
+run_mythos_init
 
 # Create directory structure
 echo ""
@@ -216,11 +220,11 @@ echo ""
 echo "  1. Activate the virtual environment:"
 echo "     source venv/bin/activate"
 echo ""
-echo "  2. Run the terminal chat interface:"
-echo "     python3 main.py --mode chat"
+echo "  2. Run chat (no need to activate venv):"
+echo "     ./mythos"
 echo ""
 echo "  3. Or run the web interface:"
-echo "     python3 main.py --mode web"
+echo "     ./mythos web"
 echo ""
 echo "  4. Run benchmarks:"
 echo "     python3 main.py --mode benchmark"
@@ -238,5 +242,7 @@ else
 fi
 
 echo ""
+chmod +x "$SCRIPT_DIR/mythos" 2>/dev/null || true
+print_mythos_usage
 echo "Happy chatting with Mythos!"
 echo ""

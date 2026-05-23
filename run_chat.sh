@@ -28,22 +28,18 @@ if [ ! -d "venv" ]; then
 fi
 
 echo "✓ Found project files"
-echo "✓ Activating virtual environment..."
-source venv/bin/activate
+if [ ! -x "./mythos" ] && [ ! -x "venv/bin/mythos" ]; then
+    echo "❌ mythos CLI not installed. Run ./setup-macos.sh or ./setup.sh first"
+    exit 1
+fi
 
-echo ""
-echo "Verifying configuration..."
-python3 show_download_url.py
+chmod +x ./mythos 2>/dev/null || true
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
-echo "Starting chat in 3 seconds..."
-echo "  (The model will auto-download on first run - ~4.7GB)"
-echo "  (This takes 5-10 minutes depending on your internet speed)"
+echo "Starting chat..."
+echo "  Model path: ~/.config/mythos/models/ (download once with ./mythos model download)"
 echo ""
-echo "  Press Ctrl+C now to cancel, or wait to continue..."
-echo ""
-sleep 3
 
-python3 main.py --mode chat
+exec ./mythos chat

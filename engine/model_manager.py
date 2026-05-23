@@ -25,8 +25,17 @@ class ModelManager:
         """
         self.config_path = Path(config_path)
         self.config = self._load_config()
-        self.models_dir = Path("models")
-        self.models_dir.mkdir(exist_ok=True)
+        self.models_dir = self._resolve_models_dir()
+        self.models_dir.mkdir(parents=True, exist_ok=True)
+
+    def _resolve_models_dir(self) -> Path:
+        """Directory for GGUF files (from config path, not cwd)."""
+        model_path = Path(self.config.get("model", {}).get("path", "models/model.gguf"))
+        if model_path.is_absolute():
+            return model_path.parent
+        if self.config_path.is_absolute():
+            return (self.config_path.parent / model_path).parent
+        return Path("models")
         
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from YAML file"""

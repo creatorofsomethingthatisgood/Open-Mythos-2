@@ -69,45 +69,53 @@ fi
 
 source venv/bin/activate
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/install-common.sh
+source "$SCRIPT_DIR/scripts/install-common.sh"
+
 echo "Upgrading pip..."
 pip install --upgrade pip setuptools wheel
 
-# Build llama-cpp-python with Metal (Apple GPU acceleration)
-echo ""
-echo "==================================================================="
-echo "  Building llama-cpp-python with Metal GPU support..."
-echo "  (This may take several minutes on first run)"
-echo "==================================================================="
-echo ""
-
 METAL_SUCCESS=0
 
-if [[ "$ARCH" == "arm64" ]]; then
-    echo "Attempting Metal build for Apple Silicon GPU acceleration..."
-    if CMAKE_ARGS="-DGGML_METAL=on -DGGML_METAL_EMBED_LIBRARY=ON" \
-        pip install llama-cpp-python --no-cache-dir 2>&1 | tee /tmp/metal_build.log; then
-        if grep -qi "error" /tmp/metal_build.log; then
-            echo -e "${YELLOW}Metal build completed with warnings — trying prebuilt wheel...${NC}"
-            pip uninstall -y llama-cpp-python 2>/dev/null || true
-            pip install llama-cpp-python --no-cache-dir && METAL_SUCCESS=1
-        else
-            echo -e "${GREEN}✓ Metal backend installed successfully${NC}"
-            METAL_SUCCESS=1
-        fi
-    else
-        echo -e "${YELLOW}Metal build failed — trying prebuilt wheel...${NC}"
-        pip install llama-cpp-python --no-cache-dir && METAL_SUCCESS=1
+if llama_cpp_import_ok; then
+    echo -e "${GREEN}✓ llama-cpp-python already installed (skipping rebuild)${NC}"
+    if [[ "$ARCH" == "arm64" ]]; then
+        METAL_SUCCESS=1
     fi
 else
-    echo "Intel Mac detected — installing CPU-optimized build..."
-    pip install llama-cpp-python --no-cache-dir
-    METAL_SUCCESS=0
+    echo ""
+    echo "==================================================================="
+    echo "  Building llama-cpp-python with Metal GPU support..."
+    echo "  (First run only — may take several minutes)"
+    echo "==================================================================="
+    echo ""
+
+    if [[ "$ARCH" == "arm64" ]]; then
+        echo "Attempting Metal build for Apple Silicon GPU acceleration..."
+        if CMAKE_ARGS="-DGGML_METAL=on -DGGML_METAL_EMBED_LIBRARY=ON" \
+            pip install llama-cpp-python --no-cache-dir 2>&1 | tee /tmp/metal_build.log; then
+            if grep -qi "error" /tmp/metal_build.log; then
+                echo -e "${YELLOW}Metal build completed with warnings — trying prebuilt wheel...${NC}"
+                pip uninstall -y llama-cpp-python 2>/dev/null || true
+                pip install llama-cpp-python --no-cache-dir && METAL_SUCCESS=1
+            else
+                echo -e "${GREEN}✓ Metal backend installed successfully${NC}"
+                METAL_SUCCESS=1
+            fi
+        else
+            echo -e "${YELLOW}Metal build failed — trying prebuilt wheel...${NC}"
+            pip install llama-cpp-python --no-cache-dir && METAL_SUCCESS=1
+        fi
+    else
+        echo "Intel Mac detected — installing CPU-optimized build..."
+        pip install llama-cpp-python --no-cache-dir
+        METAL_SUCCESS=0
+    fi
 fi
 
-echo ""
-echo "Installing Python dependencies..."
-pip install -r requirements.txt
-echo -e "${GREEN}✓ Python dependencies installed${NC}"
+install_mythos_python_deps
+run_mythos_init
 
 echo ""
 echo "Creating project directories..."
@@ -121,7 +129,8 @@ echo "==================================================================="
 echo "  Model Download"
 echo "==================================================================="
 echo ""
-if [ -f "models/Qwen2.5-7B-Instruct-Q4_K_M.gguf" ]; then
+USER_MODEL="$HOME/.config/mythos/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+if [ -f "$USER_MODEL" ] || [ -f "models/Qwen2.5-7B-Instruct-Q4_K_M.gguf" ]; then
     echo -e "${GREEN}✓ Default model already present${NC}"
 else
     echo "The default model (Qwen2.5-7B-Instruct-Q4_K_M) is approximately 4.5GB."
@@ -138,11 +147,11 @@ try:
     print('\n✓ Model downloaded successfully')
 except Exception as e:
     print(f'\n✗ Model download failed: {e}')
-    print('Download later with: python3 main.py --mode download')
+    print('Download later with: ./mythos model download')
 "
     else
         echo -e "${YELLOW}Skipping model download.${NC}"
-        echo "Download later with: python3 main.py --mode download"
+        echo "Download later with: ./mythos model download"
     fi
 fi
 
@@ -153,7 +162,7 @@ echo "  Testing Installation"
 echo "==================================================================="
 echo ""
 
-if ls models/*.gguf 1>/dev/null 2>&1; then
+if ls "$HOME/.config/mythos/models/"*.gguf models/*.gguf 2>/dev/null | head -1 | grep -q .; then
     python3 -c "
 import sys
 sys.path.insert(0, '.')
@@ -177,12 +186,8 @@ echo "==================================================================="
 echo "  Setup Complete!"
 echo "==================================================================="
 echo ""
-echo "To get started:"
-echo ""
-echo "  source venv/bin/activate"
-echo "  python3 main.py --mode chat      # Terminal chat"
-echo "  python3 main.py --mode web       # Web UI at http://localhost:7860"
-echo ""
+chmod +x "$SCRIPT_DIR/mythos" 2>/dev/null || true
+print_mythos_usage
 if [[ "$ARCH" == "arm64" && $METAL_SUCCESS -eq 1 ]]; then
     echo -e "${GREEN}Apple GPU acceleration (Metal) is enabled!${NC}"
 else

@@ -39,6 +39,9 @@ models/.cache/
 # RAG vector store (rebuilt with rag-index)
 chroma_db/
 
+# Portable copy of models/cache (see scripts/mythos-export-data.sh)
+offline-bundle/
+
 # --- Runtime data ---
 mythos.log
 *.log
