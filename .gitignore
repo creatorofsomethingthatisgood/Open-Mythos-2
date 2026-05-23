@@ -91,3 +91,4 @@ Thumbs.db
 **/.pytest_cache/
 **/.venv/
 **/.ruff_cache/
+.vercel
