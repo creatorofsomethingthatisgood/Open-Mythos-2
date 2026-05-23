@@ -2,6 +2,8 @@
 Web UI - Gradio-based web interface
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Any, List, Optional
 from pathlib import Path
