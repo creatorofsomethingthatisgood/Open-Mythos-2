@@ -3,7 +3,7 @@ Web UI - Gradio-based web interface
 """
 
 import logging
-from typing import List, Tuple, Optional
+from typing import Any, List, Optional
 from pathlib import Path
 
 try:
@@ -19,8 +19,45 @@ from engine.memory import ConversationMemory
 from engine.rag import RAGPipeline
 from engine.self_reflect import SelfReflector
 from engine.context_budget import fit_chat_context
+from engine.local_refs import build_local_file_context
 
 logger = logging.getLogger(__name__)
+
+ChatHistory = List[dict[str, Any]]
+
+
+def _message_content(msg: Any) -> str:
+    if isinstance(msg, dict):
+        content = msg.get("content", "")
+        return content if isinstance(content, str) else str(content)
+    return str(msg)
+
+
+def _sync_memory_from_chat_history(memory: ConversationMemory, history: Any) -> None:
+    """Rebuild conversation memory from Gradio chatbot history."""
+    memory.clear()
+    if not history:
+        return
+    for item in history:
+        if isinstance(item, dict):
+            role = item.get("role")
+            content = _message_content(item)
+            if role in ("user", "assistant", "system") and content:
+                memory.add_message(role, content)
+        elif isinstance(item, (list, tuple)) and len(item) == 2:
+            user_msg, assistant_msg = item
+            memory.add_message("user", str(user_msg))
+            if assistant_msg:
+                memory.add_message("assistant", str(assistant_msg))
+
+
+def _append_chat_messages(
+    history: Any, user_message: str, assistant_message: str
+) -> ChatHistory:
+    messages: ChatHistory = list(history or [])
+    messages.append({"role": "user", "content": user_message})
+    messages.append({"role": "assistant", "content": assistant_message})
+    return messages
 
 
 class WebUI:
@@ -66,7 +103,7 @@ class WebUI:
     def chat(
         self,
         message: str,
-        history: List[Tuple[str, str]],
+        history: ChatHistory,
         system_prompt: str,
         temperature: float,
         top_p: float,
@@ -75,7 +112,7 @@ class WebUI:
         repeat_penalty: float,
         use_reflection: bool,
         use_rag: bool
-    ) -> Tuple[List[Tuple[str, str]], str]:
+    ) -> tuple[ChatHistory, str]:
         """
         Handle chat interaction
         
@@ -101,12 +138,7 @@ class WebUI:
             # Update system prompt
             self.prompt_manager.set_prompt(system_prompt)
             
-            # Clear memory and rebuild from history
-            self.memory.clear()
-            for user_msg, assistant_msg in history:
-                self.memory.add_message("user", user_msg)
-                if assistant_msg:
-                    self.memory.add_message("assistant", assistant_msg)
+            _sync_memory_from_chat_history(self.memory, history)
             
             # Add current message
             self.memory.add_message("user", message)
@@ -115,6 +147,10 @@ class WebUI:
             rag_context = ""
             if use_rag and self.rag:
                 rag_context = self.rag.get_context(message)
+
+            local_context, local_notices = build_local_file_context(
+                message, self.engine.config
+            )
             
             # Prepare prompt
             max_turns = 10
@@ -123,8 +159,11 @@ class WebUI:
             messages = self.memory.get_recent_context(max_turns=max_turns)
 
             sys_prompt = system_prompt
-            if rag_context:
-                sys_prompt = self.prompt_manager.format_with_context(rag_context)
+            extra_context = "\n\n".join(
+                part for part in (rag_context, local_context) if part
+            )
+            if extra_context:
+                sys_prompt = self.prompt_manager.format_with_context(extra_context)
 
             reserve = self.engine.config.get("context", {}).get(
                 "reserve_tokens",
@@ -160,12 +199,13 @@ class WebUI:
             # Add to memory
             self.memory.add_message("assistant", response)
             
-            # Update history
-            history.append((message, response))
-            
+            history = _append_chat_messages(history, message, response)
+
             status = f"✓ Generated {len(response.split())} words"
             if use_reflection:
                 status += " (with reflection)"
+            if local_notices:
+                status += " | " + "; ".join(local_notices[:3])
             
             return history, status
             
@@ -211,6 +251,7 @@ class WebUI:
     def save_conversation(self, history) -> str:
         """Save conversation to file"""
         try:
+            _sync_memory_from_chat_history(self.memory, history)
             filepath = self.memory.save()
             return f"✓ Saved to: {filepath}"
         except Exception as e:
@@ -219,6 +260,7 @@ class WebUI:
     def export_conversation(self, history) -> str:
         """Export conversation as text"""
         try:
+            _sync_memory_from_chat_history(self.memory, history)
             text = self.memory.export_text()
             return text
         except Exception as e:
@@ -231,7 +273,7 @@ class WebUI:
         Returns:
             Gradio Blocks interface
         """
-        with gr.Blocks(theme=gr.themes.Soft(), title="Mythos Local") as demo:
+        with gr.Blocks(title="Mythos Local") as demo:
             gr.Markdown("""
             # 🌟 Mythos Local
             ### High-Quality Local Language Model
@@ -243,7 +285,7 @@ class WebUI:
                     chatbot = gr.Chatbot(
                         label="Conversation",
                         height=500,
-                        show_copy_button=True
+                        buttons=["copy"],
                     )
                     
                     with gr.Row():
@@ -419,7 +461,12 @@ class WebUI:
             port: Port to run on
         """
         demo = self.create_interface()
-        demo.launch(share=share, server_port=port, server_name="0.0.0.0")
+        demo.launch(
+            share=share,
+            server_port=port,
+            server_name="0.0.0.0",
+            theme=gr.themes.Soft(),
+        )
 
 
 def run_web_ui(config_path: str = "config.yaml", share: bool = False, port: int = 7860):

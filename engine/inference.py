@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Optional, Iterator, Dict, Any, List
 import yaml
 
+from .platform_utils import get_backend_name, get_default_gpu_layers, get_setup_script
+
 try:
     from llama_cpp import Llama
     LLAMA_CPP_AVAILABLE = True
@@ -17,7 +19,6 @@ except ImportError:
     logging.warning(f"llama-cpp-python not available. Run {get_setup_script()} first.")
 
 from .model_manager import ModelManager
-from .platform_utils import get_backend_name, get_default_gpu_layers, get_setup_script
 
 logger = logging.getLogger(__name__)
 

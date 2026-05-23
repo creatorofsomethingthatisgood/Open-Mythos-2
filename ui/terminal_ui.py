@@ -27,6 +27,7 @@ from engine.rag import RAGPipeline
 from engine.self_reflect import SelfReflector
 from engine.benchmark import BenchmarkSuite
 from engine.context_budget import fit_chat_context
+from engine.local_refs import build_local_file_context
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ class TerminalUI:
             raise
         
         self.running = True
+        self._pending_local_context = ""
         
     def show_header(self):
         """Display welcome header"""
@@ -129,6 +131,7 @@ class TerminalUI:
 [yellow]/temp <float>[/yellow]     - Change temperature (0.0-2.0)
 [yellow]/reflect on|off[/yellow]   - Toggle self-reflection
 [yellow]/rag on|off[/yellow]       - Toggle RAG (if available)
+[yellow]/file <path>[/yellow]      - Load a local file or folder into context
 [yellow]/benchmark[/yellow]        - Run benchmark suite
 [yellow]/config[/yellow]           - Show current configuration
 [yellow]/export[/yellow]           - Export conversation as text
@@ -145,6 +148,12 @@ class TerminalUI:
 [yellow]/system analytical[/yellow] - Deep analysis & reasoning
 [yellow]/system roleplay[/yellow]   - Character roleplay mode
 [yellow]/system security_audit[/yellow] - Codebase security review mode
+
+[bold cyan]Local files in chat:[/bold cyan]
+- Paste a path: [dim]/Users/you/project/app.py[/dim]
+- Or a file URL: [dim]file:///Users/you/project/app.py[/dim]
+- Or use [yellow]/file ~/my-repo[/yellow] then ask about vulnerabilities
+- Best with [yellow]/system security_audit[/yellow] and [yellow]/temp 0.3[/yellow]
 
 [bold cyan]Tips:[/bold cyan]
 - Use Ctrl+C to interrupt generation
@@ -257,6 +266,29 @@ class TerminalUI:
             else:
                 self.console.print("[red]Use /reflect on or /reflect off[/red]")
         
+        elif cmd == "/file":
+            if not args:
+                self.console.print(
+                    "[red]Usage: /file <path>[/red]  "
+                    "(file, folder, or file:// URL)"
+                )
+                return True
+            fake_msg = f"Analyze {args.strip()}"
+            ctx, notices = build_local_file_context(
+                fake_msg, self.engine.config
+            )
+            for note in notices:
+                style = "green" if note.startswith("Loaded") or "Scanned" in note else "yellow"
+                self.console.print(f"[{style}]{note}[/{style}]")
+            if ctx:
+                self._pending_local_context = ctx
+                self.console.print(
+                    "[green]Local file context ready — ask your security question next.[/green]"
+                )
+            else:
+                self.console.print("[yellow]No file context loaded.[/yellow]")
+            return True
+
         elif cmd == "/rag":
             if not self.rag:
                 self.console.print("[red]RAG not available[/red]")
@@ -338,6 +370,18 @@ class TerminalUI:
         rag_context = ""
         if self.rag_enabled and self.rag:
             rag_context = self.rag.get_context(user_input)
+
+        local_context, local_notices = build_local_file_context(
+            user_input, self.engine.config
+        )
+        if self._pending_local_context:
+            local_context = "\n\n".join(
+                part for part in (self._pending_local_context, local_context) if part
+            )
+            self._pending_local_context = ""
+        for note in local_notices:
+            style = "green" if note.startswith("Loaded") or "Scanned" in note else "dim"
+            self.console.print(f"[{style}]{note}[/{style}]")
         
         # Prepare messages (fewer turns when RAG is on — large system block)
         max_turns = 10
@@ -347,8 +391,11 @@ class TerminalUI:
 
         # Get system prompt
         system_prompt = self.prompt_manager.get_prompt()
-        if rag_context:
-            system_prompt = self.prompt_manager.format_with_context(rag_context)
+        extra_context = "\n\n".join(
+            part for part in (rag_context, local_context) if part
+        )
+        if extra_context:
+            system_prompt = self.prompt_manager.format_with_context(extra_context)
 
         reserve = self.engine.config.get("context", {}).get(
             "reserve_tokens",

@@ -95,6 +95,15 @@ rag:
   embedding_local_only: true           # Prefer cache; auto-download to .cache/huggingface if missing
   persist_dir: "chroma_db" # ChromaDB persistence directory
 
+chat:
+  # Inline local paths in chat (file:// or /Users/.../app.py)
+  local_files:
+    enabled: true
+    static_scan: true        # Run mythos static rules on referenced files/folders
+    max_files: 10            # Max single files loaded per message
+    max_file_bytes: 2097152  # Skip files larger than 2 MiB
+    max_context_chars: 30000 # Cap injected source text
+
 context:
   reserve_tokens: 2048     # Tokens reserved for the assistant reply (trim prompt to fit)
 
