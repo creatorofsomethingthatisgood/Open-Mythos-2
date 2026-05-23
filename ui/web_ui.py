@@ -18,6 +18,7 @@ from engine.prompt_manager import PromptManager
 from engine.memory import ConversationMemory
 from engine.rag import RAGPipeline
 from engine.self_reflect import SelfReflector
+from engine.context_budget import fit_chat_context
 
 logger = logging.getLogger(__name__)
 
@@ -116,12 +117,23 @@ class WebUI:
                 rag_context = self.rag.get_context(message)
             
             # Prepare prompt
-            messages = self.memory.get_recent_context(max_turns=10)
-            
+            max_turns = 10
+            if use_rag and self.rag:
+                max_turns = self.rag.max_history_turns
+            messages = self.memory.get_recent_context(max_turns=max_turns)
+
             sys_prompt = system_prompt
             if rag_context:
                 sys_prompt = self.prompt_manager.format_with_context(rag_context)
-            
+
+            reserve = self.engine.config.get("context", {}).get(
+                "reserve_tokens",
+                self.engine.config.get("generation", {}).get("max_tokens", 2048),
+            )
+            messages, sys_prompt, _ = fit_chat_context(
+                self.engine, messages, sys_prompt, reserve_tokens=reserve
+            )
+
             prompt = self.engine.format_chat_prompt(messages, sys_prompt)
             
             # Generate response

@@ -1,5 +1,6 @@
 """
-Inference Engine - Wrapper for llama-cpp-python with AMD GPU support
+Inference Engine - Wrapper for llama-cpp-python with GPU acceleration
+(Metal on macOS, Vulkan on Linux AMD, CPU fallback)
 """
 
 import logging
@@ -13,9 +14,10 @@ try:
     LLAMA_CPP_AVAILABLE = True
 except ImportError:
     LLAMA_CPP_AVAILABLE = False
-    logging.warning("llama-cpp-python not available. Run setup.sh first.")
+    logging.warning(f"llama-cpp-python not available. Run {get_setup_script()} first.")
 
 from .model_manager import ModelManager
+from .platform_utils import get_backend_name, get_default_gpu_layers, get_setup_script
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,9 @@ class InferenceEngine:
             model_path: Override model path (optional)
         """
         if not LLAMA_CPP_AVAILABLE:
-            raise RuntimeError("llama-cpp-python is not installed. Run setup.sh first.")
+            raise RuntimeError(
+                f"llama-cpp-python is not installed. Run {get_setup_script()} first."
+            )
         
         self.config_path = Path(config_path)
         self.config = self._load_config()
@@ -80,11 +84,12 @@ class InferenceEngine:
         if n_threads == 0:
             n_threads = max(1, os.cpu_count() // 2)  # Use half of CPU cores
         
-        # GPU layers
-        n_gpu_layers = model_config.get('n_gpu_layers', 0)
+        # GPU layers (auto-enable Metal on Apple Silicon when config is 0)
+        n_gpu_layers = get_default_gpu_layers(model_config.get('n_gpu_layers', 0))
         
-        # Context length
+        # Context length (Qwen2.5 supports 32K; larger n_ctx uses more RAM)
         n_ctx = model_config.get('context_length', 8192)
+        self._context_length = n_ctx
         
         # Batch size
         n_batch = model_config.get('n_batch', 512)
@@ -114,11 +119,11 @@ class InferenceEngine:
             
             logger.info("Model loaded successfully!")
             
-            # Log backend information
-            if n_gpu_layers > 0:
-                logger.info("GPU acceleration enabled (Vulkan)")
+            backend = get_backend_name(n_gpu_layers)
+            if n_gpu_layers != 0:
+                logger.info(f"GPU acceleration enabled ({backend})")
             else:
-                logger.info("Running on CPU (set n_gpu_layers > 0 for GPU)")
+                logger.info("Running on CPU (set n_gpu_layers to -1 for GPU)")
             
             return model
             
@@ -141,6 +146,19 @@ class InferenceEngine:
             else:
                 raise
     
+    @property
+    def context_length(self) -> int:
+        """Configured context window size (tokens)."""
+        if hasattr(self, "_context_length"):
+            return self._context_length
+        return int(self.config.get("model", {}).get("context_length", 8192))
+
+    def count_tokens(self, text: str) -> int:
+        """Return token count for a string."""
+        if not text:
+            return 0
+        return len(self.model.tokenize(text.encode("utf-8"), add_bos=False))
+
     def generate(
         self,
         prompt: str,
@@ -178,7 +196,17 @@ class InferenceEngine:
         top_k = top_k if top_k is not None else gen_config.get('top_k', 40)
         repeat_penalty = repeat_penalty if repeat_penalty is not None else gen_config.get('repeat_penalty', 1.1)
         stop = stop or gen_config.get('stop_sequences', [])
-        
+
+        prompt_tokens = self.count_tokens(prompt)
+        reserve = max_tokens
+        if prompt_tokens + reserve > self.context_length:
+            raise ValueError(
+                f"Prompt uses {prompt_tokens} tokens but context window is "
+                f"{self.context_length} (need ~{reserve} more for the reply). "
+                f"Enable context trimming, reduce RAG top_k, or raise model.context_length "
+                f"in config.yaml and restart chat."
+            )
+
         try:
             output = self.model(
                 prompt,

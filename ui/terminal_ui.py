@@ -26,6 +26,7 @@ from engine.memory import ConversationMemory
 from engine.rag import RAGPipeline
 from engine.self_reflect import SelfReflector
 from engine.benchmark import BenchmarkSuite
+from engine.context_budget import fit_chat_context
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +61,17 @@ class TerminalUI:
             try:
                 self.rag = RAGPipeline(config_path)
                 self.rag_enabled = False
-            except:
-                self.console.print("[yellow]RAG not available (optional)[/yellow]")
+                stats = self.rag.get_stats()
+                self.console.print(
+                    f"[green]RAG ready[/green] ({stats['total_chunks']} chunks indexed)"
+                )
+            except Exception as rag_err:
+                logger.exception("RAG init failed")
+                self.console.print(f"[yellow]RAG not available: {rag_err}[/yellow]")
+                self.console.print(
+                    "[dim]  Fix: python main.py --mode rag-index --path <dir> "
+                    "(needs network once for the embedding model)[/dim]"
+                )
             
             # Benchmark suite
             self.benchmark = BenchmarkSuite(config_path)
@@ -85,7 +95,8 @@ class TerminalUI:
             'Debugging': '🐛',
             'Creative': '✨',
             'Analytical': '🧠',
-            'Roleplay': '🎭'
+            'Roleplay': '🎭',
+            'Security Audit': '🛡️',
         }
         emoji = mode_emoji.get(mode_name, '🚀')
         
@@ -97,6 +108,9 @@ class TerminalUI:
         """
         self.console.print(header, style="bold cyan")
         self.console.print(f"Model: [green]{self.engine.model_path.name}[/green]")
+        self.console.print(
+            f"Context: [green]{self.engine.context_length:,}[/green] tokens"
+        )
         self.console.print(f"Mode: [bold magenta]{emoji} {mode_name}[/bold magenta]")
         self.console.print(f"System Prompt: [yellow]{self.prompt_manager.get_prompt()[:70]}...[/yellow]")
         self.console.print("\nType [bold]/help[/bold] for commands, [bold]/quit[/bold] to exit\n")
@@ -130,6 +144,7 @@ class TerminalUI:
 [yellow]/system creative[/yellow]   - Creative writing & storytelling
 [yellow]/system analytical[/yellow] - Deep analysis & reasoning
 [yellow]/system roleplay[/yellow]   - Character roleplay mode
+[yellow]/system security_audit[/yellow] - Codebase security review mode
 
 [bold cyan]Tips:[/bold cyan]
 - Use Ctrl+C to interrupt generation
@@ -201,8 +216,14 @@ class TerminalUI:
         
         elif cmd == "/system":
             if args:
-                self.prompt_manager.set_prompt(args)
-                self.console.print("[green]System prompt updated[/green]")
+                templates = self.prompt_manager.list_templates()
+                if args in templates:
+                    prompt = self.prompt_manager.load_prompt(args)
+                    self.prompt_manager.set_prompt(prompt)
+                    self.console.print(f"[green]Loaded template: {args}[/green]")
+                else:
+                    self.prompt_manager.set_prompt(args)
+                    self.console.print("[green]Custom system prompt set[/green]")
             else:
                 templates = self.prompt_manager.list_templates()
                 self.console.print(f"[cyan]Available templates: {', '.join(templates)}[/cyan]")
@@ -248,9 +269,18 @@ class TerminalUI:
                 # Show stats
                 stats = self.rag.get_stats()
                 self.console.print(f"  Indexed chunks: {stats['total_chunks']}")
+                self.console.print(f"  Index path: {stats.get('persist_directory', 'chroma_db')}")
                 
                 if stats['total_chunks'] == 0:
-                    self.console.print("[yellow]  No documents indexed. Add files to rag_docs/[/yellow]")
+                    self.console.print(
+                        "[yellow]  No documents indexed. Quit chat, run:[/yellow]"
+                    )
+                    self.console.print(
+                        "[yellow]    python main.py --mode rag-index --path <dir>[/yellow]"
+                    )
+                    self.console.print(
+                        "[yellow]  Then restart chat and /rag on again.[/yellow]"
+                    )
             elif args.lower() == "off":
                 self.rag_enabled = False
                 self.console.print("[yellow]RAG disabled[/yellow]")
@@ -309,14 +339,27 @@ class TerminalUI:
         if self.rag_enabled and self.rag:
             rag_context = self.rag.get_context(user_input)
         
-        # Prepare messages
-        messages = self.memory.get_recent_context(max_turns=10)
-        
+        # Prepare messages (fewer turns when RAG is on — large system block)
+        max_turns = 10
+        if self.rag_enabled and self.rag:
+            max_turns = self.rag.max_history_turns
+        messages = self.memory.get_recent_context(max_turns=max_turns)
+
         # Get system prompt
         system_prompt = self.prompt_manager.get_prompt()
         if rag_context:
             system_prompt = self.prompt_manager.format_with_context(rag_context)
-        
+
+        reserve = self.engine.config.get("context", {}).get(
+            "reserve_tokens",
+            self.engine.config.get("generation", {}).get("max_tokens", 2048),
+        )
+        messages, system_prompt, prompt_tokens = fit_chat_context(
+            self.engine, messages, system_prompt, reserve_tokens=reserve
+        )
+        if prompt_tokens > 0:
+            logger.debug("Prompt size after trim: %d tokens", prompt_tokens)
+
         # Format prompt
         prompt = self.engine.format_chat_prompt(messages, system_prompt)
         

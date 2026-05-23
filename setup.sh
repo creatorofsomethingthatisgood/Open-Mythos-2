@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# macOS: delegate to dedicated setup script
+if [[ "$(uname)" == "Darwin" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    exec "$SCRIPT_DIR/setup-macos.sh" "$@"
+fi
+
 echo "==================================================================="
 echo "  Mythos Local - High-Quality Local LLM for AMD/Fedora Linux"
 echo "==================================================================="

@@ -7,16 +7,22 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 import yaml
 
+from engine.hf_cache import (
+    configure_hf_cache,
+    load_sentence_transformer,
+    quiet_hf_loggers,
+)
+from engine.context_budget import truncate_text
+
 try:
     import chromadb
-    from chromadb.config import Settings
     CHROMADB_AVAILABLE = True
 except ImportError:
     CHROMADB_AVAILABLE = False
     logging.warning("ChromaDB not available")
 
 try:
-    from sentence_transformers import SentenceTransformer
+    import sentence_transformers  # noqa: F401
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
@@ -45,37 +51,69 @@ class RAGPipeline:
         if not CHROMADB_AVAILABLE or not SENTENCE_TRANSFORMERS_AVAILABLE:
             raise RuntimeError("ChromaDB and sentence-transformers required for RAG")
         
-        self.config_path = Path(config_path)
+        self.config_path = Path(config_path).resolve()
+        self.project_root = self.config_path.parent
         self.config = self._load_config()
         
         # RAG configuration
         rag_config = self.config.get('rag', {})
-        self.docs_dir = Path(rag_config.get('docs_dir', 'rag_docs'))
-        self.docs_dir.mkdir(exist_ok=True)
+        docs_dir = Path(rag_config.get('docs_dir', 'rag_docs'))
+        self.docs_dir = docs_dir if docs_dir.is_absolute() else self.project_root / docs_dir
         
         self.chunk_size = rag_config.get('chunk_size', 500)
         self.chunk_overlap = rag_config.get('chunk_overlap', 50)
         self.top_k = rag_config.get('top_k', 3)
+        self.max_context_chars = rag_config.get('max_context_chars', 20000)
+        self.max_history_turns = rag_config.get('max_history_turns', 6)
+        self.clear_before_index = rag_config.get('clear_before_index', True)
+        self.max_file_bytes = int(rag_config.get('max_file_bytes', 2 * 1024 * 1024))
+        self.exclude_dir_names = set(rag_config.get('exclude_dirs', [
+            '.git', 'node_modules', '__pycache__', '.pytest_cache',
+            'venv', '.venv', 'dist', 'build', '.next', 'coverage',
+            'chroma_db', 'models', '.mypy_cache', '.tox', 'htmlcov',
+        ]))
+        self.extensions = rag_config.get('extensions', [
+            '.txt', '.md', '.pdf', '.py', '.json', '.yaml', '.yml',
+            '.ts', '.tsx', '.js', '.jsx', '.sql', '.sh', '.toml',
+            '.ini', '.cfg', '.env.example', '.graphql', '.prisma',
+            '.html', '.css', '.scss', '.xml', '.csv',
+        ])
         
-        # Initialize embedding model
-        embedding_model_name = rag_config.get('embedding_model', 'all-MiniLM-L6-v2')
-        logger.info(f"Loading embedding model: {embedding_model_name}")
-        self.embedding_model = SentenceTransformer(embedding_model_name)
+        # Hugging Face: project-local cache + quiet logs (avoids ~/.cache permission errors)
+        hf_cache_dir = rag_config.get('hf_cache_dir', '.cache/huggingface')
+        self.hf_cache_path = configure_hf_cache(self.project_root, hf_cache_dir)
+        quiet_hf_loggers()
+
+        embedding_model_name = rag_config.get(
+            'embedding_model', 'sentence-transformers/all-MiniLM-L6-v2'
+        )
+        prefer_offline = rag_config.get('embedding_local_only', True)
+        self.embedding_model = load_sentence_transformer(
+            embedding_model_name,
+            self.hf_cache_path,
+            prefer_offline=prefer_offline,
+        )
         
-        # Initialize ChromaDB
-        persist_dir = rag_config.get('persist_dir', 'chroma_db')
-        self.client = chromadb.Client(Settings(
-            persist_directory=persist_dir,
-            anonymized_telemetry=False
-        ))
+        # Persistent disk store (Client() alone is in-memory in Chroma 1.x)
+        persist_dir = Path(rag_config.get('persist_dir', 'chroma_db'))
+        self.persist_dir = (
+            persist_dir if persist_dir.is_absolute() else self.project_root / persist_dir
+        )
+        self.persist_dir.mkdir(parents=True, exist_ok=True)
+        self.client = chromadb.PersistentClient(path=str(self.persist_dir))
         
         # Get or create collection
         self.collection = self.client.get_or_create_collection(
             name="documents",
-            metadata={"hnsw:space": "cosine"}
+            metadata={"hnsw:space": "cosine"},
         )
         
-        logger.info("RAG pipeline initialized")
+        logger.info(
+            "RAG pipeline initialized (persist=%s, docs=%s, chunks=%d)",
+            self.persist_dir,
+            self.docs_dir,
+            self.collection.count(),
+        )
     
     def _load_config(self) -> Dict:
         """Load configuration from YAML"""
@@ -101,7 +139,7 @@ class RAGPipeline:
         try:
             if suffix == '.pdf':
                 return self._load_pdf(filepath)
-            elif suffix in ['.txt', '.md', '.py', '.json', '.yaml', '.yml']:
+            elif suffix in self.extensions and suffix != '.pdf':
                 return self._load_text(filepath)
             else:
                 logger.warning(f"Unsupported file type: {suffix}")
@@ -149,9 +187,13 @@ class RAGPipeline:
         """
         # Simple word-based chunking
         words = text.split()
+        if not words:
+            return []
+
+        step = max(1, self.chunk_size - self.chunk_overlap)
         chunks = []
-        
-        for i in range(0, len(words), self.chunk_size - self.chunk_overlap):
+
+        for i in range(0, len(words), step):
             chunk_words = words[i:i + self.chunk_size]
             chunk_text = " ".join(chunk_words)
             
@@ -162,7 +204,8 @@ class RAGPipeline:
             }
             chunks.append(chunk_data)
         
-        logger.info(f"Created {len(chunks)} chunks from text")
+        if chunks:
+            logger.debug(f"Created {len(chunks)} chunks from text")
         return chunks
     
     def index_document(self, filepath: Path):
@@ -172,28 +215,39 @@ class RAGPipeline:
         Args:
             filepath: Path to document
         """
-        logger.info(f"Indexing document: {filepath}")
+        logger.debug(f"Indexing document: {filepath}")
         
         # Load document
         text = self.load_document(filepath)
-        if not text:
-            logger.warning(f"No text extracted from {filepath}")
+        if not text or not text.strip():
+            logger.debug(f"Skipping empty file: {filepath}")
             return
         
         # Create chunks
+        try:
+            rel_source = str(filepath.resolve().relative_to(self.docs_dir.resolve()))
+        except ValueError:
+            rel_source = str(filepath)
         metadata = {
-            'source': str(filepath),
+            'source': rel_source,
             'filename': filepath.name,
-            'type': filepath.suffix
+            'type': filepath.suffix,
         }
         chunks = self.chunk_text(text, metadata)
-        
+        if not chunks:
+            logger.debug(f"Skipping file with no indexable content: {filepath}")
+            return
+
         # Generate embeddings
         chunk_texts = [chunk['text'] for chunk in chunks]
+        if not any(t.strip() for t in chunk_texts):
+            logger.debug(f"Skipping file with only whitespace chunks: {filepath}")
+            return
+
         embeddings = self.embedding_model.encode(chunk_texts).tolist()
         
-        # Create IDs
-        doc_id = filepath.stem
+        # Stable IDs from path (avoids collisions across nested dirs)
+        doc_id = self._doc_id_for_path(filepath)
         ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
         
         # Add to collection
@@ -206,30 +260,162 @@ class RAGPipeline:
             metadatas=metadatas
         )
         
-        logger.info(f"Indexed {len(chunks)} chunks from {filepath.name}")
+        logger.debug(f"Indexed {len(chunks)} chunks from {filepath.name}")
     
-    def index_directory(self, directory: Optional[Path] = None):
+    def _doc_id_for_path(self, filepath: Path) -> str:
+        """Unique collection id from path relative to docs_dir when possible."""
+        try:
+            rel = filepath.resolve().relative_to(self.docs_dir.resolve())
+        except ValueError:
+            rel = filepath
+        return str(rel).replace('/', '_').replace('\\', '_').replace(' ', '_')
+
+    def _should_skip_path(self, filepath: Path) -> bool:
+        """Skip hidden files, excluded dirs, and oversized files."""
+        parts = set(filepath.parts)
+        if parts & self.exclude_dir_names:
+            return True
+        if filepath.name.startswith('.') and filepath.suffix not in ('.env.example',):
+            return True
+        try:
+            if filepath.stat().st_size > self.max_file_bytes:
+                logger.warning(f"Skipping large file ({filepath.stat().st_size} bytes): {filepath}")
+                return True
+        except OSError:
+            return True
+        return False
+
+    def resolve_docs_path(self, path: Optional[str] = None) -> Path:
         """
-        Index all documents in a directory
-        
+        Resolve a docs directory from config default or an override path.
+
+        Relative paths are resolved against the project root (config parent).
+        """
+        if path is None or not str(path).strip():
+            return self.docs_dir.resolve()
+        candidate = Path(path).expanduser()
+        if not candidate.is_absolute():
+            candidate = self.project_root / candidate
+        return candidate.resolve()
+
+    def iter_indexable_files(self, directory: Path):
+        """Yield all indexable files under directory recursively."""
+        if not directory.exists():
+            logger.error(f"Directory does not exist: {directory}")
+            return
+        for ext in self.extensions:
+            for filepath in directory.rglob(f"*{ext}"):
+                if filepath.is_file() and not self._should_skip_path(filepath):
+                    yield filepath
+
+    def explore_directory(self, path: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Summarize which files would be indexed under a directory (no embedding).
+
+        Args:
+            path: Directory to scan (config rag.docs_dir if omitted)
+
+        Returns:
+            Summary dict with counts, sizes, and sample paths
+        """
+        directory = self.resolve_docs_path(path)
+        if not directory.exists():
+            return {
+                "directory": str(directory),
+                "exists": False,
+                "file_count": 0,
+                "total_bytes": 0,
+                "by_extension": {},
+                "sample_files": [],
+                "supported_extensions": sorted(self.extensions),
+                "exclude_dirs": sorted(self.exclude_dir_names),
+            }
+
+        files = list(self.iter_indexable_files(directory))
+        by_extension: Dict[str, int] = {}
+        total_bytes = 0
+        for filepath in files:
+            ext = filepath.suffix.lower() or "(no extension)"
+            by_extension[ext] = by_extension.get(ext, 0) + 1
+            try:
+                total_bytes += filepath.stat().st_size
+            except OSError:
+                pass
+
+        sample_files = []
+        for filepath in files[:25]:
+            try:
+                sample_files.append(str(filepath.relative_to(directory)))
+            except ValueError:
+                sample_files.append(str(filepath))
+
+        return {
+            "directory": str(directory),
+            "exists": True,
+            "file_count": len(files),
+            "total_bytes": total_bytes,
+            "by_extension": dict(sorted(by_extension.items())),
+            "sample_files": sample_files,
+            "supported_extensions": sorted(self.extensions),
+            "exclude_dirs": sorted(self.exclude_dir_names),
+        }
+
+    def index_directory(
+        self,
+        directory: Optional[Path] = None,
+        clear: Optional[bool] = None,
+        path: Optional[str] = None,
+    ):
+        """
+        Recursively index all supported documents under a directory.
+
         Args:
             directory: Directory to index (uses docs_dir if None)
+            clear: Clear existing index first (uses config clear_before_index if None)
+            path: Optional path string override (resolved via resolve_docs_path)
         """
-        if directory is None:
+        if path is not None:
+            directory = self.resolve_docs_path(path)
+            self.docs_dir = directory
+        elif directory is None:
             directory = self.docs_dir
-        
-        logger.info(f"Indexing directory: {directory}")
-        
-        # Supported extensions
-        extensions = ['.txt', '.md', '.pdf', '.py', '.json', '.yaml', '.yml']
-        
+        directory = Path(directory)
+
+        if clear is None:
+            clear = self.clear_before_index
+        if clear:
+            self.clear_index()
+
+        logger.info(f"Indexing directory (recursive): {directory.resolve()}")
+
         indexed_count = 0
-        for ext in extensions:
-            for filepath in directory.glob(f"*{ext}"):
-                self.index_document(filepath)
+        skipped_count = 0
+        files = list(self.iter_indexable_files(directory))
+        total_files = len(files)
+        logger.info(f"Found {total_files} files to index under {directory}")
+
+        for i, filepath in enumerate(files, 1):
+            before = self.collection.count()
+            self.index_document(filepath)
+            after = self.collection.count()
+            if after > before:
                 indexed_count += 1
-        
-        logger.info(f"Indexed {indexed_count} documents")
+            else:
+                skipped_count += 1
+            if i % 50 == 0 or i == total_files:
+                logger.info(
+                    "Progress: %d/%d files, %d chunks in index",
+                    i,
+                    total_files,
+                    self.collection.count(),
+                )
+
+        logger.info(
+            "Indexed %d documents (%d empty/unsupported skipped), %d total chunks",
+            indexed_count,
+            skipped_count,
+            self.collection.count(),
+        )
     
     def retrieve(self, query: str, top_k: Optional[int] = None) -> List[Dict[str, Any]]:
         """
@@ -294,7 +480,14 @@ class RAGPipeline:
             context_parts.append(text)
             context_parts.append("")
         
-        return "\n".join(context_parts)
+        context = "\n".join(context_parts)
+        if len(context) > self.max_context_chars:
+            context = truncate_text(context, self.max_context_chars)
+            logger.info(
+                "RAG context capped at %d chars (config rag.max_context_chars)",
+                self.max_context_chars,
+            )
+        return context
     
     def clear_index(self):
         """Clear all indexed documents"""
@@ -317,6 +510,7 @@ class RAGPipeline:
         return {
             'total_chunks': count,
             'docs_directory': str(self.docs_dir),
+            'persist_directory': str(self.persist_dir),
             'chunk_size': self.chunk_size,
-            'chunk_overlap': self.chunk_overlap
+            'chunk_overlap': self.chunk_overlap,
         }

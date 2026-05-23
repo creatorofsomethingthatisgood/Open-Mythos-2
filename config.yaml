@@ -20,8 +20,9 @@ model:
       filename: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
   
   # Context and performance settings
-  context_length: 8192
-  n_gpu_layers: 0      # -1 for all layers on GPU, 0 for CPU only, or specific number
+  # Qwen2.5 supports 32K. Use 16384 if you run out of RAM; restart chat after changing.
+  context_length: 32768
+  n_gpu_layers: 0      # 0 = auto (Metal on Apple Silicon, CPU on Linux); -1 = all GPU layers
   n_threads: 0         # 0 = auto-detect (uses half of available cores)
   n_batch: 512         # Batch size for prompt processing
   use_mmap: true       # Memory-map model file (faster loading on Linux)
@@ -51,20 +52,51 @@ system:
   #   - prompts/creative.txt (storytelling and creative writing)
   #   - prompts/analytical.txt (deep analysis and reasoning)
   #   - prompts/roleplay.txt (character roleplay)
-  # Switch with: /system coding (in terminal) or dropdown (in web UI)
+  #   - prompts/security_audit.txt (codebase security review)
+  # Switch with: /system security_audit (in terminal) or dropdown (in web UI)
+  # For audits with RAG: index your repo, then /rag on, /temp 0.3
   prompt_file: "prompts/default.txt"
   self_reflect: false      # Enable self-reflection quality pass (slower but higher quality)
   thinking_mode: false     # Show internal reasoning process
   
+security:
+  # Mythos Sentinel CLI (mythos scan) — also see ~/.config/mythos/config.yaml after mythos init
+  min_severity: low
+  static_enabled: true
+  deep_temperature: 0.2
+  deep_max_tokens: 4096
+
 rag:
   # Retrieval-Augmented Generation settings
   enabled: false
-  docs_dir: "rag_docs"
-  chunk_size: 500          # Tokens per chunk
+  docs_dir: "rag_docs"     # Default folder for RAG; override with --path on CLI
+  chunk_size: 500          # Words per chunk (word-based splitter)
   chunk_overlap: 50        # Overlap between chunks
-  top_k: 3                 # Number of chunks to retrieve
-  embedding_model: "all-MiniLM-L6-v2"  # Sentence transformer model
+  top_k: 5                 # Chunks retrieved per query
+  max_context_chars: 20000 # Cap RAG text injected into the system prompt
+  max_history_turns: 6     # Max chat turns when RAG is on (terminal UI)
+  clear_before_index: true # Replace index on each rag-index run
+  max_file_bytes: 2097152  # Skip files larger than 2 MiB (e.g. lockfiles)
+  exclude_dirs:            # Never index these directory names
+    - ".git"
+    - "node_modules"
+    - "__pycache__"
+    - ".pytest_cache"
+    - "venv"
+    - ".venv"
+    - "dist"
+    - "build"
+    - ".next"
+    - "coverage"
+    - "chroma_db"
+    - "models"
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  hf_cache_dir: ".cache/huggingface"   # Local HF cache (not ~/.cache)
+  embedding_local_only: true           # Prefer cache; auto-download to .cache/huggingface if missing
   persist_dir: "chroma_db" # ChromaDB persistence directory
+
+context:
+  reserve_tokens: 2048     # Tokens reserved for the assistant reply (trim prompt to fit)
 
 memory:
   # Conversation memory settings

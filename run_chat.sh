@@ -19,7 +19,11 @@ fi
 # Activate venv
 if [ ! -d "venv" ]; then
     echo "❌ ERROR: Virtual environment not found!"
-    echo "   Please run ./setup.sh first"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        echo "   Please run ./setup-macos.sh first"
+    else
+        echo "   Please run ./setup.sh first"
+    fi
     exit 1
 fi
 
