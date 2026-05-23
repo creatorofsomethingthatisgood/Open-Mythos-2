@@ -79,5 +79,15 @@ git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
 # Enter the temple
 cd Open-Mythos-2
 
-# Summon the dependencies
-pip install -r requirements.txt
+# One-time setup (macOS or Linux)
+./setup-macos.sh   # or ./setup.sh on Linux
+
+# Then chat (no `source venv` needed)
+./mythos
+./mythos model download   # once per machine (~4.5 GB → ~/.config/mythos/)
+
+# Move your downloads to another PC (no re-download):
+./scripts/mythos-export-data.sh    # creates offline-bundle/ (~4.5 GB)
+# On the new machine after setup:
+./scripts/mythos-import-data.sh ./offline-bundle
+```

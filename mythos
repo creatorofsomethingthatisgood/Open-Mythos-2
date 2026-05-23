@@ -1,26 +1,24 @@
-#!/home/anonymous0304/Mythos/amd-vulkan-llm-project1/venv/bin/python3
-"""
-Mythos CLI — type `mythos` in any terminal to launch the interface.
+#!/usr/bin/env bash
+# Run Mythos without activating the venv (works on macOS and Linux).
+set -e
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
 
-Works just like `claude` — no arguments needed, drops you straight into chat.
-"""
-import os
-import sys
-from pathlib import Path
+if [[ -x "$ROOT/venv/bin/mythos" ]]; then
+  exec "$ROOT/venv/bin/mythos" "$@"
+fi
 
-# The project root is wherever this script lives
-_SCRIPT_DIR = Path(__file__).resolve().parent
+if command -v mythos >/dev/null 2>&1; then
+  exec mythos "$@"
+fi
 
-# Set MYTHOS_ROOT so the chat launcher finds config.yaml, prompts/, etc.
-os.environ.setdefault("MYTHOS_ROOT", str(_SCRIPT_DIR))
-
-# Make sure the project root is on sys.path for engine/ and ui/ imports
-_root_str = str(_SCRIPT_DIR)
-if _root_str not in sys.path:
-    sys.path.insert(0, _root_str)
-
-from mythos_cli.main import cli_main
-
-if __name__ == "__main__":
-    sys.argv[0] = sys.argv[0].removesuffix(".exe")
-    sys.exit(cli_main())
+echo "Mythos is not installed in this folder yet." >&2
+echo "" >&2
+if [[ "$(uname)" == "Darwin" ]]; then
+  echo "  Run:  ./setup-macos.sh" >&2
+else
+  echo "  Run:  ./setup.sh" >&2
+fi
+echo "" >&2
+echo "Then start chat with:  ./mythos" >&2
+exit 1

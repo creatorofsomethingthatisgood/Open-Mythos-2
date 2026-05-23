@@ -24,6 +24,7 @@ dependencies = [
   "huggingface_hub>=0.20.0",
   "pyyaml>=6.0",
   "rich>=13.0",
+  "gradio>=4.0",
   "chromadb>=0.4.0",
   "sentence-transformers>=2.2.0",
   "PyPDF2>=3.0.0",
@@ -32,7 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-web = ["gradio>=4.0"]
+web = ["gradio>=4.0"]  # alias; gradio is in core deps
 dev = ["pytest>=7.0"]
 
 [project.scripts]
