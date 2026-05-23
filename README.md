@@ -74,10 +74,10 @@ The name draws from **mythos** (μῦθος) — the ancient Greek word for *sto
 
 ```bash
 # Clone the sacred repository
-git clone https://github.com/yourname/openmythos-2.git
+git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
 
 # Enter the temple
-cd openmythos-2
+cd Open-Mythos-2
 
 # Summon the dependencies
 pip install -r requirements.txt
