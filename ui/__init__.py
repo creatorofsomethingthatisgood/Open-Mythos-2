@@ -2,7 +2,11 @@
 UI Package - Terminal and Web interfaces
 """
 
-from .terminal_ui import TerminalUI
-from .web_ui import WebUI
+from .terminal_ui import TerminalUI, run_terminal_ui
 
-__all__ = ['TerminalUI', 'WebUI']
+try:
+    from .web_ui import WebUI, run_web_ui
+except ImportError:
+    pass
+
+__all__ = ['TerminalUI', 'run_terminal_ui']

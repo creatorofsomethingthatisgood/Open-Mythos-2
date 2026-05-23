@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-Mythos Sentinel — installable security scanner CLI.
+Mythos — your local AI assistant and security scanner.
 
-  pip install -e .
-  mythos init
-  mythos path add ~/projects/api
-  mythos scan
+    mythos              # launch chat (like `claude`)
+    mythos chat         # same thing
+    mythos web          # web UI
+    mythos scan         # security scan
+    mythos init         # first-time setup
+    mythos path add .   # register a codebase for scanning
+    mythos status       # show config / model status
 """
 
 from __future__ import annotations
@@ -36,6 +39,29 @@ logging.basicConfig(
     format="%(levelname)s: %(message)s",
 )
 
+
+# ── chat / web ──────────────────────────────────────────────────────────
+
+def _cmd_chat(args: argparse.Namespace) -> int:
+    from mythos_cli.chat import launch_chat
+    launch_chat(
+        config_path=args.config if args.config != "config.yaml" else None,
+        verbose=args.verbose,
+    )
+    return 0
+
+
+def _cmd_web(args: argparse.Namespace) -> int:
+    from mythos_cli.chat import launch_web
+    launch_web(
+        config_path=args.config if args.config != "config.yaml" else None,
+        port=args.port,
+        share=args.share,
+    )
+    return 0
+
+
+# ── security scanner ────────────────────────────────────────────────────
 
 def _cmd_init(_args: argparse.Namespace) -> int:
     init_config(quiet=False)
@@ -127,7 +153,7 @@ def _cmd_explore(args: argparse.Namespace) -> int:
         print("Directory does not exist.")
         return 1
     print(f"Indexable files: {summary['file_count']}")
-    print(f"Total size:      {summary['total_bytes']} bytes")
+    print(f"Total size: {summary['total_bytes']} bytes")
     if summary.get("sample_files"):
         print("\nSample files:")
         for rel in summary["sample_files"][:15]:
@@ -153,43 +179,71 @@ def _cmd_status(_args: argparse.Namespace) -> int:
     llm = llm_config_path()
     paths = list_scan_paths() if cfg.exists() else []
 
-    print("Mythos Sentinel status\n")
-    print(f"  Version:     {__version__}")
-    print(f"  Config home: {home}")
-    print(f"  User config: {'yes' if cfg.exists() else 'no — run mythos init'}")
-    print(f"  LLM config:  {'yes' if llm.exists() else 'no'}")
-    print(f"  Scan paths:  {len(paths)}")
+    print("Mythos status\n")
+    print(f"  Version:      {__version__}")
+    print(f"  Config home:  {home}")
+    print(f"  User config:  {'yes' if cfg.exists() else 'no — run mythos init'}")
+    print(f"  LLM config:   {'yes' if llm.exists() else 'no'}")
+    print(f"  Scan paths:   {len(paths)}")
     for entry in paths:
-        print(f"    - {entry.get('label')}: {entry['path']}")
+        print(f"   - {entry.get('label')}: {entry['path']}")
 
     model_dir = models_hint_dir()
     gguf = list(model_dir.glob("*.gguf")) if model_dir.exists() else []
-    print(f"  Models:      {len(gguf)} in {model_dir}")
+    print(f"  Models:       {len(gguf)} in {model_dir}")
     return 0
 
+
+# ── argument parser ─────────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mythos",
-        description="Mythos Sentinel — local security scanner for your codebases",
+        description="Mythos — local AI chat + security scanner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Quick start:
-  mythos init
-  mythos path add ~/src/my-api
-  mythos scan                 # instant static analysis
-  mythos scan --deep --path ~/src/my-api   # AI audit (requires model)
+  mythos                  Launch chat (like `claude`)
+  mythos chat             Same as above
+  mythos web              Web UI on http://localhost:7860
 
-Sell / ship workflow: customers install once, register folders, run `mythos scan` in CI.
-        """,
+Security scanning:
+  mythos init             First-time setup
+  mythos path add ~/src   Register a codebase
+  mythos scan             Instant static analysis
+  mythos scan --deep      AI-powered audit (needs model)
+
+Examples:
+  mythos                  # start chatting from any directory
+  mythos chat --config ~/myconfig.yaml
+  mythos web --port 8080 --share
+  mythos scan --deep --path ~/src/my-api
+""",
     )
-    parser.add_argument("--version", action="version", version=f"mythos {__version__}")
+    parser.add_argument(
+        "--version", action="version", version=f"mythos {__version__}"
+    )
 
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
 
-    p_init = sub.add_parser("init", help="Create ~/.config/mythos and default settings")
+    # ── chat (default when no subcommand) ───────────────────────────────
+    p_chat = sub.add_parser("chat", help="Launch terminal chat interface (default)")
+    p_chat.add_argument("--config", default="config.yaml", help="Config file path")
+    p_chat.add_argument("--verbose", action="store_true", help="Debug logging")
+    p_chat.set_defaults(func=_cmd_chat)
+
+    # ── web ─────────────────────────────────────────────────────────────
+    p_web = sub.add_parser("web", help="Launch web UI (Gradio)")
+    p_web.add_argument("--config", default="config.yaml", help="Config file path")
+    p_web.add_argument("--port", type=int, default=7860, help="Port (default 7860)")
+    p_web.add_argument("--share", action="store_true", help="Public Gradio link")
+    p_web.set_defaults(func=_cmd_web)
+
+    # ── init ────────────────────────────────────────────────────────────
+    p_init = sub.add_parser("init", help="Create ~/.config/mythos and defaults")
     p_init.set_defaults(func=_cmd_init)
 
+    # ── path ────────────────────────────────────────────────────────────
     p_add = sub.add_parser("path", help="Manage registered codebase folders")
     path_sub = p_add.add_subparsers(dest="path_cmd", required=True)
 
@@ -205,11 +259,11 @@ Sell / ship workflow: customers install once, register folders, run `mythos scan
     pr.add_argument("target", help="Path or id to remove")
     pr.set_defaults(func=_cmd_path_remove)
 
+    # ── scan ────────────────────────────────────────────────────────────
     ps = sub.add_parser("scan", help="Run security scan on registered paths")
     ps.add_argument("--path", "-p", help="Scan one path (overrides registered list)")
     ps.add_argument(
-        "--deep",
-        action="store_true",
+        "--deep", action="store_true",
         help="AI-powered audit via local LLM (slower; needs model)",
     )
     ps.add_argument(
@@ -222,15 +276,18 @@ Sell / ship workflow: customers install once, register folders, run `mythos scan
     ps.add_argument("--verbose", "-v", action="store_true", help="Show snippets and fixes")
     ps.set_defaults(func=_cmd_scan)
 
+    # ── explore ─────────────────────────────────────────────────────────
     pe = sub.add_parser("explore", help="Preview indexable files under a path")
     pe.add_argument("path", help="Directory to inspect")
     pe.set_defaults(func=_cmd_explore)
 
+    # ── model ───────────────────────────────────────────────────────────
     pm = sub.add_parser("model", help="Local LLM model management")
     model_sub = pm.add_subparsers(dest="model_cmd", required=True)
     md = model_sub.add_parser("download", help="Download default GGUF model")
     md.set_defaults(func=_cmd_model_download)
 
+    # ── status ──────────────────────────────────────────────────────────
     st = sub.add_parser("status", help="Show configuration and model status")
     st.set_defaults(func=_cmd_status)
 
@@ -238,13 +295,33 @@ Sell / ship workflow: customers install once, register folders, run `mythos scan
 
 
 def cli_main() -> None:
+    """Entry point registered in pyproject.toml."""
     sys.exit(main())
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
-    return args.func(args)
+
+    # If called with no arguments at all, default to chat
+    # (like `claude` — just type the name and you're in)
+    if argv is None and len(sys.argv) == 1:
+        args = parser.parse_args(["chat"])
+    else:
+        args = parser.parse_args(argv)
+
+    if not hasattr(args, "func"):
+        # No subcommand matched — default to chat
+        args = parser.parse_args(["chat"])
+
+    try:
+        return args.func(args)
+    except KeyboardInterrupt:
+        print("\nInterrupted.")
+        return 0
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        logging.getLogger().exception("fatal error")
+        return 1
 
 
 if __name__ == "__main__":

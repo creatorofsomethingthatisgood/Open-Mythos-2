@@ -4,31 +4,31 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mythos-sentinel"
-version = "0.1.0"
-description = "Local security scanner CLI — register code paths, find vulnerabilities instantly"
+version = "0.2.0"
+description = "Mythos — local AI chat assistant and security scanner"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Mythos" }]
-keywords = ["security", "sast", "cli", "llm", "local"]
+keywords = ["llm", "chat", "security", "sast", "cli", "local"]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "Topic :: Security",
-    "Programming Language :: Python :: 3",
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Topic :: Security",
+  "Programming Language :: Python :: 3",
 ]
 
 dependencies = [
-    "llama-cpp-python>=0.2.0",
-    "huggingface_hub>=0.20.0",
-    "pyyaml>=6.0",
-    "rich>=13.0",
-    "chromadb>=0.4.0",
-    "sentence-transformers>=2.2.0",
-    "PyPDF2>=3.0.0",
-    "numpy>=1.24.0",
-    "tqdm>=4.65.0",
+  "llama-cpp-python>=0.2.0",
+  "huggingface_hub>=0.20.0",
+  "pyyaml>=6.0",
+  "rich>=13.0",
+  "chromadb>=0.4.0",
+  "sentence-transformers>=2.2.0",
+  "PyPDF2>=3.0.0",
+  "numpy>=1.24.0",
+  "tqdm>=4.65.0",
 ]
 
 [project.optional-dependencies]
@@ -39,7 +39,9 @@ dev = ["pytest>=7.0"]
 mythos = "mythos_cli.main:cli_main"
 
 [tool.setuptools.packages.find]
-include = ["mythos_cli*", "engine*"]
+include = ["mythos_cli*", "engine*", "ui*"]
 
 [tool.setuptools.package-data]
+engine = ["py.typed"]
+ui = ["py.typed"]
 mythos_cli = ["py.typed"]
