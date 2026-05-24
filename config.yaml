@@ -109,6 +109,8 @@ chat:
     enabled: true            # Run scan + full-file MYTHOS_PATCH rewrite flow in chat
     auto_write_patches: true # false = ask before writing (recommended; use git)
     max_rewrite_files: 0     # 0 = unlimited files rewritten per fix/rewrite run
+    show_finding_rationale: true  # show scan findings as "why" before each rewrite
+    stream_rewrite: true    # stream raw model output during dedicated rewrite (verbose)
 
 context:
   reserve_tokens: 2048     # Tokens reserved for the assistant reply (trim prompt to fit)

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from engine.chat_config import allow_disk_edit, file_limit, merge_chat_defaults
+from engine.progress import ProgressCallback, StreamCallback, emit_progress
 from engine.local_refs import extract_local_refs, ref_to_path
 
 logger = logging.getLogger(__name__)
@@ -144,6 +145,43 @@ def user_confirms_rewrite(message: str) -> bool:
     )
 
 
+def _fix_cfg(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    return merge_chat_defaults(config or {}).get("chat", {}).get("fix", {})
+
+
+def format_finding_rationale(
+    findings: list,
+    *,
+    max_items: int = 6,
+) -> List[str]:
+    """Human-readable lines explaining why a file is being rewritten."""
+    if not findings:
+        return ["  • No static findings — applying general security hardening"]
+    lines: List[str] = []
+    for f in findings[:max_items]:
+        rec = getattr(f, "recommendation", "") or ""
+        detail = f.title if hasattr(f, "title") else str(f)
+        if rec and len(rec) < 120:
+            lines.append(f"  • [{f.severity}] line {f.line}: {detail} — {rec}")
+        else:
+            lines.append(f"  • [{f.severity}] line {f.line}: {detail}")
+    if len(findings) > max_items:
+        lines.append(f"  • … and {len(findings) - max_items} more finding(s)")
+    return lines
+
+
+def emit_finding_rationale(
+    path: Path,
+    findings: list,
+    on_progress: Optional[ProgressCallback],
+    *,
+    max_items: int = 6,
+) -> None:
+    emit_progress(f"Why {path.name} is being rewritten:", on_progress)
+    for line in format_finding_rationale(findings, max_items=max_items):
+        emit_progress(line, on_progress)
+
+
 def format_rewrite_confirm_message(file_paths: List[str]) -> str:
     """Prompt text listing files that would be fully overwritten."""
     if not file_paths:
@@ -249,6 +287,7 @@ def handle_chat_fix(
     last_targets: Optional[List[Path]] = None,
     extra_refs: Optional[List[str]] = None,
     confirm_apply: Optional[Callable[[str], bool]] = None,
+    on_progress: Optional[ProgressCallback] = None,
 ) -> Tuple[str, List[str], List[Path], bool, List[str]]:
     """
     If the user wants fixes, scan targets and prepare full-file rewrite context.
@@ -274,6 +313,7 @@ def handle_chat_fix(
 
     targets = resolve_fix_targets(message, last_targets, extra_refs=extra_refs)
     rewrite_mode = user_wants_rewrite(message)
+    emit_progress("Preparing security scan…", on_progress)
     if not targets:
         return (
             "",
@@ -293,15 +333,27 @@ def handle_chat_fix(
 
     all_findings = []
     all_fixes = []
-    notices: List[str] = [REWRITE_WARNING]
+    notices: List[str] = []
+    emit_progress(REWRITE_WARNING, on_progress)
+    notices.append(REWRITE_WARNING)
 
     # Scan only — chat rewrite uses full-file MYTHOS_PATCH, not line-level edits.
     for target in targets:
+        label = target.name if target.is_file() else str(target)
+        emit_progress(f"Scanning {label}…", on_progress)
         findings, fixes = run_fix_on_path(target, dry_run=True)
         all_findings.extend(findings)
         all_fixes.extend(fixes)
+        emit_progress(
+            f"Scan complete: {label} — {len(findings)} finding(s)",
+            on_progress,
+        )
+        if _fix_cfg(config).get("show_finding_rationale", True) and findings:
+            for line in format_finding_rationale(findings, max_items=4):
+                emit_progress(line, on_progress)
         notices.append(f"Scanned {target} ({len(findings)} finding(s))")
 
+    emit_progress("Selecting files for full-file rewrite…", on_progress)
     file_paths = _files_to_rewrite(targets, all_findings, config)
     if not file_paths:
         file_paths = resolve_rewrite_file_paths(targets, config)
@@ -311,20 +363,31 @@ def handle_chat_fix(
                 file_paths.append(str(target.resolve()))
     rewrite_approved = False
     if file_paths:
+        emit_progress(
+            f"Found {len(file_paths)} file(s) that may need a full rewrite",
+            on_progress,
+        )
         confirm_text = format_rewrite_confirm_message(file_paths)
         if confirm_apply is not None:
+            emit_progress("Waiting for your confirmation to rewrite files…", on_progress)
             rewrite_approved = confirm_apply(confirm_text)
         elif user_wants_apply(message):
             rewrite_approved = True
         if rewrite_approved:
-            notices.append(f"Rewrite approved for {len(file_paths)} file(s)")
+            msg = f"Rewrite approved for {len(file_paths)} file(s)"
+            notices.append(msg)
+            emit_progress(msg, on_progress)
         else:
-            notices.append(
+            msg = (
                 "Rewrite not confirmed — model may reply with patches; "
                 "nothing will be written until you confirm"
             )
+            notices.append(msg)
+            emit_progress(msg, on_progress)
     elif rewrite_mode:
-        notices.append("No files matched for rewrite — check the path")
+        msg = "No files matched for rewrite — check the path"
+        notices.append(msg)
+        emit_progress(msg, on_progress)
 
     ctx = _format_fix_context(targets, all_fixes, all_findings, applied=False)
     if file_paths:
@@ -472,6 +535,7 @@ def apply_patches_from_response(
     text: str,
     *,
     confirm: Optional[Callable[[Path], bool]] = None,
+    on_progress: Optional[ProgressCallback] = None,
 ) -> List[str]:
     """
     Write MYTHOS_PATCH blocks from the assistant reply.
@@ -495,13 +559,19 @@ def apply_patches_from_response(
             continue
         if confirm is not None and not confirm(path):
             notices.append(f"Skipped (declined): {path}")
+            emit_progress(f"Skipped (declined): {path}", on_progress)
             continue
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
+            emit_progress(f"Writing {path}…", on_progress)
             path.write_text(content, encoding="utf-8")
+            size = len(content.encode("utf-8"))
+            msg = f"Wrote {path} ({size:,} bytes)"
             notices.append(f"Wrote full file: {path}")
+            emit_progress(msg, on_progress)
         except OSError as exc:
             notices.append(f"Failed {path}: {exc}")
+            emit_progress(f"Failed {path}: {exc}", on_progress)
     return notices
 
 
@@ -513,6 +583,7 @@ def apply_patches_with_prompt(
     confirm: Optional[Callable[[Path], bool]] = None,
     base_dirs: Optional[List[Path]] = None,
     rewrite_approved: bool = False,
+    on_progress: Optional[ProgressCallback] = None,
 ) -> List[str]:
     """Write full-file MYTHOS_PATCH blocks only when approved."""
     del base_dirs  # paths must be absolute inside MYTHOS_PATCH
@@ -535,7 +606,7 @@ def apply_patches_with_prompt(
         f"Write {len(patches)} full file(s) to disk? (no .bak; use git)"
     ):
         return ["Skipped writing files (declined)"]
-    return apply_patches_from_response(text, confirm=None)
+    return apply_patches_from_response(text, confirm=None, on_progress=on_progress)
 
 
 def generate_mythos_patch(
@@ -547,6 +618,8 @@ def generate_mythos_patch(
     source: str,
     finding_text: str,
     max_retries: int = 5,
+    on_progress: Optional[ProgressCallback] = None,
+    on_stream: Optional[StreamCallback] = None,
 ) -> Tuple[str, List[str]]:
     """
     Ask the model for a MYTHOS_PATCH-only reply; retry until parseable or attempts exhausted.
@@ -579,33 +652,75 @@ def generate_mythos_patch(
     )
 
     response = ""
-    for attempt in range(max_retries + 1):
+    total_attempts = max_retries + 1
+    for attempt in range(total_attempts):
         retry_note = ""
         if attempt > 0:
+            emit_progress(
+                f"Retrying {path.name} — previous reply was not a valid MYTHOS_PATCH "
+                f"(attempt {attempt + 1}/{total_attempts})…",
+                on_progress,
+            )
             retry_note = (
                 "\n\nYour previous reply was invalid. "
                 f"Output ONLY:\n<<<MYTHOS_PATCH path=\"{path}\">>>\n"
                 "```python\n<entire file>\n```\n<<<END_PATCH>>>"
+            )
+        else:
+            emit_progress(
+                f"Generating rewritten file: {path.name} "
+                f"(attempt 1/{total_attempts})…",
+                on_progress,
             )
         messages = [{"role": "user", "content": user_msg + retry_note}]
         msgs, sys_p, _ = fit_chat_context(
             engine, messages, system_prompt, reserve_tokens=reserve
         )
         prompt = engine.format_chat_prompt(msgs, sys_p)
-        response = engine.generate(
-            prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            stream=False,
-        )
+        stream_rewrite = bool(_fix_cfg(config).get("stream_rewrite", False))
+        if stream_rewrite and on_stream is not None:
+            emit_progress(
+                f"Streaming model output for {path.name} (MYTHOS_PATCH)…",
+                on_progress,
+            )
+            chunks: List[str] = []
+            for chunk in engine.generate(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stream=True,
+            ):
+                chunks.append(chunk)
+                on_stream(chunk)
+            response = "".join(chunks)
+        else:
+            emit_progress(
+                f"Running model for {path.name} — this can take a minute…",
+                on_progress,
+            )
+            response = engine.generate(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stream=False,
+            )
+        emit_progress(f"Checking MYTHOS_PATCH format for {path.name}…", on_progress)
         patches = extract_patches_from_response(response)
         if patches:
-            written = apply_patches_from_response(response, confirm=None)
+            emit_progress(f"Writing {path.name} to disk…", on_progress)
+            written = apply_patches_from_response(
+                response, confirm=None, on_progress=on_progress
+            )
             notices.extend(written)
             return response, notices
 
+    emit_progress(
+        f"Could not produce a valid MYTHOS_PATCH for {path.name} "
+        f"after {total_attempts} attempt(s)",
+        on_progress,
+    )
     notices.append(
-        f"Model did not produce MYTHOS_PATCH for {path} after {max_retries + 1} attempt(s)"
+        f"Model did not produce MYTHOS_PATCH for {path} after {total_attempts} attempt(s)"
     )
     return response, notices
 
@@ -618,6 +733,8 @@ def run_dedicated_rewrite(
     *,
     targets: Optional[List[Path]] = None,
     limit_one: bool = False,
+    on_progress: Optional[ProgressCallback] = None,
+    on_stream: Optional[StreamCallback] = None,
 ) -> List[str]:
     """
     Run MYTHOS_PATCH-only generation for each path until written or retries exhausted.
@@ -627,25 +744,39 @@ def run_dedicated_rewrite(
 
     paths = list(rewrite_paths)
     if not paths and targets:
+        emit_progress("Resolving files to rewrite…", on_progress)
         paths = resolve_rewrite_file_paths(targets, config)
     if limit_one and paths:
         paths = paths[:1]
     if not paths:
         return ["No files to rewrite — reference a path with /file or in your message"]
 
+    total = len(paths)
+    emit_progress(
+        f"Starting full-file rewrite ({total} file{'s' if total != 1 else ''})…",
+        on_progress,
+    )
     notices: List[str] = []
-    for abs_path in paths:
+    for index, abs_path in enumerate(paths, start=1):
         path = Path(abs_path)
         if not path.is_file():
             notices.append(f"Skip (not a file): {path}")
             continue
+        emit_progress(
+            f"File {index}/{total}: {path.name}",
+            on_progress,
+        )
         try:
+            emit_progress(f"Reading {path.name}…", on_progress)
             source = path.read_text(encoding="utf-8", errors="ignore")
         except OSError as exc:
             notices.append(f"Cannot read {path}: {exc}")
             continue
 
+        emit_progress(f"Scanning findings in {path.name}…", on_progress)
         file_findings = scan_file(path, path.parent) if path.parent.exists() else []
+        if _fix_cfg(config).get("show_finding_rationale", True):
+            emit_finding_rationale(path, file_findings, on_progress)
         finding_text = "\n".join(
             f"- [{f.severity}] line {f.line}: {f.title}"
             for f in file_findings
@@ -658,9 +789,12 @@ def run_dedicated_rewrite(
             file_path=path,
             source=source,
             finding_text=finding_text,
+            on_progress=on_progress,
+            on_stream=on_stream,
         )
         notices.extend(patch_notes)
 
+    emit_progress("Full-file rewrite finished.", on_progress)
     return notices
 
 
@@ -673,6 +807,8 @@ def run_rewrite_files(
     *,
     stream: bool = False,
     single_file: Optional[Path] = None,
+    on_progress: Optional[ProgressCallback] = None,
+    on_stream: Optional[StreamCallback] = None,
 ) -> Tuple[str, List[str]]:
     """
     Auto-fix, then MYTHOS_PATCH-only rewrite with retries until written.
@@ -689,6 +825,8 @@ def run_rewrite_files(
 
     for target in targets:
         target = target.resolve()
+        label = target.name if target.is_file() else str(target)
+        emit_progress(f"Scanning {label} for rewrite targets…", on_progress)
         if target.is_dir():
             findings, _ = run_fix_on_path(target, dry_run=True)
             file_list = _files_to_rewrite([target], findings, config)
@@ -704,17 +842,25 @@ def run_rewrite_files(
             notices.append(f"No files to rewrite under {target}")
             continue
 
-        for abs_path in file_list:
+        total = len(file_list)
+        for index, abs_path in enumerate(file_list, start=1):
             path = Path(abs_path)
             if not path.is_file():
                 continue
+            emit_progress(
+                f"Rewriting file {index}/{total}: {path.name}",
+                on_progress,
+            )
             file_findings = scan_file(path, path.parent) if path.parent.exists() else []
+            if _fix_cfg(config).get("show_finding_rationale", True):
+                emit_finding_rationale(path, file_findings, on_progress)
             finding_text = "\n".join(
                 f"- [{f.severity}] line {f.line}: {f.title} — {f.recommendation}"
                 for f in file_findings
             ) or "(apply best-practice security hardening)"
 
             try:
+                emit_progress(f"Reading {path.name}…", on_progress)
                 source = path.read_text(encoding="utf-8", errors="ignore")
             except OSError as exc:
                 notices.append(f"Cannot read {path}: {exc}")
@@ -727,8 +873,11 @@ def run_rewrite_files(
                 file_path=path,
                 source=source,
                 finding_text=finding_text,
+                on_progress=on_progress,
+                on_stream=on_stream,
             )
             all_responses.append(response)
             notices.extend(patch_notes)
 
+    emit_progress("Rewrite run finished.", on_progress)
     return "\n\n".join(all_responses), notices

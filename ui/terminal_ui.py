@@ -33,8 +33,10 @@ from engine.local_refs import (
     extract_local_refs_from_messages,
     ref_to_path,
 )
+from engine.chat_config import merge_chat_defaults
 from engine.chat_fix import (
     REWRITE_WARNING,
+    _fix_cfg,
     apply_patches_with_prompt,
     handle_chat_fix,
     resolve_fix_targets,
@@ -47,6 +49,8 @@ from engine.chat_fix import (
     user_wants_fix,
     user_wants_rewrite,
 )
+from engine.progress import ProgressCallback, StreamCallback
+from ui.terminal_bitacora import TerminalBitacoraSession
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +144,24 @@ class TerminalUI:
         self.console.print(f"Mode: [bold magenta]{emoji} {mode_name}[/bold magenta]")
         self.console.print(f"System Prompt: [yellow]{self.prompt_manager.get_prompt()[:70]}...[/yellow]")
         self.console.print("\nType [bold]/help[/bold] for commands, [bold]/quit[/bold] to exit\n")
-    
+
+    def _fix_progress(self, message: str) -> None:
+        """Show live status during scan / rewrite (users see this while waiting)."""
+        if message.startswith("  •"):
+            self.console.print(f"[dim]{message}[/dim]")
+        else:
+            self.console.print(f"[cyan]{message}[/cyan]")
+
+    def _fix_stream(self, chunk: str) -> None:
+        """Stream dedicated-rewrite model tokens (usually MYTHOS_PATCH body)."""
+        self.console.print(chunk, end="", style="dim")
+
+    def _bitacora_enabled(self, user_input: str, *, confirm_only: bool = False) -> bool:
+        fix_cfg = merge_chat_defaults(self.engine.config).get("chat", {}).get("fix", {})
+        if not fix_cfg.get("bitacora", True):
+            return False
+        return user_wants_fix(user_input) or confirm_only
+
     def show_help(self):
         """Display help information"""
         help_text = """
@@ -388,14 +409,35 @@ class TerminalUI:
                     f"[cyan]Rewriting {target} (full file write)...[/cyan]"
                 )
                 self.console.print("[dim]This may take a minute.[/dim]\n")
-                response, notices = run_rewrite_files(
-                    [target],
-                    self.engine,
-                    self.prompt_manager,
-                    self.memory,
-                    self.engine.config,
-                    stream=False,
-                )
+                use_bitacora = self._bitacora_enabled("/rewrite", confirm_only=False)
+                bitacora_cm = None
+                on_progress = self._fix_progress
+                on_stream = self._fix_stream
+                if use_bitacora:
+                    bitacora_cm = TerminalBitacoraSession(self.console)
+                    bitacora = bitacora_cm.__enter__()
+                    on_progress = bitacora.as_progress_callback()
+                    on_stream = (
+                        bitacora.stream_callback()
+                        if _fix_cfg(self.engine.config).get("stream_rewrite", False)
+                        else (lambda _c: None)
+                    )
+                try:
+                    response, notices = run_rewrite_files(
+                        [target],
+                        self.engine,
+                        self.prompt_manager,
+                        self.memory,
+                        self.engine.config,
+                        stream=False,
+                        on_progress=on_progress,
+                        on_stream=on_stream,
+                    )
+                finally:
+                    if bitacora_cm is not None:
+                        bitacora_cm.__exit__(None, None, None)
+                if on_stream is not self._fix_stream:
+                    self.console.print()
                 for note in notices:
                     style = "green" if note.startswith("Wrote") else "yellow"
                     self.console.print(f"[{style}]{note}[/{style}]")
@@ -510,194 +552,240 @@ class TerminalUI:
 
         rewrite_approved = False
         rewrite_paths: List[str] = []
+        fix_context = ""
+        fix_notices: List[str] = []
+        fix_targets: List[Path] = list(self._last_local_targets or [])
         confirm_only = user_confirms_rewrite(user_input)
-
-        if confirm_only and self._pending_rewrite_paths:
-            rewrite_approved = True
-            rewrite_paths = list(self._pending_rewrite_paths)
-            fix_context = ""
-            fix_notices = [f"Continuing rewrite for {len(rewrite_paths)} file(s)…"]
-            fix_targets = list(self._last_local_targets)
-        else:
-            def _confirm_apply(summary: str) -> bool:
-                self.console.print(
-                    Panel(REWRITE_WARNING, title="Full-file rewrite", border_style="yellow")
-                )
-                return Prompt.ask(summary, choices=["y", "n"], default="n") == "y"
-
-            fix_context, fix_notices, fix_targets, rewrite_approved, rewrite_paths = (
-                handle_chat_fix(
-                    user_input,
-                    self.engine.config,
-                    last_targets=self._last_local_targets,
-                    extra_refs=history_refs,
-                    confirm_apply=_confirm_apply,
-                )
+        use_bitacora = self._bitacora_enabled(user_input, confirm_only=confirm_only)
+        on_progress: ProgressCallback = self._fix_progress
+        on_stream: StreamCallback = self._fix_stream
+        bitacora_panel = False
+        bitacora_cm = None
+        if use_bitacora:
+            bitacora_cm = TerminalBitacoraSession(self.console)
+            bitacora = bitacora_cm.__enter__()
+            on_progress = bitacora.as_progress_callback()
+            on_stream = (
+                bitacora.stream_callback()
+                if _fix_cfg(self.engine.config).get("stream_rewrite", False)
+                else (lambda _c: None)
             )
-            if fix_targets:
-                self._last_local_targets = fix_targets
-            if rewrite_paths:
-                self._pending_rewrite_paths = rewrite_paths
+            bitacora_panel = True
 
-        for note in local_notices + fix_notices:
-            style = "green" if note.startswith(("Loaded", "Scanned", "Auto-fix", "Wrote")) else "dim"
-            if note.startswith("Say "):
-                style = "yellow"
-            self.console.print(f"[{style}]{note}[/{style}]")
-        
-        # Confirm-only: skip chat generation and run dedicated rewrite immediately.
-        if confirm_only and rewrite_approved and rewrite_paths:
-            self.console.print(
-                "[cyan]Running dedicated full-file rewrite…[/cyan]"
-            )
-            patch_notices = run_dedicated_rewrite(
-                rewrite_paths,
-                self.engine,
-                self.prompt_manager,
-                self.engine.config,
-                targets=self._last_local_targets,
-            )
-            for note in patch_notices:
-                style = "green" if note.startswith("Wrote") else "yellow"
-                self.console.print(f"[bold {style}]{note}[/bold {style}]")
-            if any(n.startswith("Wrote") for n in patch_notices):
-                self._pending_rewrite_paths = []
-            self.memory.add_message("assistant", "(rewrite run — see messages above)")
-            return "(rewrite run)"
-
-        # Prepare messages (fewer turns when RAG is on — large system block)
-        max_turns = 10
-        if self.rag_enabled and self.rag:
-            max_turns = self.rag.max_history_turns
-        messages = self.memory.get_recent_context(max_turns=max_turns)
-
-        # Get system prompt (audit mode reports only — switch to security_fix when rewriting)
-        system_prompt = self.prompt_manager.get_prompt()
-        if rewrite_approved and active_prompt_is_security_audit(self.engine.config):
-            self.console.print(
-                "[dim]Note: security_audit mode reports findings only — "
-                "using security_fix prompt for this rewrite.[/dim]"
-            )
-        system_prompt = build_fix_system_prompt(
-            self.prompt_manager,
-            system_prompt,
-            user_input,
-            rewrite_approved=rewrite_approved,
-        )
-
-        extra_context = "\n\n".join(
-            part for part in (rag_context, local_context, fix_context) if part
-        )
-        if extra_context:
-            system_prompt = self.prompt_manager.format_with_context(extra_context)
-
-        reserve = self.engine.config.get("context", {}).get(
-            "reserve_tokens",
-            self.engine.config.get("generation", {}).get("max_tokens", 2048),
-        )
-        messages, system_prompt, prompt_tokens = fit_chat_context(
-            self.engine, messages, system_prompt, reserve_tokens=reserve
-        )
-        if prompt_tokens > 0:
-            logger.debug("Prompt size after trim: %d tokens", prompt_tokens)
-
-        # Format prompt
-        prompt = self.engine.format_chat_prompt(messages, system_prompt)
-        
-        # Generate with streaming
-        response_text = ""
-        start_time = time.time()
-        token_count = 0
-        
-        self.console.print("\n[bold green]Assistant:[/bold green] ", end="")
-        
         try:
-            for chunk in self.engine.generate(prompt, stream=True):
-                response_text += chunk
-                token_count += 1
-                self.console.print(chunk, end="")
-            
-            self.console.print()  # Newline after response
-            
-            # Calculate stats
-            elapsed = time.time() - start_time
-            tokens_per_sec = token_count / elapsed if elapsed > 0 else 0
-            
-            self.console.print(
-                f"\n[dim]Generated {token_count} tokens in {elapsed:.1f}s "
-                f"({tokens_per_sec:.1f} tok/s)[/dim]\n"
-            )
-            
-        except KeyboardInterrupt:
-            self.console.print("\n\n[yellow]Generation interrupted[/yellow]\n")
-            return response_text
-        
-        # Apply self-reflection if enabled
-        if self.reflector.should_reflect() and response_text:
-            self.console.print("[cyan]Applying self-reflection...[/cyan]")
-            response_text = self.reflector.reflect(
-                self.engine,
-                user_input,
-                response_text,
-                stream=False
-            )
-            self.console.print("\n[bold green]Improved Response:[/bold green]")
-            self.console.print(response_text)
-            self.console.print()
-        
-        patch_notices = apply_patches_with_prompt(
-            response_text,
-            self.engine.config,
-            message=user_input,
-            rewrite_approved=rewrite_approved,
-        )
+            if user_wants_fix(user_input) or confirm_only:
+                on_progress("Fix/rewrite requested — starting workflow…")
 
-        needs_dedicated = user_wants_fix(user_input) and not any(
-            n.startswith("Wrote") for n in patch_notices
-        )
-        if needs_dedicated:
-            if not rewrite_approved:
-                self.console.print(
-                    "[yellow]Chat reply had no usable MYTHOS_PATCH (audit-style markdown is OK).[/yellow]"
-                )
-                rewrite_approved = (
-                    Prompt.ask(
-                        "Run dedicated full-file rewrite now?",
-                        choices=["y", "n"],
-                        default="y",
+            if confirm_only and self._pending_rewrite_paths:
+                rewrite_approved = True
+                rewrite_paths = list(self._pending_rewrite_paths)
+                fix_context = ""
+                fix_notices = [f"Continuing rewrite for {len(rewrite_paths)} file(s)…"]
+                on_progress(fix_notices[0])
+                fix_targets = list(self._last_local_targets)
+            else:
+                def _confirm_apply(summary: str) -> bool:
+                    self.console.print(
+                        Panel(REWRITE_WARNING, title="Full-file rewrite", border_style="yellow")
                     )
-                    == "y"
+                    return Prompt.ask(summary, choices=["y", "n"], default="n") == "y"
+
+                fix_context, fix_notices, fix_targets, rewrite_approved, rewrite_paths = (
+                    handle_chat_fix(
+                        user_input,
+                        self.engine.config,
+                        last_targets=self._last_local_targets,
+                        extra_refs=history_refs,
+                        confirm_apply=_confirm_apply,
+                        on_progress=on_progress,
+                    )
                 )
-            if rewrite_approved:
-                self.console.print(
-                    "[cyan]Running dedicated full-file rewrite…[/cyan]"
-                )
-                limit_one = "one" in user_input.lower()
-                targets_for_rewrite = fix_targets or self._last_local_targets
-                paths_for_rewrite = rewrite_paths or resolve_rewrite_file_paths(
-                    targets_for_rewrite, self.engine.config
-                )
-                retry_notes = run_dedicated_rewrite(
-                    paths_for_rewrite,
+                if fix_targets:
+                    self._last_local_targets = fix_targets
+                if rewrite_paths:
+                    self._pending_rewrite_paths = rewrite_paths
+
+            if not bitacora_panel:
+                for note in local_notices + fix_notices:
+                    style = (
+                        "green"
+                        if note.startswith(("Loaded", "Scanned", "Auto-fix", "Wrote"))
+                        else "dim"
+                    )
+                    if note.startswith("Say "):
+                        style = "yellow"
+                    self.console.print(f"[{style}]{note}[/{style}]")
+            else:
+                for note in local_notices + fix_notices:
+                    on_progress(note)
+
+            # Confirm-only: skip chat generation and run dedicated rewrite immediately.
+            if confirm_only and rewrite_approved and rewrite_paths:
+                on_progress("Running dedicated full-file rewrite…")
+                patch_notices = run_dedicated_rewrite(
+                    rewrite_paths,
                     self.engine,
                     self.prompt_manager,
                     self.engine.config,
-                    targets=targets_for_rewrite,
-                    limit_one=limit_one,
+                    targets=self._last_local_targets,
+                    on_progress=on_progress,
+                    on_stream=on_stream,
                 )
-                patch_notices.extend(retry_notes)
-                if any(n.startswith("Wrote") for n in retry_notes):
+                if on_stream is not self._fix_stream:
+                    self.console.print()
+                if not bitacora_panel:
+                    for note in patch_notices:
+                        style = "green" if note.startswith("Wrote") else "yellow"
+                        self.console.print(f"[bold {style}]{note}[/bold {style}]")
+                if any(n.startswith("Wrote") for n in patch_notices):
                     self._pending_rewrite_paths = []
-            elif rewrite_paths:
-                self._pending_rewrite_paths = rewrite_paths
+                self.memory.add_message("assistant", "(rewrite run — see bitácora above)")
+                return "(rewrite run)"
 
-        for note in patch_notices:
-            style = "green" if note.startswith("Wrote") else "yellow"
-            self.console.print(f"[bold {style}]{note}[/bold {style}]")
+            if fix_context and not confirm_only:
+                on_progress(
+                    "Fix mode: reasoning and patches appear in the assistant reply below"
+                )
+                on_progress("Generating chat response (fix mode)…")
 
-        # Add to memory
+            # Prepare messages (fewer turns when RAG is on — large system block)
+            max_turns = 10
+            if self.rag_enabled and self.rag:
+                max_turns = self.rag.max_history_turns
+            messages = self.memory.get_recent_context(max_turns=max_turns)
+
+            system_prompt = self.prompt_manager.get_prompt()
+            if rewrite_approved and active_prompt_is_security_audit(self.engine.config):
+                self.console.print(
+                    "[dim]Note: security_audit mode reports findings only — "
+                    "using security_fix prompt for this rewrite.[/dim]"
+                )
+            system_prompt = build_fix_system_prompt(
+                self.prompt_manager,
+                system_prompt,
+                user_input,
+                rewrite_approved=rewrite_approved,
+            )
+
+            extra_context = "\n\n".join(
+                part for part in (rag_context, local_context, fix_context) if part
+            )
+            if extra_context:
+                system_prompt = self.prompt_manager.format_with_context(extra_context)
+
+            reserve = self.engine.config.get("context", {}).get(
+                "reserve_tokens",
+                self.engine.config.get("generation", {}).get("max_tokens", 2048),
+            )
+            messages, system_prompt, prompt_tokens = fit_chat_context(
+                self.engine, messages, system_prompt, reserve_tokens=reserve
+            )
+            if prompt_tokens > 0:
+                logger.debug("Prompt size after trim: %d tokens", prompt_tokens)
+
+            prompt = self.engine.format_chat_prompt(messages, system_prompt)
+
+            response_text = ""
+            start_time = time.time()
+            token_count = 0
+
+            self.console.print("\n[bold green]Assistant:[/bold green] ", end="")
+
+            try:
+                for chunk in self.engine.generate(prompt, stream=True):
+                    response_text += chunk
+                    token_count += 1
+                    self.console.print(chunk, end="")
+
+                self.console.print()
+
+                elapsed = time.time() - start_time
+                tokens_per_sec = token_count / elapsed if elapsed > 0 else 0
+
+                self.console.print(
+                    f"\n[dim]Generated {token_count} tokens in {elapsed:.1f}s "
+                    f"({tokens_per_sec:.1f} tok/s)[/dim]\n"
+                )
+
+            except KeyboardInterrupt:
+                self.console.print("\n\n[yellow]Generation interrupted[/yellow]\n")
+                return response_text
+
+            if self.reflector.should_reflect() and response_text:
+                self.console.print("[cyan]Applying self-reflection...[/cyan]")
+                response_text = self.reflector.reflect(
+                    self.engine,
+                    user_input,
+                    response_text,
+                    stream=False,
+                )
+                self.console.print("\n[bold green]Improved Response:[/bold green]")
+                self.console.print(response_text)
+                self.console.print()
+
+            patch_notices: List[str] = []
+            if user_wants_fix(user_input):
+                on_progress("Checking assistant reply for MYTHOS_PATCH blocks…")
+            patch_notices = apply_patches_with_prompt(
+                response_text,
+                self.engine.config,
+                message=user_input,
+                rewrite_approved=rewrite_approved,
+                on_progress=on_progress,
+            )
+
+            needs_dedicated = user_wants_fix(user_input) and not any(
+                n.startswith("Wrote") for n in patch_notices
+            )
+            if needs_dedicated:
+                if not rewrite_approved:
+                    self.console.print(
+                        "[yellow]Chat reply had no usable MYTHOS_PATCH "
+                        "(audit-style markdown is OK).[/yellow]"
+                    )
+                    rewrite_approved = (
+                        Prompt.ask(
+                            "Run dedicated full-file rewrite now?",
+                            choices=["y", "n"],
+                            default="y",
+                        )
+                        == "y"
+                    )
+                if rewrite_approved:
+                    on_progress("Running dedicated full-file rewrite…")
+                    limit_one = "one" in user_input.lower()
+                    targets_for_rewrite = fix_targets or self._last_local_targets
+                    paths_for_rewrite = rewrite_paths or resolve_rewrite_file_paths(
+                        targets_for_rewrite, self.engine.config
+                    )
+                    retry_notes = run_dedicated_rewrite(
+                        paths_for_rewrite,
+                        self.engine,
+                        self.prompt_manager,
+                        self.engine.config,
+                        targets=targets_for_rewrite,
+                        limit_one=limit_one,
+                        on_progress=on_progress,
+                        on_stream=on_stream,
+                    )
+                    if on_stream is not self._fix_stream:
+                        self.console.print()
+                    patch_notices.extend(retry_notes)
+                    if any(n.startswith("Wrote") for n in retry_notes):
+                        self._pending_rewrite_paths = []
+                elif rewrite_paths:
+                    self._pending_rewrite_paths = rewrite_paths
+
+            if not bitacora_panel:
+                for note in patch_notices:
+                    style = "green" if note.startswith("Wrote") else "yellow"
+                    self.console.print(f"[bold {style}]{note}[/bold {style}]")
+        finally:
+            if bitacora_cm is not None:
+                bitacora_cm.__exit__(None, None, None)
+
         self.memory.add_message("assistant", response_text)
-        
+
         return response_text
     
     def run(self):

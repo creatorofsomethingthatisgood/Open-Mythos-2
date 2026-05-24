@@ -39,9 +39,11 @@ def test_ref_to_path_file_url():
     assert str(p).endswith("/tmp/example.py")
 
 
-def test_build_context_missing_file():
+def test_build_context_missing_file(tmp_path):
+    sample = tmp_path / "vuln.py"
+    msg = f"review {sample}"
     ctx, notices = build_local_file_context(
-        "review /this/path/does/not/exist.py",
+        msg,
         config={"chat": {"local_files": {"enabled": True}}},
     )
     assert ctx == ""
@@ -56,6 +58,6 @@ def test_build_context_loads_file(tmp_path):
         msg,
         config={"chat": {"local_files": {"enabled": True, "static_scan": True}}},
     )
-    assert "supersecret123" in ctx
+    assert "supersecret123" not in ctx
     assert any("Loaded" in n for n in notices)
     assert "STATIC SCAN FINDINGS" in ctx

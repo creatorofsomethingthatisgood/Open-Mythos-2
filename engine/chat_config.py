@@ -20,6 +20,9 @@ DEFAULT_CHAT: Dict[str, Any] = {
         "allow_edit": True,
         "auto_write_patches": False,
         "max_rewrite_files": 0,  # 0 = unlimited files per rewrite/fix run
+        "show_finding_rationale": True,  # progress: why each file is being rewritten
+        "stream_rewrite": False,  # stream model tokens during dedicated rewrite (noisy)
+        "bitacora": True,  # progressive live journal during fix/rewrite (terminal)
     },
 }
 

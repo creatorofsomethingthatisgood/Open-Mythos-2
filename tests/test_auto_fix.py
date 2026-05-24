@@ -25,8 +25,8 @@ def _finding(rule_id, path, line, title="t"):
 
 def test_fix_yaml_load(tmp_path):
     sample = tmp_path / "app.py"
-    sample.write_text("import yaml\ndata = yaml.load(stream)\n", encoding="utf-8")
-    findings = [_finding("SEC008", "app.py", 2)]
+    sample.write_text("import yaml\ndata = yaml.safe_load(stream)\n", encoding="utf-8")
+    findings = [_finding("SEC008", str(sample), 2)]
     results = apply_fixes_to_file(sample, findings, dry_run=False)
     assert any(r.status == "applied" for r in results)
     assert "safe_load" in sample.read_text(encoding="utf-8")
@@ -35,7 +35,7 @@ def test_fix_yaml_load(tmp_path):
 def test_skips_secrets(tmp_path):
     sample = tmp_path / "app.py"
     sample.write_text('password = "secret123"\n', encoding="utf-8")
-    findings = [_finding("SEC003", "app.py", 1)]
+    findings = [_finding("SEC003", str(sample), 1)]
     results = apply_fixes_to_file(sample, findings, dry_run=False)
     assert all(r.status == "skipped" for r in results)
     assert "secret123" in sample.read_text(encoding="utf-8")

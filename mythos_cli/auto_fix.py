@@ -25,7 +25,6 @@ SKIP_RULES = frozenset({
     "SEC015", "SEC016",  # .env presence
 })
 
-
 @dataclass
 class FixResult:
     rule_id: str

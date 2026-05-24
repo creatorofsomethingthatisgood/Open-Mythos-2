@@ -26,6 +26,7 @@ from engine.local_refs import (
     extract_local_refs,
     extract_local_refs_from_messages,
 )
+from engine.bitacora import Bitacora
 from engine.chat_fix import (
     REWRITE_WARNING,
     apply_patches_with_prompt,
@@ -130,6 +131,7 @@ class WebUI:
         use_reflection: bool,
         use_rag: bool,
         allow_rewrite: bool,
+        progress: gr.Progress = gr.Progress(),
     ) -> tuple[ChatHistory, str]:
         """
         Handle chat interaction
@@ -153,6 +155,17 @@ class WebUI:
             return history, "Please enter a message"
         
         rewrite_approved = False
+        activity: List[str] = []
+        bitacora = Bitacora()
+
+        def _report(msg: str) -> None:
+            activity.append(msg)
+            bitacora.log(msg)
+            try:
+                progress(None, desc=msg)
+            except Exception:
+                pass
+
         try:
             # Update system prompt
             self.prompt_manager.set_prompt(system_prompt)
@@ -191,12 +204,16 @@ class WebUI:
                     return False
                 return True
 
+            if user_wants_fix(message):
+                _report("Fix/rewrite requested — starting workflow…")
+
             fix_context, fix_notices, fix_targets, rewrite_approved, _rewrite_paths = handle_chat_fix(
                 message,
                 self.engine.config,
                 last_targets=self._last_local_targets,
                 extra_refs=history_refs,
                 confirm_apply=_confirm_rewrite if user_wants_fix(message) else None,
+                on_progress=_report,
             )
             if user_wants_fix(message) and not rewrite_approved:
                 fix_notices.append(
@@ -233,7 +250,10 @@ class WebUI:
             )
 
             prompt = self.engine.format_chat_prompt(messages, sys_prompt)
-            
+
+            if user_wants_fix(message):
+                _report("Generating chat response (fix mode)…")
+
             # Generate response
             response = self.engine.generate(
                 prompt,
@@ -260,17 +280,21 @@ class WebUI:
             
             history = _append_chat_messages(history, message, response)
 
+            if user_wants_fix(message):
+                _report("Checking assistant reply for MYTHOS_PATCH blocks…")
             patch_notices = apply_patches_with_prompt(
                 response,
                 self.engine.config,
                 message=message,
                 rewrite_approved=rewrite_approved,
+                on_progress=_report,
             )
 
             if user_wants_fix(message) and not any(
                 n.startswith("Wrote") for n in patch_notices
             ):
                 if rewrite_approved or allow_rewrite:
+                    _report("Running dedicated full-file rewrite…")
                     patch_notices.extend(
                         run_dedicated_rewrite(
                             _rewrite_paths,
@@ -278,6 +302,7 @@ class WebUI:
                             self.prompt_manager,
                             self.engine.config,
                             targets=fix_targets or self._last_local_targets,
+                            on_progress=_report,
                         )
                     )
                 elif _rewrite_paths:
@@ -288,10 +313,14 @@ class WebUI:
             status = f"✓ Generated {len(response.split())} words"
             if use_reflection:
                 status += " (with reflection)"
+            if bitacora.entries:
+                status = bitacora.render_plain(max_lines=12) + "\n---\n" + status
+            elif activity:
+                status = " → ".join(activity[-4:]) + " | " + status
             all_notes = local_notices + fix_notices + patch_notices
             if all_notes:
                 status += " | " + "; ".join(all_notes[:5])
-            
+
             return history, status
             
         except Exception as e:
