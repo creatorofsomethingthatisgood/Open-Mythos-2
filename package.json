@@ -2,10 +2,21 @@
   "name": "open-mythos-2",
   "version": "2.0.0",
   "description": "Mythos — fully local, offline AI that lives in your terminal. No API keys, no cloud, no limits.",
-  "keywords": ["ai", "llm", "local", "offline", "terminal", "cli", "chat", "mythos"],
+  "keywords": [
+    "ai",
+    "llm",
+    "local",
+    "offline",
+    "terminal",
+    "cli",
+    "chat",
+    "mythos"
+  ],
   "homepage": "https://github.com/creatorofsomethingthatisgood/Open-Mythos-2",
   "license": "MIT",
-  "author": { "name": "Mythos" },
+  "author": {
+    "name": "Mythos"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git"
@@ -32,20 +43,22 @@
   },
   "dependencies": {
     "clsx": "2.1.1",
+    "open-mythos-2": "^2.0.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "tailwind-merge": "3.4.0"
+    "tailwind-merge": "3.4.0",
+    "tar": "^7.5.15"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.17",
     "@types/node": "22.19.17",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "@vercel/node": "^5.8.4",
+    "@vercel/node": "^4.0.0",
     "@vitejs/plugin-react": "5.1.1",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
-    "vite": "7.2.4",
+    "vite": "^7.3.3",
     "vite-plugin-singlefile": "2.3.0"
   },
   "engines": {

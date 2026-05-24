@@ -1,2 +1,5 @@
 allowBuilds:
   esbuild: true
+  open-mythos-2: set this to true or false
+minimumReleaseAgeExclude:
+  - open-mythos-2@2.0.0
