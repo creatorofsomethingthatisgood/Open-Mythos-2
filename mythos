@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# Run Mythos without activating the venv (works on macOS and Linux).
+# Mythos CLI — global launcher, works from ANY directory.
+# Typing "mythos" starts the chat interface (like "claude" starts Claude Code).
+# Subcommands: mythos chat, mythos web, mythos scan, mythos status, etc.
 set -e
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$ROOT"
 
-if [[ -x "$ROOT/venv/bin/mythos" ]]; then
-  exec "$ROOT/venv/bin/mythos" "$@"
+MYTHOS_ROOT="/home/anonymous0304/Open-Mythos-2"
+VENV_PYTHON="$MYTHOS_ROOT/venv/bin/python3"
+
+if [ ! -x "$VENV_PYTHON" ]; then
+  echo "Mythos venv not found at $MYTHOS_ROOT/venv" >&2
+  echo "Run the setup script first: $MYTHOS_ROOT/setup.sh" >&2
+  exit 1
 fi
 
-if command -v mythos >/dev/null 2>&1; then
-  exec mythos "$@"
-fi
+# Ensure MYTHOS_PROJECT_ROOT is set so the CLI knows where the project lives
+export MYTHOS_PROJECT_ROOT="$MYTHOS_ROOT"
 
-echo "Mythos is not installed in this folder yet." >&2
-echo "" >&2
-if [[ "$(uname)" == "Darwin" ]]; then
-  echo "  Run:  ./setup-macos.sh" >&2
+# If no arguments, default to chat (like claude does)
+if [ $# -eq 0 ]; then
+  exec "$VENV_PYTHON" -m mythos_cli.main chat
 else
-  echo "  Run:  ./setup.sh" >&2
+  exec "$VENV_PYTHON" -m mythos_cli.main "$@"
 fi
-echo "" >&2
-echo "Then start chat with:  ./mythos" >&2
-exit 1
