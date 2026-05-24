@@ -123,11 +123,19 @@ rml:
  hint_threshold: 3.0 # Negative score before a learned hint is injected
 
 memory:
- # Conversation memory settings
- save_conversations: true
- conversations_dir: "conversations"
- max_history_turns: 50 # Maximum turns to keep in memory
- auto_summarize: true # Summarize old context when full
+  # Conversation memory settings
+  save_conversations: true
+  conversations_dir: "conversations"
+  max_history_turns: 50 # Maximum turns to keep in memory
+  auto_summarize: true # Summarize old context when full
+  cross_session:
+    # Cross-Session Memory — "Mythos Remembers"
+    # Persists key facts across sessions so Mythos starts with user context.
+    # Toggle with /memory on|off in chat. View facts with /memory.
+    enabled: true
+    max_facts: 50 # Maximum facts stored (oldest pruned first)
+    decay_days: 30 # Facts with no reinforcement fade after this many days
+    max_context_chars: 2000 # Cap for the injected memory block in the system prompt
   
 ui:
   # User interface settings

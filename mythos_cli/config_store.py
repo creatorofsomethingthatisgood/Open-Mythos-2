@@ -35,7 +35,12 @@ def chroma_root() -> Path:
 
 
 def models_hint_dir() -> Path:
-    return mythos_home() / "models"
+ return mythos_home() / "models"
+
+
+def cross_session_memory_path() -> Path:
+ """Directory for cross-session memory facts (JSON store)."""
+ return mythos_home() / "memory"
 
 
 def _default_user_config() -> Dict[str, Any]:
@@ -137,6 +142,8 @@ def _patch_llm_config_for_user(llm_path: Path) -> None:
 
     mem = cfg.setdefault("memory", {})
     mem["conversations_dir"] = str(home / "conversations")
+    cs = mem.setdefault("cross_session", {})
+    cs.setdefault("data_dir", str(cross_session_memory_path()))
 
     sys_cfg = cfg.setdefault("system", {})
     default_prompt = DEFAULT_PROMPT_FILE if DEFAULT_PROMPT_FILE.exists() else PROMPTS_DIR / "default.txt"

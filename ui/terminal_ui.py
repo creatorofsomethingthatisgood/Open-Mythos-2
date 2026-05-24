@@ -35,6 +35,7 @@ from engine.local_refs import (
 )
 from engine.chat_config import merge_chat_defaults
 from engine.rml import RMLEngine
+from engine.cross_session_memory import CrossSessionMemory
 from engine.chat_fix import (
     REWRITE_WARNING,
     _fix_cfg,
@@ -108,7 +109,16 @@ class TerminalUI:
         # RML (Reinforcement Machine Learning) engine
         self.rml = RMLEngine(self.engine.config)
         if self.rml.enabled:
-            self.console.print("[green]RML (Reinforcement ML) enabled — learning from your feedback[/green]")
+            self.console.print("[green]RML (Reinforcement ML) enabled â learning from your feedback[/green]")
+
+        # Cross-Session Memory -- Mythos Remembers
+        self.cross_memory = CrossSessionMemory(self.engine.config)
+        if self.cross_memory.enabled:
+            fact_count = len(self.cross_memory.list_facts())
+            self.console.print(
+                "[green]Cross-Session Memory enabled -- "
+                f"remembering {fact_count} fact(s) from past sessions[/green]"
+            )
         
         self.running = True
         self._pending_local_context = ""
@@ -184,6 +194,7 @@ class TerminalUI:
 [yellow]/reflect on|off[/yellow] - Toggle self-reflection
 [yellow]/rag on|off[/yellow] - Toggle RAG (if available)
 [yellow]/rml on|off|stats|good|bad|reset[/yellow] - Reinforcement ML: learn from your feedback
+[yellow]/memory [on|off|add|forget|clear|extract][/yellow] - Cross-session memory: facts Mythos remembers
 [yellow]/file <path>[/yellow] - Load a local file or folder into context
 [yellow]/fix <path>[/yellow] - Auto-fix safe vulns (yaml, TLS, debug flags)
 [yellow]/rewrite <path>[/yellow] - Rewrite file(s) on disk (LLM + auto-write)
@@ -525,8 +536,82 @@ class TerminalUI:
                 self.console.print("[dim]  stats  — show what RML has learned[/dim]")
                 self.console.print("[dim]  good   — rate the last response as good (+2)[/dim]")
                 self.console.print("[dim]  bad    — rate the last response as bad (-2)[/dim]")
-                self.console.print("[dim]  reset  — wipe all learned preferences[/dim]")
-        
+                self.console.print("[dim] reset \u2014 wipe all learned preferences[/dim]")
+
+        elif cmd == "/memory":
+            sub_parts = args.strip().split(maxsplit=1)
+            sub = sub_parts[0].lower() if sub_parts else ""
+            mem_args = sub_parts[1] if len(sub_parts) > 1 else ""
+            if sub == "on":
+                self.cross_memory.enabled = True
+                self.engine.config.setdefault("memory", {}).setdefault(
+                    "cross_session", {}
+                )["enabled"] = True
+                self.console.print("[green]Cross-Session Memory enabled[/green]")
+                self.console.print(
+                    "[dim]Mythos will remember facts across sessions.[/dim]"
+                )
+            elif sub == "off":
+                self.cross_memory.enabled = False
+                self.engine.config.setdefault("memory", {}).setdefault(
+                    "cross_session", {}
+                )["enabled"] = False
+                self.console.print("[yellow]Cross-Session Memory disabled[/yellow]")
+                self.console.print(
+                    "[dim]Memory paused. Stored facts are kept.[/dim]"
+                )
+            elif sub == "add":
+                if not mem_args:
+                    self.console.print("[red]Usage: /memory add <fact text>[/red]")
+                else:
+                    fid = self.cross_memory.add_fact(mem_args, source="manual")
+                    if fid:
+                        self.console.print(f"[green]Fact added: {mem_args}[/green]")
+                    else:
+                        self.console.print(
+                            "[yellow]Fact skipped (empty or duplicate)[/yellow]"
+                        )
+            elif sub == "forget" or sub == "remove":
+                if not mem_args:
+                    self.console.print(
+                        "[red]Usage: /memory forget <fact text or ID>[/red]"
+                    )
+                else:
+                    removed = self.cross_memory.remove_fact(mem_args)
+                    if removed:
+                        self.console.print(
+                            f"[green]Fact removed: {mem_args}[/green]"
+                        )
+                    else:
+                        self.console.print(
+                            "[yellow]No matching fact found[/yellow]"
+                        )
+            elif sub == "clear":
+                self.cross_memory.clear()
+                self.console.print("[yellow]All cross-session memory cleared[/yellow]")
+            elif sub == "extract":
+                msg_list = self.memory.get_recent_context(max_turns=50)
+                n = self.cross_memory.extract_facts_from_messages(
+                    msg_list, engine=self.engine
+                )
+                self.console.print(
+                    f"[green]Extracted {n} new fact(s) from this session[/green]"
+                )
+            elif sub == "":
+                # No subcommand -- show the facts table
+                self.console.print(self.cross_memory.format_facts_table())
+            else:
+                self.console.print(
+                    "[red]Usage: /memory [on|off|add|forget|clear|extract][/red]"
+                )
+                self.console.print("[dim] /memory       -- show stored facts[/dim]")
+                self.console.print("[dim] /memory on    -- enable cross-session memory[/dim]")
+                self.console.print("[dim] /memory off   -- disable cross-session memory[/dim]")
+                self.console.print("[dim] /memory add <fact>   -- manually add a fact[/dim]")
+                self.console.print("[dim] /memory forget <text> -- remove a fact[/dim]")
+                self.console.print("[dim] /memory clear -- wipe all facts[/dim]")
+                self.console.print("[dim] /memory extract -- scan session for facts now[/dim]")
+
         elif cmd == "/benchmark":
             self.console.print("[cyan]Running benchmark suite...[/cyan]")
             self.console.print("[yellow]This will take several minutes...[/yellow]\n")
@@ -729,6 +814,12 @@ class TerminalUI:
                 if rml_hints:
                     system_prompt = system_prompt + "\n" + rml_hints
 
+            # Cross-session memory: inject remembered facts into the system prompt
+            if self.cross_memory.enabled:
+                memory_block = self.cross_memory.get_prompt_block()
+                if memory_block:
+                    system_prompt = system_prompt + "\n" + memory_block
+
             extra_context = "\n\n".join(
                 part for part in (rag_context, local_context, fix_context) if part
             )
@@ -904,6 +995,20 @@ class TerminalUI:
             if save == "y":
                 filepath = self.memory.save()
                 self.console.print(f"[green]Saved to: {filepath}[/green]")
+
+        # Cross-session memory: extract facts from this session before exiting
+        if self.cross_memory.enabled and self.memory.messages:
+            try:
+                msg_list = self.memory.get_recent_context(max_turns=50)
+                n_extracted = self.cross_memory.extract_facts_from_messages(
+                    msg_list, engine=self.engine
+                )
+                if n_extracted > 0:
+                    self.console.print(
+                        f"[green]Cross-Session Memory: learned {n_extracted} new fact(s) from this session[/green]"
+                    )
+            except Exception as mem_err:
+                logger.warning(f"Cross-session memory extraction failed on exit: {mem_err}")
 
 
 def run_terminal_ui(config_path: str = "config.yaml"):

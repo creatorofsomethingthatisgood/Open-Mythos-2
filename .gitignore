@@ -95,3 +95,4 @@ Thumbs.db
 **/.venv/
 **/.ruff_cache/
 .vercel
+.npmrc
