@@ -33,6 +33,8 @@ from mythos_cli.config_store import (
 )
 from mythos_cli.output import print_json, print_summary, print_verbose_findings
 from mythos_cli.scan_runner import run_scan
+from mythos_cli.fix_runner import run_fix
+from mythos_cli.fix_output import print_fix_results
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -137,6 +139,35 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     return print_summary(findings, roots, deep_report)
 
 
+def _cmd_fix(args: argparse.Namespace) -> int:
+    ensure_initialized()
+    dry_run = not args.apply
+
+    try:
+        findings, roots, fixes = run_fix(
+            path_arg=args.path,
+            dry_run=dry_run,
+            min_severity=args.severity,
+        )
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Fix failed: {e}", file=sys.stderr)
+        return 1
+
+    print_fix_results(fixes, dry_run=dry_run)
+
+    if findings:
+        from mythos_cli.output import print_summary
+
+        print("\n--- Remaining findings after fix ---")
+        return print_summary(findings, roots, None)
+
+    print("\nNo remaining static findings at configured severity.")
+    return 0
+
+
 def _cmd_explore(args: argparse.Namespace) -> int:
     ensure_initialized()
     from engine.rag import RAGPipeline
@@ -212,6 +243,7 @@ Security scanning:
   mythos path add ~/src   Register a codebase
   mythos scan             Instant static analysis
   mythos scan --deep      AI-powered audit (needs model)
+  mythos fix --path .     Auto-fix safe patterns (dry-run; use --apply)
 
 Examples:
   mythos                  # start chatting from any directory
@@ -275,6 +307,25 @@ Examples:
     ps.add_argument("--format", choices=["table", "json"], default="table")
     ps.add_argument("--verbose", "-v", action="store_true", help="Show snippets and fixes")
     ps.set_defaults(func=_cmd_scan)
+
+    # ── fix ─────────────────────────────────────────────────────────────
+    pf = sub.add_parser(
+        "fix",
+        help="Auto-fix safe static findings (yaml.safe_load, TLS verify, etc.)",
+    )
+    pf.add_argument("--path", "-p", help="Fix one path (file or directory)")
+    pf.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write line-level fixes to disk (use git; no .bak files)",
+    )
+    pf.add_argument(
+        "--severity",
+        choices=["critical", "high", "medium", "low", "info"],
+        default=None,
+        help="Minimum severity to consider",
+    )
+    pf.set_defaults(func=_cmd_fix)
 
     # ── explore ─────────────────────────────────────────────────────────
     pe = sub.add_parser("explore", help="Preview indexable files under a path")

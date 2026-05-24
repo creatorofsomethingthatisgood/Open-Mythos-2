@@ -49,7 +49,9 @@ class PromptManager:
         """
         if prompt_name is None:
             # Load from config
-            prompt_file = self.config.get('system', {}).get('prompt_file', 'prompts/default.txt')
+            prompt_file = self.config.get('system', {}).get(
+                'prompt_file', 'prompts/security_fix.txt'
+            )
             prompt_path = Path(prompt_file)
         else:
             # Load specific template

@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import unquote, urlparse
 
+from engine.chat_config import file_limit, merge_chat_defaults
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,6 +23,20 @@ def _truncate_text(text: str, max_chars: int) -> str:
     return text[:keep] + suffix
 
 FILE_URL_RE = re.compile(r"\bfile://[^\s<>\"'\]`]+", re.IGNORECASE)
+# Paths in single or double quotes: '/Users/me/app' or "/Users/me/app"
+QUOTED_PATH_RE = re.compile(
+    r"""['"](?P<path>(?:~|/|[A-Za-z]:)[^'"]{2,})['"]""",
+)
+# "in this '/Users/me/project'" or "in '/Users/me/project'"
+THIS_QUOTED_PATH_RE = re.compile(
+    r"""\b(?:in\s+)?this\s+['"](?P<path>(?:~|/|[A-Za-z]:)[^'"]{2,})['"]""",
+    re.IGNORECASE,
+)
+# Paths after "in" without quotes
+IN_PATH_RE = re.compile(
+    r"""\bin\s+['"]?(?P<path>(?:~|/)[^\s'"]+)['"]?""",
+    re.IGNORECASE,
+)
 ABS_PATH_RE = re.compile(
     r"""(?:^|[\s(\[{])"""
     r"""(?P<path>"""
@@ -58,27 +74,51 @@ def ref_to_path(ref: str) -> Path:
     return Path(ref).expanduser()
 
 
+def _add_ref(refs: List[str], seen: set[str], raw: str) -> None:
+    raw = _strip_ref(raw)
+    if not raw or raw in seen:
+        return
+    lower = raw.lower()
+    if lower.startswith(("http://", "https://", "ftp://")):
+        return
+    seen.add(raw)
+    refs.append(raw)
+
+
 def extract_local_refs(text: str) -> List[str]:
-    """Find file:// URLs and absolute paths mentioned in a chat message."""
+    """Find file:// URLs, quoted paths, and absolute paths in a message."""
     seen: set[str] = set()
     refs: List[str] = []
 
     for match in FILE_URL_RE.finditer(text):
-        raw = _strip_ref(match.group(0))
-        if raw and raw not in seen:
-            seen.add(raw)
-            refs.append(raw)
+        _add_ref(refs, seen, match.group(0))
+
+    for match in QUOTED_PATH_RE.finditer(text):
+        _add_ref(refs, seen, match.group("path"))
+
+    for match in THIS_QUOTED_PATH_RE.finditer(text):
+        _add_ref(refs, seen, match.group("path"))
+
+    for match in IN_PATH_RE.finditer(text):
+        _add_ref(refs, seen, match.group("path"))
 
     for match in ABS_PATH_RE.finditer(text):
-        raw = _strip_ref(match.group("path"))
-        lower = raw.lower()
-        if lower.startswith(("http://", "https://", "ftp://", "file://")):
-            continue
-        if not raw or raw in seen:
-            continue
-        seen.add(raw)
-        refs.append(raw)
+        _add_ref(refs, seen, match.group("path"))
 
+    return refs
+
+
+def extract_local_refs_from_messages(messages: List[Dict[str, str]]) -> List[str]:
+    """Collect paths mentioned in recent user messages (newest first)."""
+    seen: set[str] = set()
+    refs: List[str] = []
+    for msg in reversed(messages):
+        if msg.get("role") != "user":
+            continue
+        for ref in extract_local_refs(msg.get("content", "")):
+            if ref not in seen:
+                seen.add(ref)
+                refs.append(ref)
     return refs
 
 
@@ -157,13 +197,13 @@ def build_local_file_context(
     Returns:
         (context_block, status_notices)
     """
-    cfg = (config or {}).get("chat", {}).get("local_files", {})
+    cfg = merge_chat_defaults(config or {}).get("chat", {}).get("local_files", {})
     if cfg.get("enabled", True) is False:
         return "", []
 
     max_file_bytes = int(cfg.get("max_file_bytes", 2 * 1024 * 1024))
     max_context_chars = int(cfg.get("max_context_chars", 30000))
-    max_files = int(cfg.get("max_files", 10))
+    max_files = file_limit(cfg.get("max_files"), 0)
     static_scan = bool(cfg.get("static_scan", True))
 
     refs = extract_local_refs(message)
@@ -185,6 +225,8 @@ def build_local_file_context(
         if static_scan:
             notices.append("Static scanner unavailable (mythos_cli not installed)")
 
+    max_dir_samples = file_limit(cfg.get("max_dir_sample_files"), 0)
+
     for target in targets:
         if target.is_dir():
             if static_scan and scan_directory:
@@ -198,6 +240,28 @@ def build_local_file_context(
                 notices.append(
                     f"Scanned directory {target} ({len(findings)} finding(s))"
                 )
+                # Load real source from files with findings so the model does not invent paths
+                seen_files: set[str] = set()
+                loaded_from_dir = 0
+                for f in findings:
+                    if max_dir_samples is not None and loaded_from_dir >= max_dir_samples:
+                        break
+                    fp = (target / f.path).resolve()
+                    key = str(fp)
+                    if key in seen_files or not fp.is_file():
+                        continue
+                    seen_files.add(key)
+                    if max_files is not None and files_loaded >= max_files:
+                        break
+                    content, err = _read_file_block(fp, max_file_bytes)
+                    if err:
+                        continue
+                    blocks.append(content)
+                    if scan_file:
+                        blocks.append(_format_findings(scan_file(fp, target)))
+                    files_loaded += 1
+                    loaded_from_dir += 1
+                    notices.append(f"Loaded {fp}")
             else:
                 notices.append(f"Directory noted (enable static_scan): {target}")
             continue
@@ -206,7 +270,7 @@ def build_local_file_context(
             notices.append(f"Not a file or directory: {target}")
             continue
 
-        if files_loaded >= max_files:
+        if max_files is not None and files_loaded >= max_files:
             notices.append(f"File limit ({max_files}) reached; skipped {target}")
             continue
 

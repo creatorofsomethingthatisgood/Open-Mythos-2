@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from mythos_cli.config_store import (
+    ensure_chat_edit_config,
     mythos_home,
     resolve_chat_config,
 )
@@ -47,6 +48,7 @@ def launch_chat(config_path: str | None = None, verbose: bool = False) -> None:
     """Launch the Mythos terminal chat interface."""
     _setup_import_path()
     cfg_path = resolve_chat_config(config_path)
+    ensure_chat_edit_config()
     _prepare_runtime_dirs(cfg_path)
 
     os.environ["MYTHOS_CONFIG"] = str(cfg_path)
@@ -69,6 +71,7 @@ def launch_web(
     """Launch the Mythos web UI."""
     _setup_import_path()
     cfg_path = resolve_chat_config(config_path)
+    ensure_chat_edit_config()
     _prepare_runtime_dirs(cfg_path)
 
     os.environ["MYTHOS_CONFIG"] = str(cfg_path)

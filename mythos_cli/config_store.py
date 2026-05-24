@@ -14,6 +14,7 @@ import yaml
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LLM_CONFIG = PACKAGE_ROOT / "config.yaml"
 PROMPTS_DIR = PACKAGE_ROOT / "prompts"
+DEFAULT_PROMPT_FILE = PROMPTS_DIR / "security_fix.txt"
 
 
 def mythos_home() -> Path:
@@ -138,15 +139,58 @@ def _patch_llm_config_for_user(llm_path: Path) -> None:
     mem["conversations_dir"] = str(home / "conversations")
 
     sys_cfg = cfg.setdefault("system", {})
-    default_prompt = PROMPTS_DIR / "default.txt"
+    default_prompt = DEFAULT_PROMPT_FILE if DEFAULT_PROMPT_FILE.exists() else PROMPTS_DIR / "default.txt"
     if default_prompt.exists():
         sys_cfg["prompt_file"] = str(default_prompt)
 
     log_cfg = cfg.setdefault("logging", {})
     log_cfg["file"] = str(home / "mythos.log")
 
+    from engine.chat_config import merge_chat_defaults
+
+    cfg = merge_chat_defaults(cfg)
+
     with open(llm_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
+
+
+def ensure_chat_edit_config() -> None:
+    """Ensure ~/.config/mythos/mythos.yaml has unlimited chat limits and enough max_tokens."""
+    llm = llm_config_path()
+    if not llm.exists():
+        return
+    with open(llm, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f) or {}
+    from engine.chat_config import merge_chat_defaults
+
+    merged = merge_chat_defaults(cfg)
+    gen = merged.setdefault("generation", {})
+    if int(gen.get("max_tokens", 2048)) < 8192:
+        gen["max_tokens"] = 8192
+
+    old_chat = cfg.get("chat") if isinstance(cfg.get("chat"), dict) else {}
+    old_fix = old_chat.get("fix") if isinstance(old_chat.get("fix"), dict) else {}
+    old_lf = old_chat.get("local_files") if isinstance(old_chat.get("local_files"), dict) else {}
+    limits_need_upgrade = (
+        int(old_fix.get("max_rewrite_files", 5) or 0) > 0
+        or int(old_lf.get("max_files", 10) or 0) > 0
+        or int(old_lf.get("max_dir_sample_files", 5) or 0) > 0
+    )
+    old_pf = str(cfg.get("system", {}).get("prompt_file", "")).lower()
+    prompt_should_upgrade = any(
+        x in old_pf for x in ("security_audit", "default.txt", "default")
+    ) and "security_fix" not in old_pf
+    if prompt_should_upgrade and DEFAULT_PROMPT_FILE.exists():
+        merged.setdefault("system", {})["prompt_file"] = str(DEFAULT_PROMPT_FILE)
+    need_write = (
+        not isinstance(cfg.get("chat"), dict)
+        or limits_need_upgrade
+        or prompt_should_upgrade
+        or int(cfg.get("generation", {}).get("max_tokens", 2048)) < 8192
+    )
+    if need_write:
+        with open(llm, "w", encoding="utf-8") as f:
+            yaml.safe_dump(merged, f, default_flow_style=False, sort_keys=False)
 
 
 def migrate_repo_models_to_user_home() -> None:

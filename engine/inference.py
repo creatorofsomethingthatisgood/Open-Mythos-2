@@ -67,7 +67,9 @@ class InferenceEngine:
         """Load configuration from YAML"""
         try:
             with open(self.config_path, 'r') as f:
-                return yaml.safe_load(f)
+                raw = yaml.safe_load(f) or {}
+            from engine.chat_config import merge_chat_defaults
+            return merge_chat_defaults(raw)
         except Exception as e:
             logger.error(f"Failed to load config: {e}")
             return {}

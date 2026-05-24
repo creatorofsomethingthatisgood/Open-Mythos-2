@@ -22,6 +22,12 @@ def test_extract_file_url():
     assert any("file://" in r for r in refs)
 
 
+def test_extract_quoted_path():
+    msg = "find vulns in '/Users/ludwing/Documents/GitHub/carla-chat'"
+    refs = extract_local_refs(msg)
+    assert any("carla-chat" in r for r in refs)
+
+
 def test_extract_tilde_path():
     msg = "Audit ~/projects/payments-api/handlers/auth.py"
     refs = extract_local_refs(msg)

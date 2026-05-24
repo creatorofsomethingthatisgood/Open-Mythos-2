@@ -4,7 +4,7 @@ Terminal UI - Beautiful terminal interface using Rich library
 
 import logging
 import time
-from typing import Optional
+from typing import List, Optional
 from pathlib import Path
 
 try:
@@ -27,7 +27,26 @@ from engine.rag import RAGPipeline
 from engine.self_reflect import SelfReflector
 from engine.benchmark import BenchmarkSuite
 from engine.context_budget import fit_chat_context
-from engine.local_refs import build_local_file_context
+from engine.local_refs import (
+    build_local_file_context,
+    extract_local_refs,
+    extract_local_refs_from_messages,
+    ref_to_path,
+)
+from engine.chat_fix import (
+    REWRITE_WARNING,
+    apply_patches_with_prompt,
+    handle_chat_fix,
+    resolve_fix_targets,
+    resolve_rewrite_file_paths,
+    run_dedicated_rewrite,
+    run_rewrite_files,
+    user_confirms_rewrite,
+    active_prompt_is_security_audit,
+    build_fix_system_prompt,
+    user_wants_fix,
+    user_wants_rewrite,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,11 +102,15 @@ class TerminalUI:
         
         self.running = True
         self._pending_local_context = ""
+        self._last_local_targets: list = []
+        self._pending_rewrite_paths: List[str] = []
         
     def show_header(self):
         """Display welcome header"""
         # Detect which prompt mode is active
-        current_prompt_file = self.engine.config.get('system', {}).get('prompt_file', 'prompts/default.txt')
+        current_prompt_file = self.engine.config.get(
+            'system', {}
+        ).get('prompt_file', 'prompts/security_fix.txt')
         mode_name = Path(current_prompt_file).stem.replace('_', ' ').title()
         
         mode_emoji = {
@@ -99,6 +122,7 @@ class TerminalUI:
             'Analytical': '🧠',
             'Roleplay': '🎭',
             'Security Audit': '🛡️',
+            'Security Fix': '🔧',
         }
         emoji = mode_emoji.get(mode_name, '🚀')
         
@@ -132,6 +156,8 @@ class TerminalUI:
 [yellow]/reflect on|off[/yellow]   - Toggle self-reflection
 [yellow]/rag on|off[/yellow]       - Toggle RAG (if available)
 [yellow]/file <path>[/yellow]      - Load a local file or folder into context
+[yellow]/fix <path>[/yellow]       - Auto-fix safe vulns (yaml, TLS, debug flags)
+[yellow]/rewrite <path>[/yellow]   - Rewrite file(s) on disk (LLM + auto-write)
 [yellow]/benchmark[/yellow]        - Run benchmark suite
 [yellow]/config[/yellow]           - Show current configuration
 [yellow]/export[/yellow]           - Export conversation as text
@@ -148,12 +174,17 @@ class TerminalUI:
 [yellow]/system analytical[/yellow] - Deep analysis & reasoning
 [yellow]/system roleplay[/yellow]   - Character roleplay mode
 [yellow]/system security_audit[/yellow] - Codebase security review mode
+[yellow]/system security_fix[/yellow]   - Default — find + fix (MYTHOS_PATCH)
 
-[bold cyan]Local files in chat:[/bold cyan]
+[bold cyan]Local files & fixes in chat:[/bold cyan]
 - Paste a path: [dim]/Users/you/project/app.py[/dim]
-- Or a file URL: [dim]file:///Users/you/project/app.py[/dim]
-- Or use [yellow]/file ~/my-repo[/yellow] then ask about vulnerabilities
-- Best with [yellow]/system security_audit[/yellow] and [yellow]/temp 0.3[/yellow]
+- Or: [dim]file:///Users/you/project/app.py[/dim]
+- [yellow]/file ~/my-repo[/yellow] then ask about vulnerabilities
+- [dim]fix the vulns in '/Users/you/project'[/dim] — scans, warns, asks to rewrite full files (git)
+- [yellow]/rewrite '/path/to/file.py'[/yellow] — LLM writes complete file (MYTHOS_PATCH; confirm required)
+- [yellow]/fix ~/my-repo[/yellow] — CLI line-level fixes only (separate from chat full-file rewrite)
+- Default mode is [yellow]security_fix[/yellow] (writes via MYTHOS_PATCH). Use [yellow]/system security_audit[/yellow] for report-only.
+- Best with [yellow]/temp 0.3[/yellow] for fixes
 
 [bold cyan]Tips:[/bold cyan]
 - Use Ctrl+C to interrupt generation
@@ -282,11 +313,98 @@ class TerminalUI:
                 self.console.print(f"[{style}]{note}[/{style}]")
             if ctx:
                 self._pending_local_context = ctx
+                self._last_local_targets = resolve_fix_targets(
+                    fake_msg, self._last_local_targets
+                )
                 self.console.print(
                     "[green]Local file context ready — ask your security question next.[/green]"
                 )
             else:
                 self.console.print("[yellow]No file context loaded.[/yellow]")
+            return True
+
+        elif cmd == "/fix":
+            if not args:
+                self.console.print(
+                    "[red]Usage: /fix <path>[/red]  "
+                    "(file or folder; dry-run preview, then confirm apply)"
+                )
+                return True
+            target = ref_to_path(args.strip())
+            if not target.exists():
+                self.console.print(f"[red]Not found: {target}[/red]")
+                return True
+            try:
+                from mythos_cli.fix_runner import run_fix_on_path
+                from mythos_cli.fix_output import print_fix_results
+
+                self.console.print(f"[cyan]Scanning {target}...[/cyan]")
+                findings, fixes = run_fix_on_path(target, dry_run=True)
+                print_fix_results(fixes, dry_run=True)
+
+                pending = [f for f in fixes if f.status == "pending"]
+                if not pending:
+                    if findings:
+                        self.console.print(
+                            "[yellow]Remaining issues need manual or LLM review "
+                            "(secrets, SQL, eval, etc.). Ask in chat with /file.[/yellow]"
+                        )
+                    return True
+
+                self.console.print(
+                    Panel(REWRITE_WARNING, title="Line-level fix", border_style="yellow")
+                )
+                if Prompt.ask("Apply line-level fixes to disk?", choices=["y", "n"], default="n") == "y":
+                    _, applied = run_fix_on_path(target, dry_run=False)
+                    print_fix_results(applied, dry_run=False)
+                    self.console.print("[green]Fixes written — review with git diff.[/green]")
+            except Exception as exc:
+                self.console.print(f"[red]Fix failed: {exc}[/red]")
+            return True
+
+        elif cmd == "/rewrite":
+            if not args:
+                self.console.print(
+                    "[red]Usage: /rewrite <file-or-folder>[/red]  "
+                    "(rewrites full file on disk via LLM)"
+                )
+                return True
+            target = ref_to_path(args.strip())
+            if not target.exists():
+                self.console.print(f"[red]Not found: {target}[/red]")
+                return True
+            try:
+                self.console.print(
+                    Panel(REWRITE_WARNING, title="Full-file rewrite", border_style="yellow")
+                )
+                if Prompt.ask(
+                    f"Rewrite {target} on disk (complete files)?",
+                    choices=["y", "n"],
+                    default="n",
+                ) != "y":
+                    self.console.print("[yellow]Rewrite cancelled.[/yellow]")
+                    return True
+                self.console.print(
+                    f"[cyan]Rewriting {target} (full file write)...[/cyan]"
+                )
+                self.console.print("[dim]This may take a minute.[/dim]\n")
+                response, notices = run_rewrite_files(
+                    [target],
+                    self.engine,
+                    self.prompt_manager,
+                    self.memory,
+                    self.engine.config,
+                    stream=False,
+                )
+                for note in notices:
+                    style = "green" if note.startswith("Wrote") else "yellow"
+                    self.console.print(f"[{style}]{note}[/{style}]")
+                if response.strip():
+                    self.console.print("\n[bold green]Assistant:[/bold green]")
+                    self.console.print(response)
+                    self.memory.add_message("assistant", response)
+            except Exception as exc:
+                self.console.print(f"[red]Rewrite failed: {exc}[/red]")
             return True
 
         elif cmd == "/rag":
@@ -371,6 +489,16 @@ class TerminalUI:
         if self.rag_enabled and self.rag:
             rag_context = self.rag.get_context(user_input)
 
+        history_refs = extract_local_refs_from_messages(
+            self.memory.get_recent_context(max_turns=20)
+        )
+        if extract_local_refs(user_input) or history_refs:
+            self._last_local_targets = resolve_fix_targets(
+                user_input,
+                self._last_local_targets,
+                extra_refs=history_refs,
+            )
+
         local_context, local_notices = build_local_file_context(
             user_input, self.engine.config
         )
@@ -379,20 +507,86 @@ class TerminalUI:
                 part for part in (self._pending_local_context, local_context) if part
             )
             self._pending_local_context = ""
-        for note in local_notices:
-            style = "green" if note.startswith("Loaded") or "Scanned" in note else "dim"
+
+        rewrite_approved = False
+        rewrite_paths: List[str] = []
+        confirm_only = user_confirms_rewrite(user_input)
+
+        if confirm_only and self._pending_rewrite_paths:
+            rewrite_approved = True
+            rewrite_paths = list(self._pending_rewrite_paths)
+            fix_context = ""
+            fix_notices = [f"Continuing rewrite for {len(rewrite_paths)} file(s)…"]
+            fix_targets = list(self._last_local_targets)
+        else:
+            def _confirm_apply(summary: str) -> bool:
+                self.console.print(
+                    Panel(REWRITE_WARNING, title="Full-file rewrite", border_style="yellow")
+                )
+                return Prompt.ask(summary, choices=["y", "n"], default="n") == "y"
+
+            fix_context, fix_notices, fix_targets, rewrite_approved, rewrite_paths = (
+                handle_chat_fix(
+                    user_input,
+                    self.engine.config,
+                    last_targets=self._last_local_targets,
+                    extra_refs=history_refs,
+                    confirm_apply=_confirm_apply,
+                )
+            )
+            if fix_targets:
+                self._last_local_targets = fix_targets
+            if rewrite_paths:
+                self._pending_rewrite_paths = rewrite_paths
+
+        for note in local_notices + fix_notices:
+            style = "green" if note.startswith(("Loaded", "Scanned", "Auto-fix", "Wrote")) else "dim"
+            if note.startswith("Say "):
+                style = "yellow"
             self.console.print(f"[{style}]{note}[/{style}]")
         
+        # Confirm-only: skip chat generation and run dedicated rewrite immediately.
+        if confirm_only and rewrite_approved and rewrite_paths:
+            self.console.print(
+                "[cyan]Running dedicated full-file rewrite…[/cyan]"
+            )
+            patch_notices = run_dedicated_rewrite(
+                rewrite_paths,
+                self.engine,
+                self.prompt_manager,
+                self.engine.config,
+                targets=self._last_local_targets,
+            )
+            for note in patch_notices:
+                style = "green" if note.startswith("Wrote") else "yellow"
+                self.console.print(f"[bold {style}]{note}[/bold {style}]")
+            if any(n.startswith("Wrote") for n in patch_notices):
+                self._pending_rewrite_paths = []
+            self.memory.add_message("assistant", "(rewrite run — see messages above)")
+            return "(rewrite run)"
+
         # Prepare messages (fewer turns when RAG is on — large system block)
         max_turns = 10
         if self.rag_enabled and self.rag:
             max_turns = self.rag.max_history_turns
         messages = self.memory.get_recent_context(max_turns=max_turns)
 
-        # Get system prompt
+        # Get system prompt (audit mode reports only — switch to security_fix when rewriting)
         system_prompt = self.prompt_manager.get_prompt()
+        if rewrite_approved and active_prompt_is_security_audit(self.engine.config):
+            self.console.print(
+                "[dim]Note: security_audit mode reports findings only — "
+                "using security_fix prompt for this rewrite.[/dim]"
+            )
+        system_prompt = build_fix_system_prompt(
+            self.prompt_manager,
+            system_prompt,
+            user_input,
+            rewrite_approved=rewrite_approved,
+        )
+
         extra_context = "\n\n".join(
-            part for part in (rag_context, local_context) if part
+            part for part in (rag_context, local_context, fix_context) if part
         )
         if extra_context:
             system_prompt = self.prompt_manager.format_with_context(extra_context)
@@ -451,6 +645,56 @@ class TerminalUI:
             self.console.print(response_text)
             self.console.print()
         
+        patch_notices = apply_patches_with_prompt(
+            response_text,
+            self.engine.config,
+            message=user_input,
+            rewrite_approved=rewrite_approved,
+        )
+
+        needs_dedicated = user_wants_fix(user_input) and not any(
+            n.startswith("Wrote") for n in patch_notices
+        )
+        if needs_dedicated:
+            if not rewrite_approved:
+                self.console.print(
+                    "[yellow]Chat reply had no usable MYTHOS_PATCH (audit-style markdown is OK).[/yellow]"
+                )
+                rewrite_approved = (
+                    Prompt.ask(
+                        "Run dedicated full-file rewrite now?",
+                        choices=["y", "n"],
+                        default="y",
+                    )
+                    == "y"
+                )
+            if rewrite_approved:
+                self.console.print(
+                    "[cyan]Running dedicated full-file rewrite…[/cyan]"
+                )
+                limit_one = "one" in user_input.lower()
+                targets_for_rewrite = fix_targets or self._last_local_targets
+                paths_for_rewrite = rewrite_paths or resolve_rewrite_file_paths(
+                    targets_for_rewrite, self.engine.config
+                )
+                retry_notes = run_dedicated_rewrite(
+                    paths_for_rewrite,
+                    self.engine,
+                    self.prompt_manager,
+                    self.engine.config,
+                    targets=targets_for_rewrite,
+                    limit_one=limit_one,
+                )
+                patch_notices.extend(retry_notes)
+                if any(n.startswith("Wrote") for n in retry_notes):
+                    self._pending_rewrite_paths = []
+            elif rewrite_paths:
+                self._pending_rewrite_paths = rewrite_paths
+
+        for note in patch_notices:
+            style = "green" if note.startswith("Wrote") else "yellow"
+            self.console.print(f"[bold {style}]{note}[/bold {style}]")
+
         # Add to memory
         self.memory.add_message("assistant", response_text)
         

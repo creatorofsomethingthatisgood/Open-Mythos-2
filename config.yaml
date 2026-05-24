@@ -35,7 +35,7 @@ generation:
   top_p: 0.9          # Nucleus sampling threshold
   top_k: 40           # Top-k sampling
   repeat_penalty: 1.1 # Penalize repetition (1.0 = no penalty)
-  max_tokens: 2048    # Maximum tokens to generate
+  max_tokens: 8192    # Large enough for full-file MYTHOS_PATCH rewrites
   stream: true        # Stream tokens as they're generated
   stop_sequences:     # Stop generation at these sequences
     - "<|im_end|>"
@@ -53,9 +53,9 @@ system:
   #   - prompts/analytical.txt (deep analysis and reasoning)
   #   - prompts/roleplay.txt (character roleplay)
   #   - prompts/security_audit.txt (codebase security review)
-  # Switch with: /system security_audit (in terminal) or dropdown (in web UI)
+  # Default: security_fix (MYTHOS_PATCH). Switch: /system security_audit or /system default
   # For audits with RAG: index your repo, then /rag on, /temp 0.3
-  prompt_file: "prompts/default.txt"
+  prompt_file: "prompts/security_fix.txt"
   self_reflect: false      # Enable self-reflection quality pass (slower but higher quality)
   thinking_mode: false     # Show internal reasoning process
   
@@ -100,9 +100,15 @@ chat:
   local_files:
     enabled: true
     static_scan: true        # Run mythos static rules on referenced files/folders
-    max_files: 10            # Max single files loaded per message
+    max_files: 0             # 0 = unlimited files loaded per message
+    max_dir_sample_files: 0  # 0 = unlimited files loaded per directory scan
     max_file_bytes: 2097152  # Skip files larger than 2 MiB
     max_context_chars: 30000 # Cap injected source text
+  # Natural language: "fix vulns in ~/my-repo" / "apply fixes to ~/my-repo"
+  fix:
+    enabled: true            # Run scan + full-file MYTHOS_PATCH rewrite flow in chat
+    auto_write_patches: true # false = ask before writing (recommended; use git)
+    max_rewrite_files: 0     # 0 = unlimited files rewritten per fix/rewrite run
 
 context:
   reserve_tokens: 2048     # Tokens reserved for the assistant reply (trim prompt to fit)
