@@ -39,8 +39,94 @@
 
 Like Prometheus stealing fire from the gods, OpenMythos-2 brings the fire of AI to every machine.
 
+---
+
+## 🏛️ Features
+
+| ✨ Feature | 📖 Description |
+|---|---|
+| ⚡ **No API Required** | Fully local — nothing ever leaves your machine |
+| 🖥️ **Terminal Native** | Built from the ground up for the command line |
+| 🧠 **Intelligent Reasoning** | Context-aware, multi-turn conversations |
+| 🌑 **Offline First** | Works anywhere — planes, bunkers, the underworld |
+| 🔱 **Mythos Persona** | Answers in the voice of an ancient, wise oracle |
+| 🪶 **Lightweight** | Minimal dependencies, blazing fast startup |
+| 🔓 **Open Source** | Fully transparent and community-driven |
+| 🛡️ **Private by Design** | Your conversations are yours alone |
+| 🔄 **RML (Reinforcement ML)** | Learns from your feedback and adapts — edits system prompt and generation params to match your preferences | when command is /rml on
+
+## 🌊 The Myth Behind the Machine
+
+The name draws from **mythos** (μῦθος) — the ancient Greek word for *story*, *legend*, and *the spoken word of truth*. OpenMythos-2 embodies that spirit: a storyteller, reasoner, and companion that runs **entirely on your machine**, with no external gods (servers) to pray to.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python `3.10+`
+- `pip`
+- A terminal (bash, zsh, PowerShell, cmd)
+
+### 🔱 Installation
+
+<details>
+<summary><strong>Option 1 — Git Clone (recommended)</strong></summary>
+
+```bash
+# Clone the sacred repository
+git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
+
+# Enter the temple
+cd Open-Mythos-2
+
+# One-time setup (macOS or Linux)
+./setup-macos.sh # or ./setup.sh on Linux
+
+# Then chat (no `source venv` needed)
+./mythos
+./mythos model download # once per machine (~4.5 GB → ~/.config/mythos/)
+
+# Move your downloads to another PC (no re-download):
+./scripts/mythos-export-data.sh # creates offline-bundle/ (~4.5 GB)
+# On the new machine after setup:
+./scripts/mythos-import-data.sh ./offline-bundle
+```
+
+</details>
+
+<details>
+<summary><strong>Option 2 — npm (npx)</strong></summary>
+
+```bash
+# Two-command install & run — no manual clone needed
+sudo npm install open-mythos-2@2.0.0
 
 
+# Download the model (~4.5 GB, first time only)
+mythos model download
+
+# Start chatting
+mythos
+```
+
+> **Note:** The npm package wraps the same setup and Python backend under the hood. Node.js 18+ and Python 3.10+ are required. The first `npx` or `mythos` run will automatically set up the virtual environment and dependencies if they aren't already present.
+
+</details>
+
+<details>
+<summary><strong>Option 3 — pnpm</strong></summary>
+
+```bash
+sudo pnpm install open-mythos-2@2.0.0
+
+> **Note:** [pnpm](https://pnpm.io/) is a fast, disk-efficient package manager. The package wraps the same setup and Python backend under the hood. Node.js 18+ and Python 3.10+ are required. The first run will automatically set up the virtual environment and dependencies if they aren't already present.
+
+</details>
+
+
+---
 
 ## 🔄 RML — Reinforcement Machine Learning
 
@@ -105,95 +191,3 @@ Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
 
 Thank you for the star if you gave one.
 
-
-
----
-
-## 🏛️ Features
-
-| ✨ Feature | 📖 Description |
-|---|---|
-| ⚡ **No API Required** | Fully local — nothing ever leaves your machine |
-| 🖥️ **Terminal Native** | Built from the ground up for the command line |
-| 🧠 **Intelligent Reasoning** | Context-aware, multi-turn conversations |
-| 🌑 **Offline First** | Works anywhere — planes, bunkers, the underworld |
-| 🔱 **Mythos Persona** | Answers in the voice of an ancient, wise oracle |
-| 🪶 **Lightweight** | Minimal dependencies, blazing fast startup |
-| 🔓 **Open Source** | Fully transparent and community-driven |
-| 🛡️ **Private by Design** | Your conversations are yours alone |
-| 🔄 **RML (Reinforcement ML)** | Learns from your feedback and adapts — edits system prompt and generation params to match your preferences | when command is /rml on
-
-## 🌊 The Myth Behind the Machine
-
-The name draws from **mythos** (μῦθος) — the ancient Greek word for *story*, *legend*, and *the spoken word of truth*. OpenMythos-2 embodies that spirit: a storyteller, reasoner, and companion that runs **entirely on your machine**, with no external gods (servers) to pray to.
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Python `3.10+`
-- `pip`
-- A terminal (bash, zsh, PowerShell, cmd)
-
-### 🔱 Installation
-
-<details>
-<summary><strong>Option 1 — Git Clone (recommended)</strong></summary>
-
-```bash
-# Clone the sacred repository
-git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
-
-# Enter the temple
-cd Open-Mythos-2
-
-# One-time setup (macOS or Linux)
-./setup-macos.sh # or ./setup.sh on Linux
-
-# Then chat (no `source venv` needed)
-./mythos
-./mythos model download # once per machine (~4.5 GB → ~/.config/mythos/)
-
-# Move your downloads to another PC (no re-download):
-./scripts/mythos-export-data.sh # creates offline-bundle/ (~4.5 GB)
-# On the new machine after setup:
-./scripts/mythos-import-data.sh ./offline-bundle
-```
-
-</details>
-
-<details>
-<summary><strong>Option 2 — npm (npx)</strong></summary>
-
-```bash
-# Two-command install & run — no manual clone needed
- npm install
-npm run dev
-
-# Download the model (~4.5 GB, first time only)
-mythos model download
-
-# Start chatting
-mythos
-```
-
-> **Note:** The npm package wraps the same setup and Python backend under the hood. Node.js 18+ and Python 3.10+ are required. The first `npx` or `mythos` run will automatically set up the virtual environment and dependencies if they aren't already present.
-
-</details>
-
-<details>
-<summary><strong>Option 3 — pnpm</strong></summary>
-
-```bash
-git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
-cd Open-Mythos-2
-pnpm add -g .
-
-> **Note:** [pnpm](https://pnpm.io/) is a fast, disk-efficient package manager. The package wraps the same setup and Python backend under the hood. Node.js 18+ and Python 3.10+ are required. The first run will automatically set up the virtual environment and dependencies if they aren't already present.
-
-</details>
-
-
----
