@@ -236,23 +236,78 @@ class RMLEngine:
             self.record_signal(SIGNAL_EXPLICIT_BAD, source="explicit_bad",
                                category=category, detail=detail)
 
+    # Keyword-to-category heuristics for implicit signals
+    _NEGATIVE_CATEGORY_HINTS = {
+        "too long": "conciseness",
+        "too verbose": "conciseness",
+        "too short": "completeness",
+        "incomplete": "completeness",
+        "missing": "completeness",
+        "wrong code": "code_quality",
+        "bad code": "code_quality",
+        "doesn't work": "code_quality",
+        "does not work": "code_quality",
+        "doesn't run": "code_quality",
+        "insecure": "security",
+        "vulnerable": "security",
+        "unsafe": "security",
+        "unclear": "clarity",
+        "confusing": "clarity",
+        "inaccurate": "accuracy",
+        "wrong fact": "accuracy",
+        "incorrect": "accuracy",
+        "mistake": "accuracy",
+    }
+
+    def _infer_implicit_category(self, text: str, fallback: str = "accuracy") -> str:
+        """Guess the feedback category from the user's phrasing."""
+        lower = text.lower()
+        for phrase, cat in self._NEGATIVE_CATEGORY_HINTS.items():
+            if phrase in lower:
+                return cat
+        return fallback
+
     def record_implicit(self, text: str) -> Optional[str]:
         """
         Scan a user follow-up for implicit positive/negative signals.
+
+        Uses two-tier matching:
+          1. Full-match regex (standalone feedback like "thanks!", "wrong.")
+          2. Mid-sentence regex (explicit evaluation like "that's correct")
+
         Returns 'positive', 'negative', or None.
         """
         if not self.enabled:
             return None
-        if IMPLICIT_POSITIVE_RE.search(text):
-            # Avoid double-counting if the user is also asking to fix something
-            if IMPLICIT_NEGATIVE_RE.search(text):
+
+        # Short messages are likely pure feedback; longer ones might be questions
+        # that coincidentally contain feedback words. Use stricter matching for those.
+        is_short = len(text.strip()) < 40
+
+        positive_hit = False
+        negative_hit = False
+
+        if is_short:
+            # Standalone feedback: "thanks", "wrong", "perfect!", etc.
+            positive_hit = bool(IMPLICIT_POSITIVE_RE.match(text))
+            negative_hit = bool(IMPLICIT_NEGATIVE_RE.match(text))
+        else:
+            # Longer messages: only match if clearly evaluating the response
+            positive_hit = bool(IMPLICIT_POSITIVE_MID.search(text))
+            negative_hit = bool(IMPLICIT_NEGATIVE_MID.search(text))
+
+        if positive_hit:
+            # Avoid double-counting if mixed signals
+            if negative_hit:
                 return None
+            cat = self._infer_implicit_category(text, fallback="accuracy")
             self.record_signal(SIGNAL_IMPLICIT_POSITIVE, source="implicit_pos",
-                               category="accuracy", detail=text[:80])
+                               category=cat, detail=text[:80])
             return "positive"
-        if IMPLICIT_NEGATIVE_RE.search(text):
+        if negative_hit:
+            cat = self._infer_implicit_category(text, fallback="accuracy")
             self.record_signal(SIGNAL_IMPLICIT_NEGATIVE, source="implicit_neg",
-                               category="accuracy", detail=text[:80])
+                               category=cat, detail=text[:80])
             return "negative"
         return None
 
