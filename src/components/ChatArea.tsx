@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import type { Message, Settings } from "../types";
 import { CodeBlock } from "./CodeBlock";
 import { ThinkingBlock } from "./ThinkingBlock";
@@ -15,13 +15,23 @@ function parseMessageContent(content: string): ParsedBlock[] {
   let remaining = content;
 
   while (remaining.length > 0) {
-    // Thinking blocks: <think>...</think> or <thinking>...</thinking>
-    const thinkMatch = remaining.match(
+    // Thinking blocks:  HLSL... HLSR (Qwen2.5 alpha-bracket style)
+    const thinkAlphaMatch = remaining.match(
+      /^\u00ab\u00ab\u00ab\u00ab([\s\S]*?)\u00bb\u00bb\u00bb\u00bb\n?/
+    );
+    if (thinkAlphaMatch) {
+      blocks.push({ type: "thinking", content: thinkAlphaMatch[1].trim() });
+      remaining = remaining.slice(thinkAlphaMatch[0].length);
+      continue;
+    }
+
+    // Thinking blocks:  HLSL/ or  HL9;
+    const thinkXmlMatch = remaining.match(
       /^<(?:think|thinking)>([\s\S]*?)<\/(?:think|thinking)>\n?/
     );
-    if (thinkMatch) {
-      blocks.push({ type: "thinking", content: thinkMatch[1].trim() });
-      remaining = remaining.slice(thinkMatch[0].length);
+    if (thinkXmlMatch) {
+      blocks.push({ type: "thinking", content: thinkXmlMatch[1].trim() });
+      remaining = remaining.slice(thinkXmlMatch[0].length);
       continue;
     }
 
@@ -30,7 +40,6 @@ function parseMessageContent(content: string): ParsedBlock[] {
     if (codeMatch) {
       const lang = codeMatch[1] || "text";
       const code = codeMatch[2];
-      // Try to detect filename from first line comment
       const fileNameMatch = code.match(/^\/\/\s*(\S+\.\w+)\s*$/m) ||
         code.match(/^#\s*(\S+\.\w+)\s*$/m) ||
         code.match(/^<!--\s*(\S+\.\w+)\s*-->\s*$/m);
@@ -46,10 +55,12 @@ function parseMessageContent(content: string): ParsedBlock[] {
 
     // Find next code block or thinking block
     const nextCode = remaining.search(/```/);
-    const nextThink = remaining.search(/<(?:think|thinking)>/);
+    const nextThinkXml = remaining.search(/<(?:think|thinking)>/);
+    const nextThinkAlpha = remaining.search(/\u00ab\u00ab\u00ab\u00ab/);
     let endIdx = remaining.length;
     if (nextCode !== -1) endIdx = Math.min(endIdx, nextCode);
-    if (nextThink !== -1) endIdx = Math.min(endIdx, nextThink);
+    if (nextThinkXml !== -1) endIdx = Math.min(endIdx, nextThinkXml);
+    if (nextThinkAlpha !== -1) endIdx = Math.min(endIdx, nextThinkAlpha);
 
     const text = remaining.slice(0, endIdx);
     if (text) {
@@ -67,18 +78,13 @@ function formatInlineMarkdown(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Inline code (must be before bold/italic)
   html = html.replace(
     /`([^`]+)`/g,
     '<code class="mythos-inline-code">$1</code>'
   );
-  // Bold
   html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  // Italic
   html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>");
-  // Strikethrough
   html = html.replace(/~~(.+?)~~/g, "<del>$1</del>");
-  // Line breaks
   html = html.replace(/\n/g, "<br/>");
 
   return html;
@@ -95,6 +101,11 @@ function ChatMessage({
 }) {
   const isUser = msg.role === "user";
   const blocks = parseMessageContent(msg.content);
+
+  // If the message has a reasoning field from the API, prepend it as a thinking block
+  const allBlocks: ParsedBlock[] = msg.reasoning
+    ? [{ type: "thinking", content: msg.reasoning }, ...blocks]
+    : blocks;
 
   return (
     <div
@@ -135,7 +146,7 @@ function ChatMessage({
 
       {/* Content blocks */}
       <div className="text-sm leading-relaxed">
-        {blocks.map((block, i) => {
+        {allBlocks.map((block, i) => {
           if (block.type === "code") {
             return (
               <CodeBlock
@@ -152,7 +163,6 @@ function ChatMessage({
           if (block.type === "thinking") {
             return <ThinkingBlock key={i} content={block.content} />;
           }
-          // Text block
           return (
             <div
               key={i}
@@ -178,14 +188,9 @@ export function ChatArea({
   settings: Settings;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [copiedId, setCopiedId] = useState<number | null>(null);
-
   const handleCopyMessage = useCallback(
     (text: string) => {
-      navigator.clipboard.writeText(text).then(() => {
-        setCopiedId(Date.now());
-        setTimeout(() => setCopiedId(null), 2000);
-      });
+      navigator.clipboard.writeText(text);
     },
     []
   );

@@ -57,7 +57,7 @@ system:
   # For audits with RAG: index your repo, then /rag on, /temp 0.3
   prompt_file: "prompts/security_fix.txt"
   self_reflect: false      # Enable self-reflection quality pass (slower but higher quality)
-  thinking_mode: false     # Show internal reasoning process
+  thinking_mode: true      # Show internal reasoning process
   
 security:
   # Mythos Sentinel CLI (mythos scan) — also see ~/.config/mythos/config.yaml after mythos init

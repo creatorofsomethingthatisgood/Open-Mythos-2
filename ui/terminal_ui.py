@@ -203,8 +203,9 @@ class TerminalUI:
 [yellow]/system <prompt>[/yellow] - Change system prompt
 [yellow]/model <name>[/yellow] - Switch model (if available)
 [yellow]/temp <float>[/yellow] - Change temperature (0.0-2.0)
-[yellow]/reflect on|off[/yellow] - Toggle self-reflection
-[yellow]/rag on|off[/yellow] - Toggle RAG (if available)
+            [yellow]/reflect on|off[/yellow] - Toggle self-reflection
+            [yellow]/think on|off[/yellow] - Show model's step-by-step reasoning process
+            [yellow]/rag on|off[/yellow] - Toggle RAG (if available)
 [yellow]/rml on|off|stats|good|bad|reset[/yellow] - Reinforcement ML: learn from your feedback
 [yellow]/memory [on|off|add|forget|clear|extract][/yellow] - Cross-session memory: facts Mythos remembers
 [yellow]/summary[/yellow] - Generate a structured digest of this session
@@ -259,6 +260,7 @@ class TerminalUI:
         table.add_row("Temperature", str(self.engine.config.get('generation', {}).get('temperature', 0.7)))
         table.add_row("Max Tokens", str(self.engine.config.get('generation', {}).get('max_tokens', 2048)))
         table.add_row("Self-Reflection", "On" if self.reflector.should_reflect() else "Off")
+        table.add_row("Thinking Mode", "On" if self.reflector.should_think() else "Off")
         table.add_row("RAG", "On" if self.rag_enabled and self.rag else "Off")
         table.add_row("RML", "On" if self.rml.enabled else "Off")
         table.add_row("Session Summaries", "On" if self.session_summaries.enabled else "Off")
@@ -701,6 +703,19 @@ class TerminalUI:
                 listings = self.session_summaries.list_summaries(limit=20)
                 self.console.print(self.session_summaries.format_sessions_list(listings))
 
+        elif cmd == "/think":
+            if args.lower() == "on":
+                self.engine.config['system']['thinking_mode'] = True
+                self.reflector.config.setdefault('system', {})['thinking_mode'] = True
+                self.console.print("[green]Thinking mode enabled[/green]")
+                self.console.print("[dim]Mythos will now show its step-by-step reasoning before the answer.[/dim]")
+            elif args.lower() == "off":
+                self.engine.config['system']['thinking_mode'] = False
+                self.reflector.config.setdefault('system', {})['thinking_mode'] = False
+                self.console.print("[yellow]Thinking mode disabled[/yellow]")
+            else:
+                self.console.print("[red]Use /think on or /think off[/red]")
+
         elif cmd == "/sessions-clear":
             if not self.session_summaries.enabled:
                 self.console.print("[yellow]Session Summaries not enabled.[/yellow]")
@@ -898,6 +913,10 @@ class TerminalUI:
             if extra_context:
                 system_prompt = self.prompt_manager.format_with_context(extra_context)
 
+            # Thinking mode: inject step-by-step reasoning prompt (after format_with_context)
+            if self.reflector.should_think():
+                system_prompt = system_prompt + "\n\n" + self.reflector.thinking_prompt
+
             reserve = self.engine.config.get("context", {}).get(
                 "reserve_tokens",
                 self.engine.config.get("generation", {}).get("max_tokens", 2048),
@@ -919,7 +938,17 @@ class TerminalUI:
             start_time = time.time()
             token_count = 0
 
+            thinking_mode = self.reflector.should_think()
+
             self.console.print("\n[bold green]Assistant:[/bold green] ", end="")
+
+            # Thinking-mode streaming: detect HLSL/<thinking> tags in real-time
+            _in_think = False
+            _display_buf = ""
+            _safe_margin = 12 # max tag length + safety buffer for partial tags
+            _open_tags = ("««««", "<thinking>")
+            _close_tags = ("»»»»", "</thinking>")
+            _think_header_printed = False
 
             try:
                 for chunk in self.engine.generate(
@@ -931,7 +960,77 @@ class TerminalUI:
                 ):
                     response_text += chunk
                     token_count += 1
-                    self.console.print(chunk, end="")
+
+                    if not thinking_mode:
+                        # Normal streaming — no tag processing
+                        self.console.print(chunk, end="")
+                        continue
+
+                    # Thinking-mode: process buffer for think-tag display
+                    _display_buf += chunk
+                    while _display_buf:
+                        if not _in_think:
+                            # Look for opening tags «««« or <thinking>
+                            earliest = -1
+                            tag_len = 0
+                            for tag in _open_tags:
+                                idx = _display_buf.find(tag)
+                                if idx != -1 and (earliest == -1 or idx < earliest):
+                                    earliest = idx
+                                    tag_len = len(tag)
+
+                            if earliest == -1:
+                                # No tag — print everything beyond the partial-tag safety margin
+                                if len(_display_buf) > _safe_margin:
+                                    safe = _display_buf[:-_safe_margin]
+                                    _display_buf = _display_buf[-_safe_margin:]
+                                    self.console.print(safe, end="")
+                                else:
+                                    break
+                            else:
+                                # Print content before the opening tag
+                                if earliest > 0:
+                                    self.console.print(_display_buf[:earliest], end="")
+                                # Skip the opening tag itself
+                                _display_buf = _display_buf[earliest + tag_len:]
+                                _in_think = True
+                        else:
+                            # Inside a think tag — look for closing »»»» or </thinking>
+                            earliest = -1
+                            tag_len = 0
+                            for tag in _close_tags:
+                                idx = _display_buf.find(tag)
+                                if idx != -1 and (earliest == -1 or idx < earliest):
+                                    earliest = idx
+                                    tag_len = len(tag)
+
+                            if earliest == -1:
+                                # No closing tag yet — print dimmed content beyond safety margin
+                                if len(_display_buf) > _safe_margin:
+                                    safe = _display_buf[:-_safe_margin]
+                                    _display_buf = _display_buf[-_safe_margin:]
+                                    self.console.print(safe, end="", style="dim italic")
+                                else:
+                                    break
+                            else:
+                                # Print reasoning content before the closing tag (dimmed)
+                                if earliest > 0:
+                                    self.console.print(
+                                        _display_buf[:earliest], end="", style="dim italic"
+                                    )
+                                # Skip the closing tag
+                                _display_buf = _display_buf[earliest + tag_len:]
+                                _in_think = False
+                                # Visual separator between reasoning and answer
+                                self.console.print()
+
+                    # Flush any remaining display buffer
+                    if _display_buf:
+                        style = "dim italic" if _in_think else ""
+                        if style:
+                            self.console.print(_display_buf, end="", style=style)
+                        else:
+                            self.console.print(_display_buf, end="")
 
                 self.console.print()
 

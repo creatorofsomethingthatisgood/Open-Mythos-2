@@ -41,6 +41,7 @@ class ChatRequest(BaseModel):
     repeat_penalty: float = 1.1
     use_reflection: bool = False
     use_rag: bool = False
+    use_thinking: bool = True
 
 
 class ExportRequest(BaseModel):
@@ -125,6 +126,16 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
             if extra_context:
                 sys_prompt = pm.format_with_context(extra_context)
 
+            # Inject thinking instructions into system prompt when thinking mode is on
+            if req.use_thinking:
+                thinking_instruction = (
+                    "\n\nIMPORTANT: You MUST show your reasoning process before answering. "
+                    "Use <thinking> tags to wrap your step-by-step reasoning, then provide "
+                    "your final answer after the closing </thinking> tag. "
+                    "Example:\n<thinking>\nLet me think about this step by step...\n</thinking>\n\nYour answer here."
+                )
+                sys_prompt = sys_prompt + thinking_instruction
+
             reserve = engine.config.get("context", {}).get(
                 "reserve_tokens",
                 engine.config.get("generation", {}).get("max_tokens", 2048),
@@ -145,6 +156,15 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
                 stream=False,
             )
 
+            # Extract thinking/reasoning from the response if thinking mode is on
+            reasoning = None
+            if req.use_thinking:
+                reasoning, answer = reflector.extract_reasoning(response)
+                if reasoning:
+                    response = answer
+                else:
+                    reasoning = None
+
             if req.use_reflection:
                 response = reflector.reflect(
                     engine,
@@ -156,18 +176,29 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
 
             memory.add_message("assistant", response)
 
+            # Build assistant history entry with optional reasoning
+            assistant_entry = {"role": "assistant", "content": response}
+            if reasoning:
+                assistant_entry["reasoning"] = reasoning
+
             new_history = list(req.history) + [
                 {"role": "user", "content": req.message},
-                {"role": "assistant", "content": response},
+                assistant_entry,
             ]
 
-            status = f"✓ Generated {len(response.split())} words"
+            status = f"Generated {len(response.split())} words"
+            if req.use_thinking and reasoning:
+                status += f" (with thinking: {len(reasoning.split())} words)"
             if req.use_reflection:
                 status += " (with reflection)"
             if local_notices:
                 status += " | " + "; ".join(local_notices[:3])
 
-            return {"history": new_history, "status": status}
+            result = {"history": new_history, "status": status}
+            if reasoning:
+                result["reasoning"] = reasoning
+
+            return result
 
         except Exception as e:
             logger.error(f"Chat error: {e}", exc_info=True)
@@ -201,7 +232,7 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
                 if role in ("user", "assistant", "system") and content:
                     memory.add_message(role, content)
             filepath = memory.save()
-            return {"status": f"✓ Saved to: {filepath}"}
+            return {"status": f"Saved to: {filepath}"}
         except Exception as e:
             raise HTTPException(500, str(e))
 

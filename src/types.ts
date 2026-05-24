@@ -1,8 +1,9 @@
 export interface Message {
-  role: "user" | "assistant" | "system";
-  content: string;
-  timestamp?: number;
-  codeBlocks?: CodeBlock[];
+ role: "user" | "assistant" | "system";
+ content: string;
+ timestamp?: number;
+ codeBlocks?: CodeBlock[];
+ reasoning?: string; // AI thinking/chain-of-thought content
 }
 
 export interface CodeBlock {
@@ -12,19 +13,20 @@ export interface CodeBlock {
 }
 
 export interface Settings {
-  systemPrompt: string;
-  temperature: number;
-  topP: number;
-  topK: number;
-  maxTokens: number;
-  repeatPenalty: number;
-  useReflection: boolean;
-  useRag: boolean;
-  mode: CodingMode;
-  fontSize: number;
-  lineWrap: boolean;
-  showLineNumbers: boolean;
-  streamCode: boolean;
+ systemPrompt: string;
+ temperature: number;
+ topP: number;
+ topK: number;
+ maxTokens: number;
+ repeatPenalty: number;
+ useReflection: boolean;
+ useRag: boolean;
+ useThinking: boolean;
+ mode: CodingMode;
+ fontSize: number;
+ lineWrap: boolean;
+ showLineNumbers: boolean;
+ streamCode: boolean;
 }
 
 export type CodingMode =
@@ -105,9 +107,10 @@ You are not just an assistant - you are a thinking partner who elevates every in
   topK: 40,
   maxTokens: 4096,
   repeatPenalty: 1.1,
-  useReflection: false,
-  useRag: false,
-  mode: "code",
+ useReflection: false,
+ useRag: false,
+ useThinking: true,
+ mode: "code",
   fontSize: 13,
   lineWrap: true,
   showLineNumbers: true,

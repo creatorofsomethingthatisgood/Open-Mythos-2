@@ -3,26 +3,27 @@ import type { Message, Settings } from "./types";
 const API_BASE = "/api";
 
 export async function sendChat(
-  message: string,
-  history: Message[],
-  settings: Settings
-): Promise<{ history: Message[]; status: string }> {
-  const res = await fetch(`${API_BASE}/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message,
-      history,
-      system_prompt: settings.systemPrompt,
-      temperature: settings.temperature,
-      top_p: settings.topP,
-      top_k: settings.topK,
-      max_tokens: settings.maxTokens,
-      repeat_penalty: settings.repeatPenalty,
-      use_reflection: settings.useReflection,
-      use_rag: settings.useRag,
-    }),
-  });
+ message: string,
+ history: Message[],
+ settings: Settings
+): Promise<{ history: Message[]; status: string; reasoning?: string }> {
+ const res = await fetch(`${API_BASE}/chat`, {
+ method: "POST",
+ headers: { "Content-Type": "application/json" },
+ body: JSON.stringify({
+ message,
+ history,
+ system_prompt: settings.systemPrompt,
+ temperature: settings.temperature,
+ top_p: settings.topP,
+ top_k: settings.topK,
+ max_tokens: settings.maxTokens,
+ repeat_penalty: settings.repeatPenalty,
+ use_reflection: settings.useReflection,
+ use_rag: settings.useRag,
+ use_thinking: settings.useThinking,
+ }),
+ });
 
   if (!res.ok) {
     const err = await res.text();

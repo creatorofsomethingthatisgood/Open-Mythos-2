@@ -6,10 +6,9 @@ interface InputBarProps {
   onQuickAction?: (prompt: string) => void;
 }
 
-export function InputBar({ onSend, disabled, onQuickAction }: InputBarProps) {
+export function InputBar({ onSend, disabled }: InputBarProps) {
   const [text, setText] = useState("");
   const [mono, setMono] = useState(false);
-  const [rows, setRows] = useState(3);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = useCallback(() => {
@@ -17,7 +16,6 @@ export function InputBar({ onSend, disabled, onQuickAction }: InputBarProps) {
     if (!trimmed || disabled) return;
     onSend(trimmed);
     setText("");
-    setRows(3);
     // Refocus textarea
     setTimeout(() => textareaRef.current?.focus(), 50);
   }, [text, disabled, onSend]);
@@ -86,7 +84,7 @@ export function InputBar({ onSend, disabled, onQuickAction }: InputBarProps) {
                 : "Ask Mythos... (Shift+Enter for newline)"
             }
             disabled={disabled}
-            rows={rows}
+            rows={3}
             className={`w-full resize-none rounded-lg bg-[var(--mythos-bg)] border border-[var(--mythos-border)] text-[var(--mythos-text)] placeholder:text-[var(--mythos-text3)] px-4 py-3 text-sm focus:outline-none focus:border-[var(--mythos-accent)] transition-colors ${
               mono ? "font-mono" : ""
             }`}

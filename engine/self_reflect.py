@@ -3,6 +3,7 @@ Self-Reflection Module - Enhances response quality through iterative improvement
 """
 
 import logging
+import re
 from typing import Optional, Dict, Any
 import yaml
 
@@ -23,130 +24,126 @@ class SelfReflector:
         self.config = self._load_config()
         
         # Reflection prompts
-        self.review_prompt = """Review your previous answer. Consider:
-1. Accuracy - Are there any errors or inaccuracies?
-2. Completeness - Did you fully address the question?
-3. Clarity - Is the explanation clear and well-structured?
-4. Quality - Could the response be improved?
+        self.reflection_prompt = """You are a self-reflection assistant. Review the following response for accuracy, completeness, and clarity. If the response can be improved, provide an improved version. If it's already good, return it unchanged.
 
-If you find issues, provide an improved answer. If the original answer was excellent, confirm it's good as-is."""
+Original question: {prompt}
+
+Initial response: {response}
+
+Provide your reviewed and improved response:"""
         
-        self.thinking_prompt = """Before answering, think through the problem step by step:
-1. What is being asked?
-2. What information is relevant?
-3. What approach will work best?
-4. What are potential pitfalls?
+        self.thinking_prompt = """You are a thoughtful assistant. Before answering, reason through the problem step by step inside thinking tags. Use the format:
 
-Then provide your complete answer."""
+<thinking>
+Your step-by-step reasoning here...
+</thinking>
+
+Then provide your final answer after the closing tag. Always show your reasoning process."""
+        
+        self._load_settings()
     
-    def _load_config(self) -> Dict:
-        """Load configuration from YAML"""
+    def _load_config(self) -> dict:
+        """Load configuration from YAML file"""
         try:
             with open(self.config_path, 'r') as f:
-                return yaml.safe_load(f)
+                return yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            logger.warning(f"Config file {self.config_path} not found, using defaults")
+            return {}
         except Exception as e:
-            logger.error(f"Failed to load config: {e}")
+            logger.error(f"Error loading config: {e}")
             return {}
     
-    def should_reflect(self) -> bool:
-        """
-        Check if self-reflection is enabled
+    def _load_settings(self):
+        """Load reflection and thinking settings from config"""
+        reflection_config = self.config.get('reflection', {})
+        thinking_config = self.config.get('thinking', {})
         
-        Returns:
-            True if reflection is enabled
-        """
-        return self.config.get('system', {}).get('self_reflect', False)
+        self.reflection_enabled = reflection_config.get('enabled', False)
+        self.reflection_threshold = reflection_config.get('threshold', 0.7)
+        self.reflection_iterations = reflection_config.get('iterations', 2)
+        
+        self.thinking_enabled = thinking_config.get('enabled', True)
+        self.thinking_mode = self.config.get('thinking_mode', True)
+    
+    def should_reflect(self) -> bool:
+        """Check if reflection should be applied"""
+        return self.reflection_enabled
     
     def should_think(self) -> bool:
-        """
-        Check if thinking mode is enabled
-        
-        Returns:
-            True if thinking mode is enabled
-        """
-        return self.config.get('system', {}).get('thinking_mode', False)
+        """Check if thinking mode should be applied"""
+        return self.thinking_enabled or self.thinking_mode
     
-    def create_thinking_prompt(self, original_prompt: str) -> str:
+    def reflect(self, engine, prompt: str, response: str, **kwargs) -> str:
         """
-        Create a prompt that encourages step-by-step thinking
-        
-        Args:
-            original_prompt: The original user prompt
-            
-        Returns:
-            Enhanced prompt with thinking instructions
-        """
-        return f"{self.thinking_prompt}\n\nUSER QUESTION:\n{original_prompt}"
-    
-    def create_reflection_prompt(self, original_prompt: str, initial_response: str) -> str:
-        """
-        Create a prompt for self-reflection
-        
-        Args:
-            original_prompt: The original user prompt
-            initial_response: The initial response to review
-            
-        Returns:
-            Reflection prompt
-        """
-        return f"""ORIGINAL QUESTION:
-{original_prompt}
-
-YOUR PREVIOUS ANSWER:
-{initial_response}
-
-{self.review_prompt}"""
-    
-    def reflect(self, engine, original_prompt: str, initial_response: str, **kwargs) -> str:
-        """
-        Perform self-reflection to improve response quality
+        Apply self-reflection to improve a response
         
         Args:
             engine: InferenceEngine instance
-            original_prompt: Original user prompt
-            initial_response: Initial response to improve
+            prompt: Original user prompt
+            response: Initial response to improve
             **kwargs: Additional generation parameters
             
         Returns:
-            Improved response or original if already good
+            Improved response (or original if no improvement found)
         """
-        logger.info("Performing self-reflection...")
+        reflection_input = self.reflection_prompt.format(
+            prompt=prompt,
+            response=response
+        )
         
-        # Create reflection prompt
-        reflection_prompt = self.create_reflection_prompt(original_prompt, initial_response)
+        try:
+            improved = engine.generate(reflection_input, **kwargs)
+            if improved and len(improved.strip()) > len(response.strip()) * 0.5:
+                logger.info("Self-reflection: Improved answer generated")
+                return improved
+        except Exception as e:
+            logger.error(f"Self-reflection failed: {e}")
         
-        # Get reflection response
-        reflection = engine.generate(reflection_prompt, **kwargs)
-        
-        # Parse reflection to see if improvement was made
-        # If the model says the answer is good, return original
-        # Otherwise, return the improved version
-        
-        lower_reflection = reflection.lower()
-        if any(phrase in lower_reflection for phrase in [
-            "original answer was excellent",
-            "original answer is good",
-            "no improvements needed",
-            "answer is already",
-            "response was accurate"
-        ]):
-            logger.info("Self-reflection: Original answer deemed good")
-            return initial_response
-        else:
-            logger.info("Self-reflection: Improved answer generated")
-            return reflection
+        return response
     
     def extract_reasoning(self, response: str) -> tuple[str, str]:
         """
-        Extract reasoning and final answer from a thinking-mode response
+        Extract reasoning and final answer from a thinking-mode response.
+        
+        Supports multiple thinking tag formats:
+        - <think> ... </think>
+        - <thinking> ... </thinking>
+        -  ...  (Qwen-style)
+        - Text separators like "FINAL ANSWER:", "Answer:", etc.
         
         Args:
             response: Full response with thinking
-            
+        
         Returns:
             Tuple of (reasoning, final_answer)
         """
-        # Look for common separators
+        # Pattern 1: <think> ... </think> tags
+        think_match = re.search(r'<think>(.*?)</think>', response, re.DOTALL)
+        if think_match:
+            reasoning = think_match.group(1).strip()
+            after_tag = response[think_match.end():].strip()
+            return reasoning, after_tag if after_tag else ""
+        
+        # Pattern 2: <thinking> ... </thinking> tags
+        thinking_match = re.search(r'<thinking>(.*?)</thinking>', response, re.DOTALL)
+        if thinking_match:
+            reasoning = thinking_match.group(1).strip()
+            after_tag = response[thinking_match.end():].strip()
+            return reasoning, after_tag if after_tag else ""
+        
+        # Pattern 3:  ...  tags (Qwen2.5 style)
+        qwen_think_open = '\u00ab\u00ab\u00ab\u00ab'
+        qwen_think_close = '\u00bb\u00bb\u00bb\u00bb'
+        if qwen_think_open in response and qwen_think_close in response:
+            idx_open = response.index(qwen_think_open) + len(qwen_think_open)
+            idx_close = response.index(qwen_think_close)
+            if idx_close > idx_open:
+                reasoning = response[idx_open:idx_close].strip()
+                after_tag = response[idx_close + len(qwen_think_close):].strip()
+                return reasoning, after_tag if after_tag else ""
+        
+        # Pattern 4: Text separators (fallback)
         separators = [
             "FINAL ANSWER:",
             "Final Answer:",
