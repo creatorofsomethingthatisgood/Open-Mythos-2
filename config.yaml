@@ -117,10 +117,18 @@ context:
 
 rml:
  # Reinforcement Machine Learning — adapts model behaviour from user feedback
- enabled: false # Turn on with /rml on in chat
+ enabled: true # Turn on with /rml on in chat
  learning_rate: 0.05 # How fast RML adjusts (0.01 = slow, 0.2 = fast)
  max_param_offset: 0.3 # Maximum drift from base temperature/top_p
  hint_threshold: 3.0 # Negative score before a learned hint is injected
+
+session_summaries:
+ # Session Summaries — "Mythos Remembers Your Sessions"
+ # Generates structured digests of what you discussed, decided, and modified.
+ # Browse past sessions with /sessions, generate on-demand with /summary.
+ enabled: true
+ auto_on_exit: true # Automatically summarize when you quit a session
+ max_summaries: 200 # Oldest summaries pruned when limit is reached
 
 memory:
   # Conversation memory settings

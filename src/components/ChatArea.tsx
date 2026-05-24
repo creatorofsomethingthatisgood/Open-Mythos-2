@@ -1,60 +1,168 @@
-import { useEffect, useRef } from "react";
-import type { Message } from "../types";
+import { useEffect, useRef, useState, useCallback } from "react";
+import type { Message, Settings } from "../types";
+import { CodeBlock } from "./CodeBlock";
+import { ThinkingBlock } from "./ThinkingBlock";
 
-function formatContent(content: string): string {
-  // Simple markdown-ish: code blocks, bold, italic
-  let html = content
+interface ParsedBlock {
+  type: "text" | "code" | "thinking";
+  content: string;
+  language?: string;
+  fileName?: string;
+}
+
+function parseMessageContent(content: string): ParsedBlock[] {
+  const blocks: ParsedBlock[] = [];
+  let remaining = content;
+
+  while (remaining.length > 0) {
+    // Thinking blocks: <think>...</think> or <thinking>...</thinking>
+    const thinkMatch = remaining.match(
+      /^<(?:think|thinking)>([\s\S]*?)<\/(?:think|thinking)>\n?/
+    );
+    if (thinkMatch) {
+      blocks.push({ type: "thinking", content: thinkMatch[1].trim() });
+      remaining = remaining.slice(thinkMatch[0].length);
+      continue;
+    }
+
+    // Code blocks: ```lang\n...\n```
+    const codeMatch = remaining.match(/^```(\w*)\n([\s\S]*?)```\n?/);
+    if (codeMatch) {
+      const lang = codeMatch[1] || "text";
+      const code = codeMatch[2];
+      // Try to detect filename from first line comment
+      const fileNameMatch = code.match(/^\/\/\s*(\S+\.\w+)\s*$/m) ||
+        code.match(/^#\s*(\S+\.\w+)\s*$/m) ||
+        code.match(/^<!--\s*(\S+\.\w+)\s*-->\s*$/m);
+      blocks.push({
+        type: "code",
+        content: code,
+        language: lang,
+        fileName: fileNameMatch?.[1],
+      });
+      remaining = remaining.slice(codeMatch[0].length);
+      continue;
+    }
+
+    // Find next code block or thinking block
+    const nextCode = remaining.search(/```/);
+    const nextThink = remaining.search(/<(?:think|thinking)>/);
+    let endIdx = remaining.length;
+    if (nextCode !== -1) endIdx = Math.min(endIdx, nextCode);
+    if (nextThink !== -1) endIdx = Math.min(endIdx, nextThink);
+
+    const text = remaining.slice(0, endIdx);
+    if (text) {
+      blocks.push({ type: "text", content: text });
+    }
+    remaining = remaining.slice(endIdx);
+  }
+
+  return blocks;
+}
+
+function formatInlineMarkdown(text: string): string {
+  let html = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Code blocks ```...```
-  html = html.replace(
-    /```(\w*)\n([\s\S]*?)```/g,
-    '<pre class="mythos-codeblock"><code>$2</code></pre>'
-  );
-  // Inline code `...`
+  // Inline code (must be before bold/italic)
   html = html.replace(
     /`([^`]+)`/g,
     '<code class="mythos-inline-code">$1</code>'
   );
-  // Bold **...**
+  // Bold
   html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  // Italic *...*
+  // Italic
   html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>");
+  // Strikethrough
+  html = html.replace(/~~(.+?)~~/g, "<del>$1</del>");
   // Line breaks
   html = html.replace(/\n/g, "<br/>");
 
   return html;
 }
 
-export function ChatMessage({ msg }: { msg: Message }) {
+function ChatMessage({
+  msg,
+  settings,
+  onCopy,
+}: {
+  msg: Message;
+  settings: Settings;
+  onCopy: (text: string) => void;
+}) {
   const isUser = msg.role === "user";
+  const blocks = parseMessageContent(msg.content);
 
   return (
     <div
-      className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3 px-1`}
+      className={`py-3 px-4 ${
+        isUser ? "mythos-msg-user" : "mythos-msg-assistant"
+      }`}
     >
-      <div
-        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-          isUser
-            ? "bg-[var(--mythos-user)] text-[var(--mythos-text)] rounded-br-md"
-            : "bg-[var(--mythos-surface2)] text-[var(--mythos-text)] rounded-bl-md border border-[var(--mythos-border)]"
-        }`}
-      >
-        <div className="flex items-center gap-2 mb-1">
-          <span
-            className={`text-xs font-semibold ${
-              isUser ? "text-[var(--mythos-accent2)]" : "text-[var(--mythos-success)]"
-            }`}
-          >
-            {isUser ? "You" : "Mythos"}
+      {/* Role label */}
+      <div className="flex items-center gap-2 mb-2">
+        <span
+          className={`text-[10px] font-bold uppercase tracking-widest ${
+            isUser
+              ? "text-[var(--mythos-accent2)]"
+              : "text-[var(--mythos-success)]"
+          }`}
+        >
+          {isUser ? "You" : "Mythos"}
+        </span>
+        {msg.timestamp && (
+          <span className="text-[10px] text-[var(--mythos-text3)]">
+            {new Date(msg.timestamp).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
           </span>
-        </div>
-        <div
-          className="prose-sm"
-          dangerouslySetInnerHTML={{ __html: formatContent(msg.content) }}
-        />
+        )}
+        {!isUser && (
+          <button
+            className="ml-auto text-[var(--mythos-text3)] hover:text-[var(--mythos-text)] transition-colors"
+            onClick={() => onCopy(msg.content)}
+            title="Copy message"
+            style={{ fontSize: 11 }}
+          >
+            Copy
+          </button>
+        )}
+      </div>
+
+      {/* Content blocks */}
+      <div className="text-sm leading-relaxed">
+        {blocks.map((block, i) => {
+          if (block.type === "code") {
+            return (
+              <CodeBlock
+                key={i}
+                language={block.language || "text"}
+                code={block.content}
+                fileName={block.fileName}
+                showLineNumbers={settings.showLineNumbers}
+                lineWrap={settings.lineWrap}
+                fontSize={settings.fontSize}
+              />
+            );
+          }
+          if (block.type === "thinking") {
+            return <ThinkingBlock key={i} content={block.content} />;
+          }
+          // Text block
+          return (
+            <div
+              key={i}
+              className="text-[var(--mythos-text)]"
+              dangerouslySetInnerHTML={{
+                __html: formatInlineMarkdown(block.content),
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -63,44 +171,91 @@ export function ChatMessage({ msg }: { msg: Message }) {
 export function ChatArea({
   messages,
   isTyping,
+  settings,
 }: {
   messages: Message[];
   isTyping: boolean;
+  settings: Settings;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  const handleCopyMessage = useCallback(
+    (text: string) => {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopiedId(Date.now());
+        setTimeout(() => setCopiedId(null), 2000);
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, isTyping]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-2 py-4">
+    <div className="flex-1 overflow-y-auto" style={{ background: "var(--mythos-bg)" }}>
       {messages.length === 0 && (
-        <div className="flex flex-col items-center justify-center h-full text-center gap-4 opacity-60">
-          <div className="text-5xl">&#127775;</div>
-          <h2 className="text-2xl font-bold text-[var(--mythos-text)]">
-            Mythos Local
-          </h2>
-          <p className="text-[var(--mythos-text2)] max-w-md">
-            High-quality local language model. Type a message to start a
-            conversation.
-          </p>
+        <div className="flex flex-col items-center justify-center h-full text-center gap-6 px-8">
+          <div className="text-6xl opacity-80">⚡</div>
+          <div>
+            <h2 className="text-2xl font-bold text-[var(--mythos-text)] mb-2">
+              Mythos Coding Interface
+            </h2>
+            <p className="text-[var(--mythos-text2)] max-w-lg text-sm leading-relaxed">
+              Local AI coding assistant. Paste code, ask questions, request
+              reviews, or use the quick actions below. Everything runs on your
+              machine.
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2 max-w-md">
+            {[
+              "Write a Python web scraper",
+              "Explain this error",
+              "Review my API design",
+              "Generate unit tests",
+            ].map((hint) => (
+              <span
+                key={hint}
+                className="text-xs px-3 py-1.5 rounded-full border border-[var(--mythos-border)] text-[var(--mythos-text2)] bg-[var(--mythos-surface)]"
+              >
+                {hint}
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 text-[10px] text-[var(--mythos-text3)]">
+            <span>
+              <span className="mythos-kbd">Enter</span> send
+            </span>
+            <span>
+              <span className="mythos-kbd">Shift+Enter</span> newline
+            </span>
+            <span>
+              <span className="mythos-kbd">Ctrl+N</span> new chat
+            </span>
+          </div>
         </div>
       )}
       {messages.map((m, i) => (
-        <ChatMessage key={i} msg={m} />
+        <ChatMessage
+          key={i}
+          msg={{ ...m, timestamp: m.timestamp || Date.now() }}
+          settings={settings}
+          onCopy={handleCopyMessage}
+        />
       ))}
       {isTyping && (
-        <div className="flex justify-start mb-3 px-1">
-          <div className="bg-[var(--mythos-surface2)] border border-[var(--mythos-border)] rounded-2xl rounded-bl-md px-4 py-3">
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-[var(--mythos-success)] font-semibold mr-2">
-                Mythos
-              </span>
-              <span className="animate-pulse text-[var(--mythos-accent)]">
-                &#9679;&#9679;&#9679;
-              </span>
-            </div>
+        <div className="py-3 px-4 mythos-msg-assistant">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--mythos-success)]">
+              Mythos
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="mythos-typing-dot" />
+            <span className="mythos-typing-dot" />
+            <span className="mythos-typing-dot" />
           </div>
         </div>
       )}

@@ -1,18 +1,37 @@
 @import "tailwindcss";
+@import "highlight.js/styles/github-dark-dimmed.css";
 
 :root {
-  --mythos-bg: #0f0f1a;
-  --mythos-surface: #1a1a2e;
-  --mythos-surface2: #252540;
-  --mythos-border: #2d2d4a;
-  --mythos-text: #e0e0f0;
-  --mythos-text2: #9090b0;
+  --mythos-bg: #0d1117;
+  --mythos-surface: #161b22;
+  --mythos-surface2: #1c2333;
+  --mythos-surface3: #242d3d;
+  --mythos-border: #30363d;
+  --mythos-border2: #3d4450;
+  --mythos-text: #e6edf3;
+  --mythos-text2: #8b949e;
+  --mythos-text3: #6e7681;
   --mythos-accent: #7c5cfc;
   --mythos-accent2: #9b7cff;
-  --mythos-user: #3a2a7c;
-  --mythos-assistant: #1e1e3a;
-  --mythos-success: #4ade80;
-  --mythos-error: #f87171;
+  --mythos-accent-dim: rgba(124, 92, 252, 0.15);
+  --mythos-user: #1c1535;
+  --mythos-user-border: #3a2a7c;
+  --mythos-assistant: #0d1117;
+  --mythos-success: #3fb950;
+  --mythos-success-dim: rgba(63, 185, 80, 0.15);
+  --mythos-error: #f85149;
+  --mythos-warning: #d29922;
+  --mythos-info: #58a6ff;
+  --mythos-code-bg: #0d1117;
+  --mythos-code-header: #161b22;
+  --mythos-gutter: #1c2128;
+  --mythos-line-number: #484f58;
+  --mythos-diff-add: rgba(63, 185, 80, 0.15);
+  --mythos-diff-remove: rgba(248, 81, 73, 0.15);
+  --mythos-diff-add-text: #3fb950;
+  --mythos-diff-remove-text: #f85149;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Cascadia Code', Consolas, monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 * {
@@ -24,7 +43,7 @@ body {
   padding: 0;
   background: var(--mythos-bg);
   color: var(--mythos-text);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -34,20 +53,12 @@ body {
   flex-direction: column;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--mythos-surface);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--mythos-border);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--mythos-accent);
-}
+/* Scrollbar — thin, dark, subtle */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--mythos-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--mythos-border2); }
+::-webkit-scrollbar-corner { background: transparent; }
 
 /* Slider styling */
 input[type="range"] {
@@ -73,14 +84,265 @@ input[type="range"]::-webkit-slider-thumb:hover {
   background: var(--mythos-accent2);
 }
 
-/* Textarea / input focus */
+/* Focus */
 textarea:focus, input:focus, select:focus {
   outline: none;
   border-color: var(--mythos-accent) !important;
-  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.2);
+  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.25);
 }
 
 /* Checkbox */
 input[type="checkbox"] {
   accent-color: var(--mythos-accent);
+}
+
+/* ===== CODE BLOCK STYLING ===== */
+.mythos-code-container {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--mythos-border);
+  margin: 12px 0;
+  background: var(--mythos-code-bg);
+}
+
+.mythos-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--mythos-code-header);
+  border-bottom: 1px solid var(--mythos-border);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.mythos-code-lang {
+  color: var(--mythos-text2);
+  font-weight: 600;
+  text-transform: lowercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mythos-code-filename {
+  color: var(--mythos-accent2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.mythos-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--mythos-border);
+  background: transparent;
+  color: var(--mythos-text2);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-sans);
+}
+.mythos-copy-btn:hover {
+  background: var(--mythos-surface3);
+  color: var(--mythos-text);
+  border-color: var(--mythos-border2);
+}
+.mythos-copy-btn.copied {
+  color: var(--mythos-success);
+  border-color: var(--mythos-success);
+}
+
+.mythos-code-body {
+  position: relative;
+  overflow-x: auto;
+  padding: 0;
+}
+
+.mythos-code-body pre {
+  margin: 0;
+  padding: 16px;
+  background: transparent !important;
+  font-family: var(--font-mono) !important;
+  font-size: 13px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.mythos-code-body code {
+  font-family: var(--font-mono) !important;
+  font-size: 13px;
+}
+
+.mythos-code-body .hljs {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* Line numbers */
+.mythos-code-body.linenums pre {
+  padding-left: 56px;
+  counter-reset: line;
+}
+
+.mythos-line-wrap pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Inline code */
+.mythos-inline-code {
+  background: var(--mythos-accent-dim);
+  color: var(--mythos-accent2);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  border: 1px solid rgba(124, 92, 252, 0.2);
+}
+
+/* Diff styling in code blocks */
+.mythos-diff-add {
+  background: var(--mythos-diff-add);
+}
+.mythos-diff-remove {
+  background: var(--mythos-diff-remove);
+}
+
+/* ===== MODE TABS ===== */
+.mythos-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mythos-text2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+}
+.mythos-mode-tab:hover {
+  background: var(--mythos-surface3);
+  color: var(--mythos-text);
+}
+.mythos-mode-tab.active {
+  background: var(--mythos-accent-dim);
+  color: var(--mythos-accent2);
+  border-color: var(--mythos-accent);
+}
+
+/* ===== MESSAGE STYLING ===== */
+.mythos-msg-user {
+  border-left: 2px solid var(--mythos-accent);
+  padding-left: 12px;
+}
+
+.mythos-msg-assistant {
+  border-left: 2px solid var(--mythos-success);
+  padding-left: 12px;
+}
+
+/* Typing indicator */
+.mythos-typing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mythos-accent);
+  animation: mythos-pulse 1.4s infinite ease-in-out both;
+}
+.mythos-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.mythos-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes mythos-pulse {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* ===== THINKING BLOCK ===== */
+.mythos-thinking {
+  border: 1px solid var(--mythos-border);
+  border-radius: 8px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+.mythos-thinking-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--mythos-surface);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--mythos-text2);
+  user-select: none;
+}
+.mythos-thinking-toggle:hover {
+  background: var(--mythos-surface2);
+  color: var(--mythos-text);
+}
+.mythos-thinking-body {
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--mythos-text2);
+  line-height: 1.5;
+  border-top: 1px solid var(--mythos-border);
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* ===== STATUS BAR ===== */
+.mythos-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 16px;
+  background: var(--mythos-surface);
+  border-top: 1px solid var(--mythos-border);
+  font-size: 11px;
+  color: var(--mythos-text3);
+  font-family: var(--font-mono);
+}
+
+/* ===== QUICK ACTION BUTTONS ===== */
+.mythos-quick-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--mythos-border);
+  background: var(--mythos-surface2);
+  color: var(--mythos-text2);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mythos-quick-action:hover {
+  background: var(--mythos-surface3);
+  color: var(--mythos-text);
+  border-color: var(--mythos-border2);
+}
+
+/* ===== KEYBOARD SHORTCUT HINTS ===== */
+.mythos-kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--mythos-border);
+  background: var(--mythos-surface2);
+  color: var(--mythos-text3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
 }

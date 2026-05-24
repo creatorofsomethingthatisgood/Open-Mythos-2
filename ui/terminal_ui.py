@@ -36,6 +36,7 @@ from engine.local_refs import (
 from engine.chat_config import merge_chat_defaults
 from engine.rml import RMLEngine
 from engine.cross_session_memory import CrossSessionMemory
+from engine.session_summaries import SessionSummaries
 from engine.chat_fix import (
     REWRITE_WARNING,
     _fix_cfg,
@@ -116,15 +117,26 @@ class TerminalUI:
         if self.cross_memory.enabled:
             fact_count = len(self.cross_memory.list_facts())
             self.console.print(
-                "[green]Cross-Session Memory enabled -- "
-                f"remembering {fact_count} fact(s) from past sessions[/green]"
+            "[green]Cross-Session Memory enabled -- "
+            f"remembering {fact_count} fact(s) from past sessions[/green]"
             )
-        
+
+        # Session Summaries -- Mythos Remembers Your Sessions
+        self.session_summaries = SessionSummaries(self.engine.config)
+        if self.session_summaries.enabled:
+            summary_count = len(self.session_summaries.list_summaries(limit=1))
+            self.console.print(
+            "[green]Session Summaries enabled -- "
+            "digest your sessions with /summary or /sessions[/green]"
+            )
+        self._session_start_time = time.time()
+
         self.running = True
         self._pending_local_context = ""
         self._last_local_targets: list = []
         self._pending_rewrite_paths: List[str] = []
         self._last_response_text: str = ""  # for RML explicit feedback
+        self._last_ctrl_c_time: float = 0.0  # for double Ctrl+C exit
     
     def show_header(self):
         """Display welcome header"""
@@ -195,6 +207,9 @@ class TerminalUI:
 [yellow]/rag on|off[/yellow] - Toggle RAG (if available)
 [yellow]/rml on|off|stats|good|bad|reset[/yellow] - Reinforcement ML: learn from your feedback
 [yellow]/memory [on|off|add|forget|clear|extract][/yellow] - Cross-session memory: facts Mythos remembers
+[yellow]/summary[/yellow] - Generate a structured digest of this session
+[yellow]/sessions [N|id][/yellow] - Browse past session summaries (list, or view #N / session-id)
+[yellow]/sessions-clear[/yellow] - Delete all saved session summaries
 [yellow]/file <path>[/yellow] - Load a local file or folder into context
 [yellow]/fix <path>[/yellow] - Auto-fix safe vulns (yaml, TLS, debug flags)
 [yellow]/rewrite <path>[/yellow] - Rewrite file(s) on disk (LLM + auto-write)
@@ -246,7 +261,8 @@ class TerminalUI:
         table.add_row("Self-Reflection", "On" if self.reflector.should_reflect() else "Off")
         table.add_row("RAG", "On" if self.rag_enabled and self.rag else "Off")
         table.add_row("RML", "On" if self.rml.enabled else "Off")
-        
+        table.add_row("Session Summaries", "On" if self.session_summaries.enabled else "Off")
+ 
         self.console.print(table)
     
     def handle_command(self, command: str) -> bool:
@@ -636,6 +652,62 @@ class TerminalUI:
                 f.write(text)
             self.console.print(f"[green]Exported to: {filename}[/green]")
         
+        elif cmd == "/summary":
+            if not self.session_summaries.enabled:
+                self.console.print("[yellow]Session Summaries not enabled. Set session_summaries.enabled: true in config.[/yellow]")
+                return True
+            self.console.print("[cyan]Generating session summary...[/cyan]")
+            msg_list = self.memory.get_recent_context(max_turns=50)
+            model_name = self.engine.config.get("model", {}).get("name", "")
+            summary = self.session_summaries.generate_summary(
+                msg_list,
+                engine=self.engine,
+                session_start_time=getattr(self, "_session_start_time", None),
+                model_name=model_name,
+            )
+            if summary is None:
+                self.console.print("[yellow]Not enough conversation to summarize yet.[/yellow]")
+                return True
+            sid = self.session_summaries.save_summary(summary)
+            detail = self.session_summaries.format_summary_detail(summary)
+            self.console.print(detail)
+            self.console.print(f"[green]Summary saved (id: {sid})[/green]")
+
+        elif cmd == "/sessions":
+            if not self.session_summaries.enabled:
+                self.console.print("[yellow]Session Summaries not enabled.[/yellow]")
+                return True
+            if args and args.strip().isdigit():
+                # /sessions <number> -- show detail for the Nth most recent
+                idx = int(args.strip()) - 1
+                listings = self.session_summaries.list_summaries(limit=idx + 1)
+                if 0 <= idx < len(listings):
+                    full = self.session_summaries.load_summary(listings[idx]["session_id"])
+                    if full:
+                        self.console.print(self.session_summaries.format_summary_detail(full))
+                    else:
+                        self.console.print("[red]Could not load that summary.[/red]")
+                else:
+                    self.console.print("[red]Invalid session number.[/red]")
+            elif args:
+                # /sessions <session_id> -- show detail by ID
+                full = self.session_summaries.load_summary(args.strip())
+                if full:
+                    self.console.print(self.session_summaries.format_summary_detail(full))
+                else:
+                    self.console.print(f"[red]No summary found for: {args.strip()}[/red]")
+            else:
+                # /sessions -- list all
+                listings = self.session_summaries.list_summaries(limit=20)
+                self.console.print(self.session_summaries.format_sessions_list(listings))
+
+        elif cmd == "/sessions-clear":
+            if not self.session_summaries.enabled:
+                self.console.print("[yellow]Session Summaries not enabled.[/yellow]")
+                return True
+            count = self.session_summaries.clear_all()
+            self.console.print(f"[green]Cleared {count} session summary/ies.[/green]")
+
         elif cmd == "/quit":
             self.console.print("[cyan]Goodbye![/cyan]")
             return False
@@ -872,6 +944,7 @@ class TerminalUI:
                 )
 
             except KeyboardInterrupt:
+                self._last_ctrl_c_time = time.time()
                 self.console.print("\n\n[yellow]Generation interrupted[/yellow]\n")
                 # RML: record interrupt as negative signal (usually = too verbose / off-track)
                 if self.rml.enabled:
@@ -981,7 +1054,13 @@ class TerminalUI:
                 self.generate_response(user_input)
             
             except KeyboardInterrupt:
-                self.console.print("\n[yellow]Use /quit to exit[/yellow]")
+                now = time.time()
+                if now - self._last_ctrl_c_time < 1.0:
+                    self.console.print("\n[cyan]Exiting...[/cyan]")
+                    self.running = False
+                    break
+                self._last_ctrl_c_time = now
+                self.console.print("\n[yellow]Press Ctrl+C again to exit[/yellow]")
                 continue
             except EOFError:
                 break
@@ -1010,6 +1089,24 @@ class TerminalUI:
             except Exception as mem_err:
                 logger.warning(f"Cross-session memory extraction failed on exit: {mem_err}")
 
+        # Session Summaries: auto-generate a digest on exit
+        if self.session_summaries.enabled and self.session_summaries.auto_on_exit and self.memory.messages:
+            try:
+                msg_list = self.memory.get_recent_context(max_turns=50)
+                model_name = self.engine.config.get("model", {}).get("name", "")
+                summary = self.session_summaries.generate_summary(
+                    msg_list,
+                    engine=self.engine,
+                    session_start_time=getattr(self, "_session_start_time", None),
+                    model_name=model_name,
+                )
+                if summary:
+                    sid = self.session_summaries.save_summary(summary)
+                    self.console.print(
+                        f"[green]Session Summary saved (id: {sid})[/green]"
+                    )
+            except Exception as ss_err:
+                logger.warning(f"Session summary auto-generation failed on exit: {ss_err}")
 
 def run_terminal_ui(config_path: str = "config.yaml"):
     """
