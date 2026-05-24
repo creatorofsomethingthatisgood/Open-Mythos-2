@@ -39,6 +39,74 @@
 
 Like Prometheus stealing fire from the gods, OpenMythos-2 brings the fire of AI to every machine.
 
+
+
+
+## 🔄 RML — Reinforcement Machine Learning
+
+RML is a feedback-driven self-improvement loop that learns your preferences over time and adapts Mythos to match. It does **two things automatically**:
+
+### 1. Edits the System Prompt
+
+When a category accumulates enough negative feedback, RML injects a concrete behavioral hint directly into the system prompt. These learned hints tell Mythos how to adjust its style — for example:
+
+- **Accuracy** hint: *"Prioritize accuracy over creativity. Double-check facts. If unsure, say so."*
+- **Conciseness** hint: *"Be concise. Get to the answer quickly; elaborate only when asked."*
+- **Clarity** hint: *"Use headers, bullet points, short paragraphs. Avoid jargon without explanation."*
+- **Code quality** hint: *"Write production-quality code: type hints, docstrings, error handling."*
+- **Security** hint: *"Apply security best practices: input validation, no hardcoded secrets."*
+- **Completeness** hint: *"Be thorough. Address all parts of the question. Don't skip edge cases."*
+
+Hints are **removed automatically** when the category's score recovers — so the system prompt is always a live reflection of what you actually prefer.
+
+### 2. Adjusts Generation Parameters
+
+RML also tweaks `temperature`, `top_p`, and `repeat_penalty` behind the scenes:
+
+- High accept rate → temperature nudges **up** (more creative/confident)
+- High rejections/edits → temperature nudges **down** (more conservative/precise)
+- Many interrupts → `repeat_penalty` increases slightly
+
+All adjustments are bounded by `max_param_offset` (default 0.3) so nothing swings wildly.
+
+### Feedback Signals RML Collects
+
+| Signal | Strength | Trigger |
+|--------|----------|---------|
+| Explicit good | +2.0 | `/rml good` |
+| Explicit bad | −2.0 | `/rml bad` |
+| Implicit positive | +1.0 | You say "thanks", "perfect", "works", etc. |
+| Implicit negative | −1.0 | You say "wrong", "try again", "mistake", etc. |
+| Edit penalty | −1.0 | You rewrite Mythos' output |
+| Interrupt penalty | −0.5 | You Ctrl+C during generation |
+
+### Commands
+
+```
+/rml on          Enable RML
+/rml off         Disable RML
+/rml good        Mark last response as good (explicit +2)
+/rml bad         Mark last response as bad (explicit -2)
+/rml stats       Show what RML has learned (scores, hints, param adjustments)
+/rml reset       Wipe all learned preferences and start fresh
+```
+
+### Config (`config.yaml`)
+
+```yaml
+rml:
+  enabled: false          # Turn on with /rml on in chat
+  learning_rate: 0.05     # 0.01 = slow, 0.2 = fast
+  max_param_offset: 0.3   # Max drift from base temperature/top_p
+  hint_threshold: 3.0     # Negative score before a hint is injected
+```
+
+Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
+
+Thank you for the star if you gave one.
+
+
+
 ---
 
 ## 🏛️ Features
@@ -129,67 +197,3 @@ pnpm add -g .
 
 
 ---
-
-## 🔄 RML — Reinforcement Machine Learning
-
-RML is a feedback-driven self-improvement loop that learns your preferences over time and adapts Mythos to match. It does **two things automatically**:
-
-### 1. Edits the System Prompt
-
-When a category accumulates enough negative feedback, RML injects a concrete behavioral hint directly into the system prompt. These learned hints tell Mythos how to adjust its style — for example:
-
-- **Accuracy** hint: *"Prioritize accuracy over creativity. Double-check facts. If unsure, say so."*
-- **Conciseness** hint: *"Be concise. Get to the answer quickly; elaborate only when asked."*
-- **Clarity** hint: *"Use headers, bullet points, short paragraphs. Avoid jargon without explanation."*
-- **Code quality** hint: *"Write production-quality code: type hints, docstrings, error handling."*
-- **Security** hint: *"Apply security best practices: input validation, no hardcoded secrets."*
-- **Completeness** hint: *"Be thorough. Address all parts of the question. Don't skip edge cases."*
-
-Hints are **removed automatically** when the category's score recovers — so the system prompt is always a live reflection of what you actually prefer.
-
-### 2. Adjusts Generation Parameters
-
-RML also tweaks `temperature`, `top_p`, and `repeat_penalty` behind the scenes:
-
-- High accept rate → temperature nudges **up** (more creative/confident)
-- High rejections/edits → temperature nudges **down** (more conservative/precise)
-- Many interrupts → `repeat_penalty` increases slightly
-
-All adjustments are bounded by `max_param_offset` (default 0.3) so nothing swings wildly.
-
-### Feedback Signals RML Collects
-
-| Signal | Strength | Trigger |
-|--------|----------|---------|
-| Explicit good | +2.0 | `/rml good` |
-| Explicit bad | −2.0 | `/rml bad` |
-| Implicit positive | +1.0 | You say "thanks", "perfect", "works", etc. |
-| Implicit negative | −1.0 | You say "wrong", "try again", "mistake", etc. |
-| Edit penalty | −1.0 | You rewrite Mythos' output |
-| Interrupt penalty | −0.5 | You Ctrl+C during generation |
-
-### Commands
-
-```
-/rml on          Enable RML
-/rml off         Disable RML
-/rml good        Mark last response as good (explicit +2)
-/rml bad         Mark last response as bad (explicit -2)
-/rml stats       Show what RML has learned (scores, hints, param adjustments)
-/rml reset       Wipe all learned preferences and start fresh
-```
-
-### Config (`config.yaml`)
-
-```yaml
-rml:
-  enabled: false          # Turn on with /rml on in chat
-  learning_rate: 0.05     # 0.01 = slow, 0.2 = fast
-  max_param_offset: 0.3   # Max drift from base temperature/top_p
-  hint_threshold: 3.0     # Negative score before a hint is injected
-```
-
-Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
-
-Thank you for the star if you gave one.
-
