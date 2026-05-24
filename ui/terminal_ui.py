@@ -34,6 +34,7 @@ from engine.local_refs import (
     ref_to_path,
 )
 from engine.chat_config import merge_chat_defaults
+from engine.rml import RMLEngine
 from engine.chat_fix import (
     REWRITE_WARNING,
     _fix_cfg,
@@ -93,22 +94,28 @@ class TerminalUI:
                 logger.exception("RAG init failed")
                 self.console.print(f"[yellow]RAG not available: {rag_err}[/yellow]")
                 self.console.print(
-                    "[dim]  Fix: python main.py --mode rag-index --path <dir> "
+                    "[dim] Fix: python main.py --mode rag-index --path <dir> "
                     "(needs network once for the embedding model)[/dim]"
                 )
             
             # Benchmark suite
             self.benchmark = BenchmarkSuite(config_path)
-            
+        
         except Exception as e:
             self.console.print(f"[bold red]Error initializing engine: {e}[/bold red]")
             raise
+        
+        # RML (Reinforcement Machine Learning) engine
+        self.rml = RMLEngine(self.engine.config)
+        if self.rml.enabled:
+            self.console.print("[green]RML (Reinforcement ML) enabled — learning from your feedback[/green]")
         
         self.running = True
         self._pending_local_context = ""
         self._last_local_targets: list = []
         self._pending_rewrite_paths: List[str] = []
-        
+        self._last_response_text: str = ""  # for RML explicit feedback
+    
     def show_header(self):
         """Display welcome header"""
         # Detect which prompt mode is active
@@ -132,8 +139,8 @@ class TerminalUI:
         
         header = """
 ╔═══════════════════════════════════════════════════════════════╗
-║                      MYTHOS LOCAL                             ║
-║           High-Quality Local Language Model                   ║
+║                     MYTHOS LOCAL                              ║
+║            High-Quality Local Language Model                   ║
 ╚═══════════════════════════════════════════════════════════════╝
         """
         self.console.print(header, style="bold cyan")
@@ -147,7 +154,7 @@ class TerminalUI:
 
     def _fix_progress(self, message: str) -> None:
         """Show live status during scan / rewrite (users see this while waiting)."""
-        if message.startswith("  •"):
+        if message.startswith(" •"):
             self.console.print(f"[dim]{message}[/dim]")
         else:
             self.console.print(f"[cyan]{message}[/cyan]")
@@ -167,35 +174,36 @@ class TerminalUI:
         help_text = """
 [bold cyan]Available Commands:[/bold cyan]
 
-[yellow]/help[/yellow]              - Show this help message
-[yellow]/clear[/yellow]             - Clear conversation history
-[yellow]/save[/yellow]              - Save current conversation
-[yellow]/load[/yellow]              - Load a saved conversation
-[yellow]/system <prompt>[/yellow]  - Change system prompt
-[yellow]/model <name>[/yellow]     - Switch model (if available)
-[yellow]/temp <float>[/yellow]     - Change temperature (0.0-2.0)
-[yellow]/reflect on|off[/yellow]   - Toggle self-reflection
-[yellow]/rag on|off[/yellow]       - Toggle RAG (if available)
-[yellow]/file <path>[/yellow]      - Load a local file or folder into context
-[yellow]/fix <path>[/yellow]       - Auto-fix safe vulns (yaml, TLS, debug flags)
-[yellow]/rewrite <path>[/yellow]   - Rewrite file(s) on disk (LLM + auto-write)
-[yellow]/benchmark[/yellow]        - Run benchmark suite
-[yellow]/config[/yellow]           - Show current configuration
-[yellow]/export[/yellow]           - Export conversation as text
-[yellow]/quit[/yellow]             - Exit the chat
+[yellow]/help[/yellow] - Show this help message
+[yellow]/clear[/yellow] - Clear conversation history
+[yellow]/save[/yellow] - Save current conversation
+[yellow]/load[/yellow] - Load a saved conversation
+[yellow]/system <prompt>[/yellow] - Change system prompt
+[yellow]/model <name>[/yellow] - Switch model (if available)
+[yellow]/temp <float>[/yellow] - Change temperature (0.0-2.0)
+[yellow]/reflect on|off[/yellow] - Toggle self-reflection
+[yellow]/rag on|off[/yellow] - Toggle RAG (if available)
+[yellow]/rml on|off|stats|good|bad|reset[/yellow] - Reinforcement ML: learn from your feedback
+[yellow]/file <path>[/yellow] - Load a local file or folder into context
+[yellow]/fix <path>[/yellow] - Auto-fix safe vulns (yaml, TLS, debug flags)
+[yellow]/rewrite <path>[/yellow] - Rewrite file(s) on disk (LLM + auto-write)
+[yellow]/benchmark[/yellow] - Run benchmark suite
+[yellow]/config[/yellow] - Show current configuration
+[yellow]/export[/yellow] - Export conversation as text
+[yellow]/quit[/yellow] - Exit the chat
 
 [bold cyan]🔥 Enhanced Coding Modes:[/bold cyan]
-[yellow]/system coding[/yellow]     - ELITE 5-pass code verification mode
+[yellow]/system coding[/yellow] - ELITE 5-pass code verification mode
 [yellow]/system code_review[/yellow] - Systematic code review mode
-[yellow]/system debugging[/yellow]   - Methodical debugging mode
-[yellow]/system default[/yellow]    - Return to general purpose mode
+[yellow]/system debugging[/yellow] - Methodical debugging mode
+[yellow]/system default[/yellow] - Return to general purpose mode
 
 [bold cyan]Other Modes:[/bold cyan]
-[yellow]/system creative[/yellow]   - Creative writing & storytelling
+[yellow]/system creative[/yellow] - Creative writing & storytelling
 [yellow]/system analytical[/yellow] - Deep analysis & reasoning
-[yellow]/system roleplay[/yellow]   - Character roleplay mode
+[yellow]/system roleplay[/yellow] - Character roleplay mode
 [yellow]/system security_audit[/yellow] - Codebase security review mode
-[yellow]/system security_fix[/yellow]   - Default — find + fix (MYTHOS_PATCH)
+[yellow]/system security_fix[/yellow] - Default — find + fix (MYTHOS_PATCH)
 
 [bold cyan]Local files & fixes in chat:[/bold cyan]
 - Paste a path: [dim]/Users/you/project/app.py[/dim]
@@ -226,6 +234,7 @@ class TerminalUI:
         table.add_row("Max Tokens", str(self.engine.config.get('generation', {}).get('max_tokens', 2048)))
         table.add_row("Self-Reflection", "On" if self.reflector.should_reflect() else "Off")
         table.add_row("RAG", "On" if self.rag_enabled and self.rag else "Off")
+        table.add_row("RML", "On" if self.rml.enabled else "Off")
         
         self.console.print(table)
     
@@ -235,7 +244,7 @@ class TerminalUI:
         
         Args:
             command: Command string
-            
+        
         Returns:
             True if should continue, False if should exit
         """
@@ -262,7 +271,7 @@ class TerminalUI:
             
             self.console.print("[cyan]Saved conversations:[/cyan]")
             for i, conv in enumerate(conversations[:10], 1):
-                self.console.print(f"  {i}. {conv.name}")
+                self.console.print(f" {i}. {conv.name}")
             
             choice = Prompt.ask("Enter number to load", default="1")
             try:
@@ -321,7 +330,7 @@ class TerminalUI:
         elif cmd == "/file":
             if not args:
                 self.console.print(
-                    "[red]Usage: /file <path>[/red]  "
+                    "[red]Usage: /file <path>[/red] "
                     "(file, folder, or file:// URL)"
                 )
                 return True
@@ -347,7 +356,7 @@ class TerminalUI:
         elif cmd == "/fix":
             if not args:
                 self.console.print(
-                    "[red]Usage: /fix <path>[/red]  "
+                    "[red]Usage: /fix <path>[/red] "
                     "(file or folder; dry-run preview, then confirm apply)"
                 )
                 return True
@@ -386,7 +395,7 @@ class TerminalUI:
         elif cmd == "/rewrite":
             if not args:
                 self.console.print(
-                    "[red]Usage: /rewrite <file-or-folder>[/red]  "
+                    "[red]Usage: /rewrite <file-or-folder>[/red] "
                     "(rewrites full file on disk via LLM)"
                 )
                 return True
@@ -457,27 +466,66 @@ class TerminalUI:
             if args.lower() == "on":
                 self.rag_enabled = True
                 self.console.print("[green]RAG enabled[/green]")
-                
+            
                 # Show stats
                 stats = self.rag.get_stats()
-                self.console.print(f"  Indexed chunks: {stats['total_chunks']}")
-                self.console.print(f"  Index path: {stats.get('persist_directory', 'chroma_db')}")
-                
+                self.console.print(f" Indexed chunks: {stats['total_chunks']}")
+                self.console.print(f" Index path: {stats.get('persist_directory', 'chroma_db')}")
+            
                 if stats['total_chunks'] == 0:
                     self.console.print(
-                        "[yellow]  No documents indexed. Quit chat, run:[/yellow]"
+                        "[yellow] No documents indexed. Quit chat, run:[/yellow]"
                     )
                     self.console.print(
-                        "[yellow]    python main.py --mode rag-index --path <dir>[/yellow]"
+                        "[yellow] python main.py --mode rag-index --path <dir>[/yellow]"
                     )
                     self.console.print(
-                        "[yellow]  Then restart chat and /rag on again.[/yellow]"
+                        "[yellow] Then restart chat and /rag on again.[/yellow]"
                     )
             elif args.lower() == "off":
                 self.rag_enabled = False
                 self.console.print("[yellow]RAG disabled[/yellow]")
             else:
                 self.console.print("[red]Use /rag on or /rag off[/red]")
+        
+        elif cmd == "/rml":
+            sub = args.lower().strip()
+            if sub == "on":
+                self.rml.toggle(True)
+                self.engine.config.setdefault("rml", {})["enabled"] = True
+                self.console.print("[green]RML (Reinforcement ML) enabled[/green]")
+                self.console.print("[dim]The model will now learn from your feedback.[/dim]")
+                self.console.print("[dim]Use /rml good or /rml bad after a response to give explicit signals.[/dim]")
+            elif sub == "off":
+                self.rml.toggle(False)
+                self.engine.config.setdefault("rml", {})["enabled"] = False
+                self.console.print("[yellow]RML (Reinforcement ML) disabled[/yellow]")
+                self.console.print("[dim]Learning paused. Previous preferences are kept.[/dim]")
+            elif sub == "stats":
+                self.console.print(self.rml.format_stats_table())
+            elif sub == "good":
+                if self._last_response_text:
+                    self.rml.record_explicit(good=True, detail="user /rml good")
+                    self.console.print("[green]RML: positive signal recorded (+2)[/green]")
+                else:
+                    self.console.print("[yellow]No previous response to rate[/yellow]")
+            elif sub == "bad":
+                if self._last_response_text:
+                    self.rml.record_explicit(good=False, detail="user /rml bad")
+                    self.console.print("[yellow]RML: negative signal recorded (-2)[/yellow]")
+                else:
+                    self.console.print("[yellow]No previous response to rate[/yellow]")
+            elif sub == "reset":
+                self.rml.reset()
+                self.console.print("[yellow]RML preferences reset — starting fresh[/yellow]")
+            else:
+                self.console.print("[red]Usage: /rml on|off|stats|good|bad|reset[/red]")
+                self.console.print("[dim]  on     — enable RML learning[/dim]")
+                self.console.print("[dim]  off    — disable RML learning[/dim]")
+                self.console.print("[dim]  stats  — show what RML has learned[/dim]")
+                self.console.print("[dim]  good   — rate the last response as good (+2)[/dim]")
+                self.console.print("[dim]  bad    — rate the last response as bad (-2)[/dim]")
+                self.console.print("[dim]  reset  — wipe all learned preferences[/dim]")
         
         elif cmd == "/benchmark":
             self.console.print("[cyan]Running benchmark suite...[/cyan]")
@@ -519,10 +567,18 @@ class TerminalUI:
         
         Args:
             user_input: User's input text
-            
+        
         Returns:
             Complete response
         """
+        # RML: capture implicit feedback from user's follow-up
+        if self.rml.enabled and self._last_response_text:
+            implicit = self.rml.record_implicit(user_input)
+            if implicit == "positive":
+                self.console.print("[dim](RML: positive signal detected)[/dim]")
+            elif implicit == "negative":
+                self.console.print("[dim](RML: negative signal detected)[/dim]")
+        
         # Add user message to memory
         self.memory.add_message("user", user_input)
         
@@ -576,48 +632,48 @@ class TerminalUI:
             if user_wants_fix(user_input) or confirm_only:
                 on_progress("Fix/rewrite requested — starting workflow…")
 
-            if confirm_only and self._pending_rewrite_paths:
-                rewrite_approved = True
-                rewrite_paths = list(self._pending_rewrite_paths)
-                fix_context = ""
-                fix_notices = [f"Continuing rewrite for {len(rewrite_paths)} file(s)…"]
-                on_progress(fix_notices[0])
-                fix_targets = list(self._last_local_targets)
-            else:
-                def _confirm_apply(summary: str) -> bool:
-                    self.console.print(
-                        Panel(REWRITE_WARNING, title="Full-file rewrite", border_style="yellow")
-                    )
-                    return Prompt.ask(summary, choices=["y", "n"], default="n") == "y"
+                if confirm_only and self._pending_rewrite_paths:
+                    rewrite_approved = True
+                    rewrite_paths = list(self._pending_rewrite_paths)
+                    fix_context = ""
+                    fix_notices = [f"Continuing rewrite for {len(rewrite_paths)} file(s)…"]
+                    on_progress(fix_notices[0])
+                    fix_targets = list(self._last_local_targets)
+                else:
+                    def _confirm_apply(summary: str) -> bool:
+                        self.console.print(
+                            Panel(REWRITE_WARNING, title="Full-file rewrite", border_style="yellow")
+                        )
+                        return Prompt.ask(summary, choices=["y", "n"], default="n") == "y"
 
-                fix_context, fix_notices, fix_targets, rewrite_approved, rewrite_paths = (
-                    handle_chat_fix(
-                        user_input,
-                        self.engine.config,
-                        last_targets=self._last_local_targets,
-                        extra_refs=history_refs,
-                        confirm_apply=_confirm_apply,
-                        on_progress=on_progress,
+                    fix_context, fix_notices, fix_targets, rewrite_approved, rewrite_paths = (
+                        handle_chat_fix(
+                            user_input,
+                            self.engine.config,
+                            last_targets=self._last_local_targets,
+                            extra_refs=history_refs,
+                            confirm_apply=_confirm_apply,
+                            on_progress=on_progress,
+                        )
                     )
-                )
-                if fix_targets:
-                    self._last_local_targets = fix_targets
-                if rewrite_paths:
-                    self._pending_rewrite_paths = rewrite_paths
+                    if fix_targets:
+                        self._last_local_targets = fix_targets
+                    if rewrite_paths:
+                        self._pending_rewrite_paths = rewrite_paths
 
-            if not bitacora_panel:
-                for note in local_notices + fix_notices:
-                    style = (
-                        "green"
-                        if note.startswith(("Loaded", "Scanned", "Auto-fix", "Wrote"))
-                        else "dim"
-                    )
-                    if note.startswith("Say "):
-                        style = "yellow"
-                    self.console.print(f"[{style}]{note}[/{style}]")
-            else:
-                for note in local_notices + fix_notices:
-                    on_progress(note)
+                if not bitacora_panel:
+                    for note in local_notices + fix_notices:
+                        style = (
+                            "green"
+                            if note.startswith(("Loaded", "Scanned", "Auto-fix", "Wrote"))
+                            else "dim"
+                        )
+                        if note.startswith("Say "):
+                            style = "yellow"
+                        self.console.print(f"[{style}]{note}[/{style}]")
+                else:
+                    for note in local_notices + fix_notices:
+                        on_progress(note)
 
             # Confirm-only: skip chat generation and run dedicated rewrite immediately.
             if confirm_only and rewrite_approved and rewrite_paths:
@@ -660,12 +716,18 @@ class TerminalUI:
                     "[dim]Note: security_audit mode reports findings only — "
                     "using security_fix prompt for this rewrite.[/dim]"
                 )
-            system_prompt = build_fix_system_prompt(
-                self.prompt_manager,
-                system_prompt,
-                user_input,
-                rewrite_approved=rewrite_approved,
-            )
+                system_prompt = build_fix_system_prompt(
+                    self.prompt_manager,
+                    system_prompt,
+                    user_input,
+                    rewrite_approved=rewrite_approved,
+                )
+
+            # RML: inject learned preference hints into the system prompt
+            if self.rml.enabled:
+                rml_hints = self.rml.get_learned_hints_text()
+                if rml_hints:
+                    system_prompt = system_prompt + "\n" + rml_hints
 
             extra_context = "\n\n".join(
                 part for part in (rag_context, local_context, fix_context) if part
@@ -685,6 +747,11 @@ class TerminalUI:
 
             prompt = self.engine.format_chat_prompt(messages, system_prompt)
 
+            # RML: apply parameter adjustments (temperature, top_p, repeat_penalty)
+            gen_config = self.engine.config.get("generation", {})
+            if self.rml.enabled:
+                gen_config = self.rml.adjusted_generation_params(gen_config)
+
             response_text = ""
             start_time = time.time()
             token_count = 0
@@ -692,7 +759,13 @@ class TerminalUI:
             self.console.print("\n[bold green]Assistant:[/bold green] ", end="")
 
             try:
-                for chunk in self.engine.generate(prompt, stream=True):
+                for chunk in self.engine.generate(
+                    prompt,
+                    stream=True,
+                    temperature=gen_config.get("temperature"),
+                    top_p=gen_config.get("top_p"),
+                    repeat_penalty=gen_config.get("repeat_penalty"),
+                ):
                     response_text += chunk
                     token_count += 1
                     self.console.print(chunk, end="")
@@ -709,6 +782,11 @@ class TerminalUI:
 
             except KeyboardInterrupt:
                 self.console.print("\n\n[yellow]Generation interrupted[/yellow]\n")
+                # RML: record interrupt as negative signal (usually = too verbose / off-track)
+                if self.rml.enabled:
+                    self.rml.record_interrupt()
+                self._last_response_text = response_text
+                self.memory.add_message("assistant", response_text)
                 return response_text
 
             if self.reflector.should_reflect() and response_text:
@@ -726,13 +804,13 @@ class TerminalUI:
             patch_notices: List[str] = []
             if user_wants_fix(user_input):
                 on_progress("Checking assistant reply for MYTHOS_PATCH blocks…")
-            patch_notices = apply_patches_with_prompt(
-                response_text,
-                self.engine.config,
-                message=user_input,
-                rewrite_approved=rewrite_approved,
-                on_progress=on_progress,
-            )
+                patch_notices = apply_patches_with_prompt(
+                    response_text,
+                    self.engine.config,
+                    message=user_input,
+                    rewrite_approved=rewrite_approved,
+                    on_progress=on_progress,
+                )
 
             needs_dedicated = user_wants_fix(user_input) and not any(
                 n.startswith("Wrote") for n in patch_notices
@@ -773,8 +851,8 @@ class TerminalUI:
                     patch_notices.extend(retry_notes)
                     if any(n.startswith("Wrote") for n in retry_notes):
                         self._pending_rewrite_paths = []
-                elif rewrite_paths:
-                    self._pending_rewrite_paths = rewrite_paths
+                    elif rewrite_paths:
+                        self._pending_rewrite_paths = rewrite_paths
 
             if not bitacora_panel:
                 for note in patch_notices:
@@ -785,6 +863,9 @@ class TerminalUI:
                 bitacora_cm.__exit__(None, None, None)
 
         self.memory.add_message("assistant", response_text)
+        
+        # RML: track the last response for explicit feedback (/rml good|bad)
+        self._last_response_text = response_text
 
         return response_text
     
@@ -807,7 +888,7 @@ class TerminalUI:
                 
                 # Generate response
                 self.generate_response(user_input)
-                
+            
             except KeyboardInterrupt:
                 self.console.print("\n[yellow]Use /quit to exit[/yellow]")
                 continue

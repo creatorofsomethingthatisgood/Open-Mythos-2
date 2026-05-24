@@ -20,10 +20,15 @@ DEFAULT_CHAT: Dict[str, Any] = {
         "allow_edit": True,
         "auto_write_patches": False,
         "max_rewrite_files": 0,  # 0 = unlimited files per rewrite/fix run
-        "show_finding_rationale": True,  # progress: why each file is being rewritten
-        "stream_rewrite": False,  # stream model tokens during dedicated rewrite (noisy)
-        "bitacora": True,  # progressive live journal during fix/rewrite (terminal)
     },
+}
+
+# RML (Reinforcement Machine Learning) defaults
+DEFAULT_RML: Dict[str, Any] = {
+    "enabled": False,
+    "learning_rate": 0.05,
+    "max_param_offset": 0.3,
+    "hint_threshold": 3.0,
 }
 
 
@@ -57,11 +62,20 @@ def apply_unlimited_chat_limits(chat: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def merge_rml_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure rml section exists with defaults."""
+    cfg = dict(config or {})
+    user_rml = cfg.get("rml") if isinstance(cfg.get("rml"), dict) else {}
+    cfg["rml"] = _deep_merge(DEFAULT_RML, user_rml)
+    return cfg
+
+
 def merge_chat_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Ensure chat.local_files + chat.fix exist with unlimited edit defaults."""
+    """Ensure chat.local_files + chat.fix + rml exist with unlimited edit defaults."""
     cfg = dict(config or {})
     user_chat = cfg.get("chat") if isinstance(cfg.get("chat"), dict) else {}
     cfg["chat"] = apply_unlimited_chat_limits(_deep_merge(DEFAULT_CHAT, user_chat))
+    cfg = merge_rml_defaults(cfg)
     return cfg
 
 

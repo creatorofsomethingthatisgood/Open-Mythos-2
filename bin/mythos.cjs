@@ -1,0 +1,108 @@
+#!/usr/bin/env node
+// -*- mode: cjs -*-
+
+/**
+ * open-mythos-2 — npm/pnpm wrapper for the Mythos local AI CLI.
+ *
+ * This script bootstraps the Python virtual environment on first run,
+ * then delegates to the Python CLI (mythos_cli).
+ */
+
+const { execSync, spawn } = require("child_process");
+const path = require("path");
+const fs = require("fs");
+const os = require("os");
+
+// Resolve the package root (where package.json lives)
+const PKG_ROOT = path.resolve(__dirname, "..");
+const VENV_DIR = path.join(PKG_ROOT, "venv");
+const VENV_PYTHON =
+  os.platform() === "win32"
+    ? path.join(VENV_DIR, "Scripts", "python.exe")
+    : path.join(VENV_DIR, "bin", "python3");
+
+// ── helpers ──────────────────────────────────────────────────────────
+function run(cmd, opts = {}) {
+  return execSync(cmd, { stdio: "inherit", cwd: PKG_ROOT, ...opts });
+}
+
+function fileExists(p) {
+  try {
+    fs.accessSync(p, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isVenvReady() {
+  return fileExists(VENV_PYTHON);
+}
+
+// ── bootstrap ────────────────────────────────────────────────────────
+function ensureSetup() {
+  if (isVenvReady()) return;
+
+  console.log("Mythos: First run — setting up Python environment...\n");
+
+  // 1. Create venv
+  if (!fs.existsSync(VENV_DIR)) {
+    console.log("Creating Python virtual environment...");
+    run("python3 -m venv venv");
+  }
+
+  // 2. Run the platform setup script (installs llama-cpp-python, deps, etc.)
+  const setupScript =
+    os.platform() === "darwin"
+      ? path.join(PKG_ROOT, "setup-macos.sh")
+      : path.join(PKG_ROOT, "setup.sh");
+
+  if (fs.existsSync(setupScript)) {
+    try {
+      run(`bash "${setupScript}"`, { cwd: PKG_ROOT });
+    } catch {
+      // setup.sh may prompt for model download; fallback to minimal install
+      console.log("Setup script exited — trying minimal pip install...");
+      run(`"${VENV_PYTHON}" -m pip install --upgrade pip setuptools wheel`, {
+        stdio: "pipe",
+      });
+      run(`"${VENV_PYTHON}" -m pip install -e ".[web]"`, { stdio: "pipe" });
+    }
+  } else {
+    // No setup script (e.g. Windows or custom env) — minimal install
+    run(`"${VENV_PYTHON}" -m pip install --upgrade pip setuptools wheel`, {
+      stdio: "pipe",
+    });
+    run(`"${VENV_PYTHON}" -m pip install -e ".[web]"`, { stdio: "pipe" });
+  }
+
+  console.log("\nMythos: Setup complete.\n");
+}
+
+// ── main ─────────────────────────────────────────────────────────────
+function main() {
+  ensureSetup();
+
+  const args = process.argv.slice(2);
+
+  // Default to "chat" if no args (mirrors ./mythos behaviour)
+  if (args.length === 0) {
+    args.push("chat");
+  }
+
+  // Spawn the Python CLI, forwarding stdio
+  const child = spawn(VENV_PYTHON, ["-m", "mythos_cli.main", ...args], {
+    cwd: PKG_ROOT,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      MYTHOS_PROJECT_ROOT: PKG_ROOT,
+    },
+  });
+
+  child.on("exit", (code) => {
+    process.exit(code ?? 1);
+  });
+}
+
+main();

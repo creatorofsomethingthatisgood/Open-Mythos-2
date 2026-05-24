@@ -21,22 +21,7 @@ from engine.memory import ConversationMemory
 from engine.rag import RAGPipeline
 from engine.self_reflect import SelfReflector
 from engine.context_budget import fit_chat_context
-from engine.local_refs import (
-    build_local_file_context,
-    extract_local_refs,
-    extract_local_refs_from_messages,
-)
-from engine.bitacora import Bitacora
-from engine.chat_fix import (
-    REWRITE_WARNING,
-    apply_patches_with_prompt,
-    build_fix_system_prompt,
-    handle_chat_fix,
-    resolve_fix_targets,
-    run_dedicated_rewrite,
-    user_wants_fix,
-    user_wants_rewrite,
-)
+from engine.local_refs import build_local_file_context
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +99,6 @@ class WebUI:
         self.current_top_k = 40
         self.current_max_tokens = 2048
         self.current_repeat_penalty = 1.1
-        self._last_local_targets: list = []
         
         print("Initialization complete!")
     
@@ -129,9 +113,7 @@ class WebUI:
         max_tokens: int,
         repeat_penalty: float,
         use_reflection: bool,
-        use_rag: bool,
-        allow_rewrite: bool,
-        progress: gr.Progress = gr.Progress(),
+        use_rag: bool
     ) -> tuple[ChatHistory, str]:
         """
         Handle chat interaction
@@ -154,18 +136,6 @@ class WebUI:
         if not message.strip():
             return history, "Please enter a message"
         
-        rewrite_approved = False
-        activity: List[str] = []
-        bitacora = Bitacora()
-
-        def _report(msg: str) -> None:
-            activity.append(msg)
-            bitacora.log(msg)
-            try:
-                progress(None, desc=msg)
-            except Exception:
-                pass
-
         try:
             # Update system prompt
             self.prompt_manager.set_prompt(system_prompt)
@@ -180,47 +150,9 @@ class WebUI:
             if use_rag and self.rag:
                 rag_context = self.rag.get_context(message)
 
-            if extract_local_refs(message):
-                self._last_local_targets = resolve_fix_targets(
-                    message, self._last_local_targets
-                )
-
-            history_refs = extract_local_refs_from_messages(
-                self.memory.get_recent_context(max_turns=20)
-            )
-            if extract_local_refs(message) or history_refs:
-                self._last_local_targets = resolve_fix_targets(
-                    message,
-                    self._last_local_targets,
-                    extra_refs=history_refs,
-                )
-
             local_context, local_notices = build_local_file_context(
                 message, self.engine.config
             )
-
-            def _confirm_rewrite(summary: str) -> bool:
-                if not allow_rewrite:
-                    return False
-                return True
-
-            if user_wants_fix(message):
-                _report("Fix/rewrite requested — starting workflow…")
-
-            fix_context, fix_notices, fix_targets, rewrite_approved, _rewrite_paths = handle_chat_fix(
-                message,
-                self.engine.config,
-                last_targets=self._last_local_targets,
-                extra_refs=history_refs,
-                confirm_apply=_confirm_rewrite if user_wants_fix(message) else None,
-                on_progress=_report,
-            )
-            if user_wants_fix(message) and not rewrite_approved:
-                fix_notices.append(
-                    "Enable “Allow full-file rewrite” in the sidebar and send again to write files"
-                )
-            if fix_targets:
-                self._last_local_targets = fix_targets
             
             # Prepare prompt
             max_turns = 10
@@ -228,15 +160,9 @@ class WebUI:
                 max_turns = self.rag.max_history_turns
             messages = self.memory.get_recent_context(max_turns=max_turns)
 
-            sys_prompt = build_fix_system_prompt(
-                self.prompt_manager,
-                system_prompt,
-                message,
-                rewrite_approved=rewrite_approved,
-            )
-
+            sys_prompt = system_prompt
             extra_context = "\n\n".join(
-                part for part in (rag_context, local_context, fix_context) if part
+                part for part in (rag_context, local_context) if part
             )
             if extra_context:
                 sys_prompt = self.prompt_manager.format_with_context(extra_context)
@@ -250,10 +176,7 @@ class WebUI:
             )
 
             prompt = self.engine.format_chat_prompt(messages, sys_prompt)
-
-            if user_wants_fix(message):
-                _report("Generating chat response (fix mode)…")
-
+            
             # Generate response
             response = self.engine.generate(
                 prompt,
@@ -280,47 +203,12 @@ class WebUI:
             
             history = _append_chat_messages(history, message, response)
 
-            if user_wants_fix(message):
-                _report("Checking assistant reply for MYTHOS_PATCH blocks…")
-            patch_notices = apply_patches_with_prompt(
-                response,
-                self.engine.config,
-                message=message,
-                rewrite_approved=rewrite_approved,
-                on_progress=_report,
-            )
-
-            if user_wants_fix(message) and not any(
-                n.startswith("Wrote") for n in patch_notices
-            ):
-                if rewrite_approved or allow_rewrite:
-                    _report("Running dedicated full-file rewrite…")
-                    patch_notices.extend(
-                        run_dedicated_rewrite(
-                            _rewrite_paths,
-                            self.engine,
-                            self.prompt_manager,
-                            self.engine.config,
-                            targets=fix_targets or self._last_local_targets,
-                            on_progress=_report,
-                        )
-                    )
-                elif _rewrite_paths:
-                    patch_notices.append(
-                        "Enable “Allow full-file rewrite” to run dedicated rewrite after chat"
-                    )
-
             status = f"✓ Generated {len(response.split())} words"
             if use_reflection:
                 status += " (with reflection)"
-            if bitacora.entries:
-                status = bitacora.render_plain(max_lines=12) + "\n---\n" + status
-            elif activity:
-                status = " → ".join(activity[-4:]) + " | " + status
-            all_notes = local_notices + fix_notices + patch_notices
-            if all_notes:
-                status += " | " + "; ".join(all_notes[:5])
-
+            if local_notices:
+                status += " | " + "; ".join(local_notices[:3])
+            
             return history, status
             
         except Exception as e:
@@ -477,12 +365,6 @@ class WebUI:
                         label="RAG (Retrieval-Augmented Generation)",
                         value=False
                     )
-
-                    gr.Markdown(f"**{REWRITE_WARNING}**")
-                    allow_rewrite = gr.Checkbox(
-                        label="Allow full-file rewrite to disk (required for fix/rewrite messages)",
-                        value=False,
-                    )
                     
                     if self.rag:
                         gr.Markdown("### RAG Documents")
@@ -520,8 +402,7 @@ class WebUI:
                     max_tokens,
                     repeat_penalty,
                     use_reflection,
-                    use_rag,
-                    allow_rewrite,
+                    use_rag
                 ],
                 outputs=[chatbot, status]
             )
@@ -538,8 +419,7 @@ class WebUI:
                     max_tokens,
                     repeat_penalty,
                     use_reflection,
-                    use_rag,
-                    allow_rewrite,
+                    use_rag
                 ],
                 outputs=[chatbot, status]
             )

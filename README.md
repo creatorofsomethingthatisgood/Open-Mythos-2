@@ -72,6 +72,9 @@ The name draws from **mythos** (μῦθος) — the ancient Greek word for *sto
 
 ### 🔱 Installation
 
+<details>
+<summary><strong>Option 1 — Git Clone (recommended)</strong></summary>
+
 ```bash
 # Clone the sacred repository
 git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
@@ -80,14 +83,49 @@ git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
 cd Open-Mythos-2
 
 # One-time setup (macOS or Linux)
-./setup-macos.sh   # or ./setup.sh on Linux
+./setup-macos.sh # or ./setup.sh on Linux
 
 # Then chat (no `source venv` needed)
 ./mythos
-./mythos model download   # once per machine (~4.5 GB → ~/.config/mythos/)
+./mythos model download # once per machine (~4.5 GB → ~/.config/mythos/)
 
 # Move your downloads to another PC (no re-download):
-./scripts/mythos-export-data.sh    # creates offline-bundle/ (~4.5 GB)
+./scripts/mythos-export-data.sh # creates offline-bundle/ (~4.5 GB)
 # On the new machine after setup:
 ./scripts/mythos-import-data.sh ./offline-bundle
 ```
+
+</details>
+
+<details>
+<summary><strong>Option 2 — npm (npx)</strong></summary>
+
+```bash
+# Two-command install & run — no manual clone needed
+ npm install
+npm run dev
+
+# Download the model (~4.5 GB, first time only)
+mythos model download
+
+# Start chatting
+mythos
+```
+
+> **Note:** The npm package wraps the same setup and Python backend under the hood. Node.js 18+ and Python 3.10+ are required. The first `npx` or `mythos` run will automatically set up the virtual environment and dependencies if they aren't already present.
+
+</details>
+
+<details>
+<summary><strong>Option 3 — pnpm</strong></summary>
+
+```bash
+git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
+cd Open-Mythos-2
+pnpm add -g .
+
+> **Note:** [pnpm](https://pnpm.io/) is a fast, disk-efficient package manager. The package wraps the same setup and Python backend under the hood. Node.js 18+ and Python 3.10+ are required. The first run will automatically set up the virtual environment and dependencies if they aren't already present.
+
+</details>
+
+
