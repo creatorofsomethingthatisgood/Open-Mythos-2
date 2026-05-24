@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Mythos CLI — global launcher, works from ANY directory.
 # Typing "mythos" starts the chat interface (like "claude" starts Claude Code).
-# Subcommands: mythos chat, mythos web, mythos scan, mythos status, etc.
+# Subcommands: mythos chat, mythos web, mythos scan, mythos status, mythos update, etc.
 set -e
 
 MYTHOS_ROOT="/home/anonymous0304/Open-Mythos-2"

@@ -2,24 +2,28 @@
 """
 Mythos — your local AI assistant and security scanner.
 
-    mythos              # launch chat (like `claude`)
-    mythos chat         # same thing
-    mythos web          # web UI
-    mythos scan         # security scan
-    mythos init         # first-time setup
-    mythos path add .   # register a codebase for scanning
-    mythos status       # show config / model status
+ mythos # launch chat (like `claude`)
+ mythos chat # same thing
+ mythos web # web UI
+ mythos scan # security scan
+ mythos init # first-time setup
+ mythos path add . # register a codebase for scanning
+ mythos status # show config / model status
+ mythos update # pull latest version from GitHub
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import shutil
 import sys
 from pathlib import Path
 
 from mythos_cli import __version__
 from mythos_cli.config_store import (
+    PACKAGE_ROOT,
+    _patch_llm_config_for_user,
     add_scan_path,
     ensure_initialized,
     init_config,
@@ -211,17 +215,183 @@ def _cmd_status(_args: argparse.Namespace) -> int:
     paths = list_scan_paths() if cfg.exists() else []
 
     print("Mythos status\n")
-    print(f"  Version:      {__version__}")
-    print(f"  Config home:  {home}")
-    print(f"  User config:  {'yes' if cfg.exists() else 'no — run mythos init'}")
-    print(f"  LLM config:   {'yes' if llm.exists() else 'no'}")
-    print(f"  Scan paths:   {len(paths)}")
+    print(f"  Version: {__version__}")
+    print(f"  Config home: {home}")
+    print(f"  User config: {'yes' if cfg.exists() else 'no — run mythos init'}")
+    print(f"  LLM config: {'yes' if llm.exists() else 'no'}")
+    print(f"  Scan paths: {len(paths)}")
     for entry in paths:
         print(f"   - {entry.get('label')}: {entry['path']}")
 
     model_dir = models_hint_dir()
     gguf = list(model_dir.glob("*.gguf")) if model_dir.exists() else []
-    print(f"  Models:       {len(gguf)} in {model_dir}")
+    print(f"  Models: {len(gguf)} in {model_dir}")
+    return 0
+
+
+def _cmd_update(_args: argparse.Namespace) -> int:
+    """Pull latest Mythos from GitHub while preserving user settings and dependencies."""
+    import json
+    import subprocess
+    import tempfile
+
+    PACKAGE_DIR = str(PACKAGE_ROOT)
+
+    # ── 1. Snapshot current version ──────────────────────────────────────
+    old_version = __version__
+    print(f"  Current version: {old_version}")
+
+    # ── 2. Backup user data from ~/.config/mythos ────────────────────────
+    home = mythos_home()
+    backup_dir = Path(tempfile.mkdtemp(prefix="mythos_update_"))
+
+    user_files_to_backup = [
+        "config.yaml",
+        "mythos.yaml",
+        "rml_preferences.json",
+    ]
+
+    backed_up = []
+    for fname in user_files_to_backup:
+        src = home / fname
+        if src.exists():
+            shutil.copy2(src, backup_dir / fname)
+            backed_up.append(fname)
+
+    # Also backup conversations dir if it has content
+    conv_src = home / "conversations"
+    conv_backup = backup_dir / "conversations"
+    if conv_src.is_dir() and any(conv_src.iterdir()):
+        shutil.copytree(conv_src, conv_backup, dirs_exist_ok=True)
+        backed_up.append("conversations/")
+
+    if backed_up:
+        print(f"  Backed up: {', '.join(backed_up)}")
+
+    # ── 3. Git pull ─────────────────────────────────────────────────────
+    print("  Fetching latest version from GitHub...")
+
+    try:
+        # Stash any uncommitted local changes
+        result = subprocess.run(
+            ["git", "stash", "--include-untracked"],
+            cwd=PACKAGE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        stash_happened = "No local changes" not in (result.stdout or "")
+
+        # Pull latest
+        result = subprocess.run(
+            ["git", "pull", "--ff-only", "origin", "main"],
+            cwd=PACKAGE_DIR,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            # Restore stash if pull failed
+            if stash_happened:
+                subprocess.run(
+                    ["git", "stash", "pop"],
+                    cwd=PACKAGE_DIR,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+            print(f"  Update failed: {result.stderr.strip() or result.stdout.strip()}", file=sys.stderr)
+            print("  Resolve git conflicts manually, then re-run: mythos update", file=sys.stderr)
+            return 1
+
+        # Pop stash if we stashed
+        if stash_happened:
+            subprocess.run(
+                ["git", "stash", "pop"],
+                cwd=PACKAGE_DIR,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+    except FileNotFoundError:
+        print("  Error: git not found. Install git or update manually.", file=sys.stderr)
+        return 1
+    except subprocess.TimeoutExpired:
+        print("  Error: git pull timed out. Check your network.", file=sys.stderr)
+        return 1
+
+    # ── 4. Read new version ─────────────────────────────────────────────
+    # Reload __version__ from the updated __init__.py
+    try:
+        init_path = PACKAGE_ROOT / "mythos_cli" / "__init__.py"
+        with open(init_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("__version__"):
+                    new_version = line.split("=")[1].strip().strip('"').strip("'")
+                    break
+            else:
+                new_version = old_version
+    except Exception:
+        new_version = old_version
+
+    # ── 5. Restore user settings ────────────────────────────────────────
+    home.mkdir(parents=True, exist_ok=True)
+
+    restored = []
+    for fname in user_files_to_backup:
+        src = backup_dir / fname
+        dst = home / fname
+        if src.exists():
+            shutil.copy2(src, dst)
+            restored.append(fname)
+
+    # Restore conversations
+    if conv_backup.is_dir():
+        shutil.copytree(conv_backup, conv_src, dirs_exist_ok=True)
+        restored.append("conversations/")
+
+    if restored:
+        print(f"  Restored: {', '.join(restored)}")
+
+    # Clean up temp dir
+    shutil.rmtree(backup_dir, ignore_errors=True)
+
+    # ── 6. Re-run init (merges new defaults, preserves user values) ─────
+    ensure_initialized()
+    # Patch LLM config with user paths (models dir, HF cache, etc.)
+    llm = llm_config_path()
+    if llm.exists():
+        _patch_llm_config_for_user(llm)
+
+    # ── 7. Reinstall Python deps (pip skips already-satisfied) ──────────
+    print("  Updating Python dependencies (skips already installed)...")
+    venv_python = PACKAGE_ROOT / "venv" / "bin" / "python3"
+    if venv_python.exists():
+        try:
+            result = subprocess.run(
+                [str(venv_python), "-m", "pip", "install", "-e", ".[web]", "--quiet"],
+                cwd=PACKAGE_DIR,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            if result.returncode == 0:
+                print("  Dependencies up to date")
+            else:
+                print(f"  Warning: some deps may need manual install: {result.stderr.strip()}", file=sys.stderr)
+        except subprocess.TimeoutExpired:
+            print("  Warning: pip install timed out. Run manually: ./venv/bin/pip install -e .", file=sys.stderr)
+    else:
+        print("  Warning: venv not found. Run setup.sh first.", file=sys.stderr)
+
+    # ── 8. Done ─────────────────────────────────────────────────────────
+    if new_version != old_version:
+        print(f"\n  Updated: {old_version} -> {new_version}")
+    else:
+        print(f"\n  Already on version {new_version} (no version change)")
+
+    print("  Update complete. Your settings and models are preserved.")
     return 0
 
 
@@ -239,11 +409,14 @@ Quick start:
   mythos web              Web UI on http://localhost:7860
 
 Security scanning:
-  mythos init             First-time setup
-  mythos path add ~/src   Register a codebase
-  mythos scan             Instant static analysis
-  mythos scan --deep      AI-powered audit (needs model)
-  mythos fix --path .     Auto-fix safe patterns (dry-run; use --apply)
+ mythos init First-time setup
+ mythos path add ~/src Register a codebase
+ mythos scan Instant static analysis
+ mythos scan --deep AI-powered audit (needs model)
+ mythos fix --path . Auto-fix safe patterns (dry-run; use --apply)
+
+Updates:
+ mythos update Pull latest version (preserves settings & models)
 
 Examples:
   mythos                  # start chatting from any directory
@@ -341,6 +514,10 @@ Examples:
     # ── status ──────────────────────────────────────────────────────────
     st = sub.add_parser("status", help="Show configuration and model status")
     st.set_defaults(func=_cmd_status)
+
+    # ── update ──────────────────────────────────────────────────────────
+    up = sub.add_parser("update", help="Pull latest Mythos from GitHub (preserves settings)")
+    up.set_defaults(func=_cmd_update)
 
     return parser
 
