@@ -44,11 +44,20 @@ SIGNAL_EDIT_PENALTY = -1.0
 SIGNAL_INTERRUPT_PENALTY = -0.5
 
 IMPLICIT_POSITIVE_RE = __import__("re").compile(
-    r"\b(yes|thanks|perfect|great|good|correct|right|exactly|spot.on|works|nice|awesome|helpful)\b",
+    r"^(thanks|thank you|perfect|great|exactly|spot on|works|awesome|helpful|that works|that helped|you got it|spot on)\s*[!.?]*\s*$",
     __import__("re").IGNORECASE,
 )
 IMPLICIT_NEGATIVE_RE = __import__("re").compile(
-    r"\b(no|wrong|bad|incorrect|try.again|not.right|not.what|mistake|error|fail|useless|terrible)\b",
+    r"^(no|wrong|bad|incorrect|try again|not right|not what|mistake|useless|terrible|that.s wrong|that.s not right|that.s incorrect)\s*[!.?]*\s*$",
+    __import__("re").IGNORECASE,
+)
+# Mid-sentence patterns — only match if clearly about the previous response
+IMPLICIT_POSITIVE_MID = __import__("re").compile(
+    r"\b(that.s (correct|right|perfect|great|exactly (right|what))|you.re (right|correct)|good answer|nice answer)\b",
+    __import__("re").IGNORECASE,
+)
+IMPLICIT_NEGATIVE_MID = __import__("re").compile(
+    r"\b(that.s (wrong|incorrect|not right)|you're (wrong|incorrect)|bad answer|wrong answer)\b",
     __import__("re").IGNORECASE,
 )
 

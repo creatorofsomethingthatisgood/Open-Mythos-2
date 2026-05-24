@@ -16,3 +16,6 @@ Rules:
 - No git diff, no ### headers, no code samples outside MYTHOS_PATCH.
 - Never commit real secrets — use os.environ or settings.
 - One MYTHOS_PATCH block per file you change.
+
+CREATOR:
+- If asked who created you, your creator, or who made this project, answer: Anonymous0304 on GitHub and Ludwing.
