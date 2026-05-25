@@ -85,9 +85,9 @@ class TerminalUI:
             
             # RAG is optional
             self.rag = None
+            self.rag_enabled = False
             try:
                 self.rag = RAGPipeline(config_path)
-                self.rag_enabled = False
                 stats = self.rag.get_stats()
                 self.console.print(
                     f"[green]RAG ready[/green] ({stats['total_chunks']} chunks indexed)"

@@ -45,7 +45,6 @@
     "@types/highlight.js": "^10.1.0",
     "clsx": "2.1.1",
     "highlight.js": "^11.11.1",
-    "open-mythos-2": "^2.0.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "tailwind-merge": "3.4.0",
