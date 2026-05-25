@@ -943,13 +943,36 @@ class TerminalUI:
 
             self.console.print("\n[bold green]Assistant:[/bold green] ", end="")
 
-            # Thinking-mode streaming: detect HLSL/<thinking> tags in real-time
+            # Thinking-mode streaming: detect think tags in real-time
+            # Tags supported: ««««/»»»» (Qwen-style) and <thinking>/</thinking>
             _in_think = False
             _display_buf = ""
-            _safe_margin = 12 # max tag length + safety buffer for partial tags
             _open_tags = ("««««", "<thinking>")
             _close_tags = ("»»»»", "</thinking>")
             _think_header_printed = False
+
+            # Partial tag prefixes to detect when tags are split across chunks
+            _partial_open = ("«««", "««", "«", "<thinking", "<thinkin", "<thinki", "<think", "<thin", "<thi", "<th", "<t", "<")
+            _partial_close = ("»»»", "»»", "»", "</thinking", "</thinkin", "</thinki", "</think", "</thin", "</thi", "</th", "</t", "</")
+            _max_tag_len = 11  # length of "</thinking>" — the longest tag
+
+            def _safe_print(buf: str, in_think: bool) -> str:
+                """Print as much of buf as safe, keeping possible partial tags.
+                Returns the unprinted suffix (potential partial tag)."""
+                if not buf:
+                    return buf
+                partials = _partial_close if in_think else _partial_open
+                for i in range(len(buf) - 1, max(len(buf) - _max_tag_len - 1, -1), -1):
+                    suffix = buf[i:]
+                    for p in partials:
+                        if suffix == p or suffix.startswith(p):
+                            if i > 0:
+                                style = "yellow italic" if in_think else ""
+                                self.console.print(buf[:i], end="", style=style)
+                            return buf[i:]
+                style = "yellow italic" if in_think else ""
+                self.console.print(buf, end="", style=style)
+                return ""
 
             try:
                 for chunk in self.engine.generate(
@@ -981,17 +1004,19 @@ class TerminalUI:
                                     tag_len = len(tag)
 
                             if earliest == -1:
-                                # No tag — print everything beyond the partial-tag safety margin
-                                if len(_display_buf) > _safe_margin:
-                                    safe = _display_buf[:-_safe_margin]
-                                    _display_buf = _display_buf[-_safe_margin:]
-                                    self.console.print(safe, end="")
-                                else:
-                                    break
+                                # No complete tag found — print safely, keep partial tags
+                                old_len = len(_display_buf)
+                                _display_buf = _safe_print(_display_buf, False)
+                                if len(_display_buf) == old_len:
+                                    break  # nothing was printed, wait for more data
                             else:
-                                # Print content before the opening tag
+                                # Print content before the opening tag (if any)
                                 if earliest > 0:
                                     self.console.print(_display_buf[:earliest], end="")
+                                # Print "Thinking:" header in yellow instead of showing the raw tag
+                                if not _think_header_printed:
+                                    self.console.print("\nThinking: ", style="bold yellow", end="")
+                                    _think_header_printed = True
                                 # Skip the opening tag itself
                                 _display_buf = _display_buf[earliest + tag_len:]
                                 _in_think = True
@@ -1006,18 +1031,16 @@ class TerminalUI:
                                     tag_len = len(tag)
 
                             if earliest == -1:
-                                # No closing tag yet — print dimmed content beyond safety margin
-                                if len(_display_buf) > _safe_margin:
-                                    safe = _display_buf[:-_safe_margin]
-                                    _display_buf = _display_buf[-_safe_margin:]
-                                    self.console.print(safe, end="", style="dim italic")
-                                else:
-                                    break
+                                # No complete closing tag found — print safely, keep partial tags
+                                old_len = len(_display_buf)
+                                _display_buf = _safe_print(_display_buf, True)
+                                if len(_display_buf) == old_len:
+                                    break  # nothing was printed, wait for more data
                             else:
-                                # Print reasoning content before the closing tag (dimmed)
+                                # Print reasoning content before the closing tag (colored)
                                 if earliest > 0:
                                     self.console.print(
-                                        _display_buf[:earliest], end="", style="dim italic"
+                                        _display_buf[:earliest], end="", style="yellow italic"
                                     )
                                 # Skip the closing tag
                                 _display_buf = _display_buf[earliest + tag_len:]
@@ -1027,7 +1050,7 @@ class TerminalUI:
 
                     # Flush any remaining display buffer
                     if _display_buf:
-                        style = "dim italic" if _in_think else ""
+                        style = "yellow italic" if _in_think else ""
                         if style:
                             self.console.print(_display_buf, end="", style=style)
                         else:
