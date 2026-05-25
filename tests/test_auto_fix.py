@@ -25,7 +25,7 @@ def _finding(rule_id, path, line, title="t"):
 
 def test_fix_yaml_load(tmp_path):
     sample = tmp_path / "app.py"
-    sample.write_text("import yaml\ndata = yaml.safe_load(stream)\n", encoding="utf-8")
+    sample.write_text("import yaml\ndata = yaml.load(stream)\n", encoding="utf-8")
     findings = [_finding("SEC008", str(sample), 2)]
     results = apply_fixes_to_file(sample, findings, dry_run=False)
     assert any(r.status == "applied" for r in results)
