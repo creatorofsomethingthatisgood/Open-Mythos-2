@@ -96,4 +96,142 @@ Thumbs.db
 **/.ruff_cache/
 .vercel
 .npmrc
+
+# ─── Contributor safeguards ──────────────────────────────────────────────
+# Goal: keep host data, credentials, and other-project files out of commits.
+# Mythos reads local paths (chat refs, RAG, scans) and runs as a venv-wrapped
+# Python app, so any of the following could plausibly end up in the worktree.
+
+# --- Extra venv name variants (covers .test-venv, ml-venv, py3.12-venv, etc.)
+*-venv/
+.*-venv/
+venv-*/
+.venv-*/
+**/.test-venv/
+
+# --- In-tree Mythos runtime state (normally lives in ~/.config/mythos, but
+# can end up here if someone sets MYTHOS_HOME=. or copies state for debugging)
+sessions/
+session_summaries/
+rml_preferences.json
+bitacora/
+.mythos/
+.mythos-venv/
+mythos_home/
+mythos.yaml
+# Per-user resolved config copied into the tree
+config.local.yaml
+config.*.local.yaml
+
+# --- Credentials, keys, tokens (defense in depth — never commit these) ---
+# SSH / GPG
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+id_ecdsa
+id_ecdsa.*
+*.ppk
+*.gpg
+*.asc
+secring.*
+# Generic key / certificate material
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.kdbx
+# Cloud / platform credentials
+.aws/
+.gcloud/
+.gcp/
+.azure/
+.kube/
+kubeconfig
+kubeconfig.*
+.docker/config.json
+gcloud-service-key.json
+service-account*.json
+*-service-account.json
+# Auth / config files that often carry tokens
+.netrc
+.pypirc
+.npmrc.local
+.yarnrc.yml
+.git-credentials
+.gitconfig.local
+.hf_token
+huggingface_token*
+*.hf_token
+.openai_key
+.anthropic_key
+# Generic patterns
+*secret*.json
+*secrets*.yaml
+*secrets*.yml
+*.secrets
+*credentials*.json
+*credentials*.yaml
+*credentials*.yml
+*-credentials.*
+token.txt
+tokens.txt
+auth.json
+
+# --- AI / IDE / editor local state (may contain prompts, transcripts, paths)
+.claude/
+.cursor/
+.windsurf/
 .aider*
+.continue/
+.history/
+*.code-workspace
+.zed/
+.helix/
+.nvim.lua
+.envrc.local
+
+# --- Personal scratch / notes / dumps (avoid leaking WIP or host info) ---
+scratch/
+tmp/
+_tmp/
+.tmp/
+TODO.local
+TODO.local.*
+NOTES.local
+NOTES.local.*
+*.local.md
+*.local.txt
+*.scratch
+# Patch / backup artifacts that often appear during merges or edits
+*.bak
+*.orig
+*.rej
+*.patch.local
+# Database / capture dumps
+*.dump
+*.sql.dump
+*.pcap
+*.har
+
+# --- Shell / OS history that sometimes lands in repos by accident ---
+.bash_history
+.zsh_history
+.python_history
+.lesshst
+.viminfo
+
+# --- Coverage / profiling artifacts ---
+coverage.xml
+.coverage.*
+*.prof
+*.profraw
+
+# --- Anything explicitly marked private ---
+*.private
+*.private.*
+private/
+PRIVATE/
