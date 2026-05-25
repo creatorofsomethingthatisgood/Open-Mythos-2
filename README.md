@@ -1,3 +1,4 @@
+<img width="845" height="372" alt="Screenshot from 2026-05-24 20-57-50" src="https://github.com/user-attachments/assets/8e3b6a5b-117a-41c6-afbb-394e5cb8c023" />
 <div align="center">
 <pre>
                   ██████╗ ██████╗ ███████╗███╗   ██╗
