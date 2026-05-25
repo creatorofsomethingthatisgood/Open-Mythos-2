@@ -114,7 +114,7 @@ class WebUI:
         repeat_penalty: float,
         use_reflection: bool,
         use_rag: bool,
-        use_thinking: bool = True
+        use_thinking: bool = False
     ) -> tuple[ChatHistory, str]:
         """
         Handle chat interaction
