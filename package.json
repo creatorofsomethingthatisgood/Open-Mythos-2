@@ -1,6 +1,6 @@
 {
   "name": "open-mythos-2",
-  "version": "2.0.0",
+  "version": "2.0.5",
   "description": "Mythos — fully local, offline AI that lives in your terminal. No API keys, no cloud, no limits.",
   "keywords": [
     "ai",
@@ -22,13 +22,13 @@
     "url": "git+https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git"
   },
   "bin": {
-    "mythos": "./bin/mythos.cjs"
+    "open-mythos-2": "bin/open-mythos-2"
   },
   "files": [
     "bin/",
-    "engine/",
-    "mythos_cli/",
-    "ui/",
+    "engine/*.py",
+    "mythos_cli/*.py",
+    "ui/*.py",
     "scripts/",
     "pyproject.toml",
     "setup.sh",
@@ -39,7 +39,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "postinstall": "node bin/mythos.cjs --version 2>/dev/null || true"
+    "postinstall": "node bin/open-mythos-2 --version 2>/dev/null || true"
   },
   "dependencies": {
     "@types/highlight.js": "^10.1.0",
@@ -64,6 +64,5 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "type": "module"
+  }
 }

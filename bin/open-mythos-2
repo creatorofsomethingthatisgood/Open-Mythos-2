@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// -*- mode: cjs -*-
 
 /**
  * open-mythos-2 — npm/pnpm wrapper for the Mythos local AI CLI.
@@ -8,10 +7,14 @@
  * then delegates to the Python CLI (mythos_cli).
  */
 
-const { execSync, spawn } = require("child_process");
-const path = require("path");
-const fs = require("fs");
-const os = require("os");
+import { execSync, spawn } from "node:child_process";
+import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Resolve the package root (where package.json lives)
 const PKG_ROOT = path.resolve(__dirname, "..");

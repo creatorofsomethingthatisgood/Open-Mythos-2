@@ -23,8 +23,9 @@
 
 <br>
 
+[![npm published](https://img.shields.io/npm/v/open-mythos-2?style=for-the-badge&label=npm&color=cb3837)](https://www.npmjs.com/package/open-mythos-2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-gold?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.0.0-blueviolet?style=for-the-badge)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2)
+[![Version](https://img.shields.io/badge/Version-2.0.5-blueviolet?style=for-the-badge)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2)
 [![No API Required](https://img.shields.io/badge/No%20API-Required-darkgreen?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![Runs in Terminal](https://img.shields.io/badge/Runs%20In-Terminal-black?style=for-the-badge&logo=windowsterminal&logoColor=white)]()
 [![Open Source](https://img.shields.io/badge/Open-Source-orange?style=for-the-badge&logo=opensourceinitiative&logoColor=white)]()
