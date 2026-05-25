@@ -1,5 +1,8 @@
 allowBuilds:
   esbuild: true
   open-mythos-2: true
+minimumReleaseAge: 0
 minimumReleaseAgeExclude:
   - open-mythos-2@2.0.0
+overrides:
+  open-mythos-2: 'link:'
