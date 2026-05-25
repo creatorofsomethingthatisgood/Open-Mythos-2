@@ -286,6 +286,101 @@ def remove_scan_path(target: str, config: Optional[Dict[str, Any]] = None) -> bo
     return removed
 
 
+def reset_user_config() -> Dict[str, Any]:
+    """Reset user settings (config.yaml) to defaults, preserving mythos.yaml and other data."""
+    home = mythos_home()
+    home.mkdir(parents=True, exist_ok=True)
+
+    user_cfg = _default_user_config()
+    save_user_config(user_cfg)
+
+    return user_cfg
+
+
+def parse_gitignore_patterns(gitignore_path: Path) -> list[str]:
+    """Parse .gitignore patterns, skipping comments and blank lines."""
+    patterns: list[str] = []
+    if not gitignore_path.exists():
+        return patterns
+    with open(gitignore_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            patterns.append(line)
+    return patterns
+
+
+def delete_matching_items(
+    patterns: list[str],
+    root: Path,
+    dry_run: bool = False,
+) -> tuple[list[str], list[str], list[str]]:
+    """Delete files and directories matching .gitignore patterns under root.
+
+    Returns (deleted_files, deleted_dirs, skipped) lists.
+    """
+    import fnmatch
+    import os
+
+    deleted_files: list[str] = []
+    deleted_dirs: list[str] = []
+    skipped: list[str] = []
+
+    for pattern in patterns:
+        # Negation patterns (leading !) are not handled — skip
+        if pattern.startswith("!"):
+            continue
+
+        # Strip trailing slash for directory patterns
+        pat = pattern.rstrip("/")
+        # Strip leading / to make it relative
+        if pat.startswith("/"):
+            pat = pat[1:]
+
+        # Walk the root directory
+        for dirpath_str, dirnames, filenames in os.walk(str(root), topdown=False):
+            dirpath = Path(dirpath_str)
+
+            # Compute relative path from root
+            try:
+                rel = dirpath.relative_to(root)
+            except ValueError:
+                continue
+
+            # Check directories
+            for dname in dirnames:
+                full = dirpath / dname
+                rel_path = (rel / dname).as_posix()
+                # Try matching the pattern against the relative path
+                if fnmatch.fnmatch(rel_path, pat) or fnmatch.fnmatch(rel_path, pat + "/*"):
+                    if not dry_run:
+                        try:
+                            import shutil
+                            shutil.rmtree(full, ignore_errors=False)
+                            deleted_dirs.append(str(full))
+                        except (PermissionError, OSError) as e:
+                            skipped.append(f"{full} ({e})")
+                    else:
+                        deleted_dirs.append(str(full))
+
+            # Check files
+            for fname in filenames:
+                full = dirpath / fname
+                rel_path = (rel / fname).as_posix()
+                if fnmatch.fnmatch(rel_path, pat):
+                    if not dry_run:
+                        try:
+                            full.unlink(missing_ok=True)
+                            deleted_files.append(str(full))
+                        except (PermissionError, OSError) as e:
+                            skipped.append(f"{full} ({e})")
+                    else:
+                        deleted_files.append(str(full))
+
+    return deleted_files, deleted_dirs, skipped
+
+
 def resolve_targets(
     path_arg: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,

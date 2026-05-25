@@ -510,6 +510,132 @@ def _cmd_update(_args: argparse.Namespace) -> int:
     return 0
 
 
+# ── reset ─────────────────────────────────────────────────────────────────
+
+
+def _cmd_reset(_args: argparse.Namespace) -> int:
+    """Reset user settings (config.yaml) to defaults — preserves models, conversations, LLM config."""
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_DIM
+    from mythos_cli.suggest import after_reset, show_suggestions
+    from rich.panel import Panel
+
+    home = mythos_home()
+    cfg_path = user_config_path()
+
+    if not cfg_path.exists():
+        console.print(f"[{STYLE_WARN}]No settings found at:[/] {cfg_path}")
+        console.print("Run [bold]mythos init[/bold] to create defaults.")
+        return 1
+
+    from mythos_cli.config_store import reset_user_config
+
+    console.print()
+    console.print(Panel.fit(
+        "[bold yellow]╔══ Reset Settings ══╗[/bold yellow]",
+        border_style="yellow",
+    ))
+    console.print()
+
+    reset_user_config()
+    console.print(f"[{STYLE_OK}]✓ Settings reset to defaults:[/]")
+    console.print(f"  [{STYLE_DIM}]{cfg_path}[/{STYLE_DIM}]")
+    console.print(f"  [{STYLE_DIM}]Models, conversations, and LLM config are unchanged.[/]")
+
+    show_suggestions(after_reset())
+    return 0
+
+
+# ── factory-reset ────────────────────────────────────────────────────────
+
+
+def _cmd_factory_reset(args: argparse.Namespace) -> int:
+    """Delete everything listed in .gitignore and user config — full clean slate."""
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_ERR, STYLE_DIM
+    from mythos_cli.suggest import after_factory_reset, show_suggestions
+    from mythos_cli.config_store import parse_gitignore_patterns, delete_matching_items
+    from rich.panel import Panel
+
+    console.print()
+    console.print(Panel.fit(
+        "[bold red]╔══ Factory Reset ══╗[/bold red]",
+        border_style="red",
+    ))
+    console.print()
+
+    if not args.yes:
+        console.print(
+            "[bold red]WARNING:[/bold red] This will delete everything listed in .gitignore\n"
+            "and your entire Mythos configuration directory:\n"
+        )
+        console.print(f"  [dim]• {PACKAGE_ROOT / '.gitignore'} patterns[/dim]")
+        console.print(f"  [dim]• {mythos_home()}/ (config, models, conversations, RAG)[/dim]")
+        console.print()
+        try:
+            response = input("  Are you sure? Type [bold]factory reset[/bold] to confirm: ")
+        except (EOFError, KeyboardInterrupt):
+            console.print(f"\n[{STYLE_WARN}]Cancelled.[/{STYLE_WARN}]")
+            return 0
+        if response.strip().lower() != "factory reset":
+            console.print(f"[{STYLE_WARN}]Cancelled (did not type confirmation).[/{STYLE_WARN}]")
+            return 0
+    else:
+        console.print("[dim]--yes flag set, skipping confirmation[/dim]")
+
+    # ── 1. Delete .gitignore-matched items ────────────────────────────────
+    gitignore = PACKAGE_ROOT / ".gitignore"
+    console.print(f"\n[{STYLE_DIM}]Scanning .gitignore patterns...[/{STYLE_DIM}]")
+    patterns = parse_gitignore_patterns(gitignore)
+    console.print(f"  [{STYLE_DIM}]Found {len(patterns)} patterns[/{STYLE_DIM}]")
+
+    if patterns:
+        deleted_files, deleted_dirs, skipped = delete_matching_items(patterns, PACKAGE_ROOT)
+        total = len(deleted_files) + len(deleted_dirs)
+        console.print(f"  [{STYLE_OK}]Deleted {total} items matching .gitignore:[/]")
+        console.print(f"    [{STYLE_DIM}]{len(deleted_files)} files, {len(deleted_dirs)} directories[/{STYLE_DIM}]")
+        if skipped:
+            console.print(f"  [{STYLE_WARN}]Skipped {len(skipped)} items (permission denied):[/{STYLE_WARN}]")
+            for s in skipped[:5]:
+                console.print(f"    [{STYLE_DIM}]{s}[/{STYLE_DIM}]")
+            if len(skipped) > 5:
+                console.print(f"    [{STYLE_DIM}]... and {len(skipped) - 5} more[/{STYLE_DIM}]")
+    else:
+        console.print(f"  [{STYLE_WARN}]No patterns found or no items to delete.[/{STYLE_WARN}]")
+
+    # ── 2. Delete user config home (~/.config/mythos) ─────────────────────
+    cfg_home = mythos_home()
+    if cfg_home.exists():
+        import shutil
+        shutil.rmtree(cfg_home, ignore_errors=True)
+        # Use plain print since rich may have been deleted with the venv
+        _safe_print(f"  ✓ Deleted config directory: {cfg_home}")
+    else:
+        _safe_print(f"  Config directory does not exist: {cfg_home}")
+
+    _safe_print("")
+    _safe_print("╔══════════════════════════════════════════════════╗")
+    _safe_print("║ Factory reset complete. Mythos is a clean slate. ║")
+    _safe_print("╚══════════════════════════════════════════════════╝")
+    _safe_print("")
+    _safe_print("Next steps:")
+    _safe_print("  bash setup.sh           # Reinstall dependencies")
+    _safe_print("  mythos init             # Reinitialize config")
+    _safe_print("  mythos model download   # Download a model")
+
+    return 0
+
+
+def _safe_print(text: str = "") -> None:
+    """Print text safely, falling back to plain print if rich is unavailable."""
+    try:
+        from mythos_cli.console import console
+        console.print(text)
+    except Exception:
+        try:
+            print(text)
+        except Exception:
+            pass
+
+
 # ── argument parser ─────────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
@@ -532,6 +658,10 @@ Security scanning:
 
 Updates:
  mythos update Pull latest version (preserves settings & models)
+
+Management:
+ mythos reset              Reset settings to defaults (preserves data)
+ mythos factory-reset      Delete .gitignore-listed items + user config (clean slate)
 
 Examples:
   mythos                  # start chatting from any directory
@@ -633,6 +763,26 @@ Examples:
     # ── update ──────────────────────────────────────────────────────────
     up = sub.add_parser("update", help="Pull latest Mythos from GitHub (preserves settings)")
     up.set_defaults(func=_cmd_update)
+
+    # ── reset ───────────────────────────────────────────────────────────
+    prs = sub.add_parser(
+        "reset",
+        help="Reset user settings to defaults (preserves models, conversations, LLM config)",
+    )
+    prs.set_defaults(func=_cmd_reset)
+
+    # ── factory-reset ───────────────────────────────────────────────────
+    pfr = sub.add_parser(
+        "factory-reset",
+        aliases=["factoryreset"],
+        help="Delete everything in .gitignore and user config — full clean slate",
+    )
+    pfr.add_argument(
+        "--yes", "-y",
+        action="store_true",
+        help="Skip confirmation prompt",
+    )
+    pfr.set_defaults(func=_cmd_factory_reset)
 
     return parser
 

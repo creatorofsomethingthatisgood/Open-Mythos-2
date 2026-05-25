@@ -135,6 +135,22 @@ def after_explore() -> List[str]:
     ]
 
 
+def after_reset() -> List[str]:
+    return [
+        "Register a codebase: [bold]mythos path add ~/your/project[/bold]",
+        "Run a scan:          [bold]mythos scan[/bold]",
+        "Start chatting:      [bold]mythos chat[/bold] (or just [bold]mythos[/bold])",
+    ]
+
+
+def after_factory_reset() -> List[str]:
+    return [
+        "Run setup:           [bold]bash setup.sh[/bold]",
+        "Then init:           [bold]mythos init[/bold]",
+        "Download a model:    [bold]mythos model download[/bold]",
+    ]
+
+
 def on_error(command: str) -> List[str]:
     """Suggestions shown after a command fails."""
     return [
