@@ -8,7 +8,7 @@ version = "0.2.0"
 description = "Mythos — local AI chat assistant and security scanner"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "Unlicense" }
 authors = [{ name = "Mythos" }]
 keywords = ["llm", "chat", "security", "sast", "cli", "local"]
 classifiers = [

@@ -96,3 +96,4 @@ Thumbs.db
 **/.ruff_cache/
 .vercel
 .npmrc
+.aider*

@@ -24,7 +24,7 @@
 <br>
 
 [![npm published](https://img.shields.io/npm/v/open-mythos-2?style=for-the-badge&label=npm&color=cb3837)](https://www.npmjs.com/package/open-mythos-2)
-[![License: MIT](https://img.shields.io/badge/License-MIT-gold?style=for-the-badge)](LICENSE)
+[![License: Unlicense](https://img.shields.io/badge/License-Unlicense-gold?style=for-the-badge)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-2.0.5-blueviolet?style=for-the-badge)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2)
 [![No API Required](https://img.shields.io/badge/No%20API-Required-darkgreen?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![Runs in Terminal](https://img.shields.io/badge/Runs%20In-Terminal-black?style=for-the-badge&logo=windowsterminal&logoColor=white)]()
@@ -56,7 +56,16 @@ Like Prometheus stealing fire from the gods, OpenMythos-2 brings the fire of AI 
 | 🪶 **Lightweight** | Minimal dependencies, blazing fast startup |
 | 🔓 **Open Source** | Fully transparent and community-driven |
 | 🛡️ **Private by Design** | Your conversations are yours alone |
-| 🔄 **RML (Reinforcement ML)** | Learns from your feedback and adapts — edits system prompt and generation params to match your preferences | when command is /rml on
+|| 🔄 **RML (Reinforcement ML)** | Learns from your feedback and adapts — edits system prompt and generation params to match your preferences | when command is /rml on |
+|| 🐳 **Docker Support** | One-command deployment with Docker — CPU or NVIDIA GPU |
+|| 📝 **Markdown Export** | `/markdown` — export conversations as clean, structured Markdown files |
+|| 🔍 **Conversation Search** | `/search <query>` — find anything in your session history instantly |
+|| 💰 **Cost Estimator** | `/cost` — see token usage and what you'd pay with a cloud API (spoiler: you're saving 100%) |
+|| 🔄 **Model Switching** | `/models` — list and switch between GGUF models without restarting |
+|| 🔁 **Regenerate** | `/redo` — regenerate the last response with a fresh sample |
+|| ✏️ **Edit & Resubmit** | `/edit` — tweak your last message and get a new response |
+|| 🏷️ **Auto-Title** | `/auto-title` — LLM generates a conversation name from context |
+|| 🖥️ **System Info** | `/sysinfo` — hardware diagnostics: CPU, RAM, GPU, Python, model config |
 
 ## 🌊 The Myth Behind the Machine
 
@@ -266,33 +275,33 @@ mythos
 </details>
 
 <details>
-<summary><strong>🐳 Docker (cross-platform — no local deps needed)</strong></summary>
+<summary><strong>🐳 Docker (quickest way to try it)</strong></summary>
 
 ```bash
-# Pull and run (CPU-only)
+# Clone
+git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
+cd Open-Mythos-2
+
+# Build (CPU)
+docker build -t mythos .
+
+# Run terminal chat (CPU)
+docker run -it --rm mythos
+
+# Run with NVIDIA GPU acceleration
+docker run -it --rm --gpus all mythos
+
+# Run with persistent config & models
 docker run -it --rm \
-  -v mythos-data:/root/.config/mythos \
-  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest
+  -v ~/.config/mythos:/root/.config/mythos \
+  -v ./models:/app/models \
+  mythos
 
-# With NVIDIA GPU acceleration
-docker run -it --rm --gpus all \
-  -v mythos-data:/root/.config/mythos \
-  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest-cuda
-
-# Download model first (one-time)
-docker run -it --rm \
-  -v mythos-data:/root/.config/mythos \
-  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest \
-  mythos model download
-
-# Web UI
-docker run -it --rm -p 7860:7860 \
-  -v mythos-data:/root/.config/mythos \
-  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest \
-  mythos web --port 7860
+# Run web UI on port 7860
+docker run -it --rm -p 7860:7860 mythos web --port 7860
 ```
 
-> **Note:** Docker avoids the need for local C++ build tools. The CUDA image requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html). Model data persists in the `mythos-data` Docker volume.
+> **Note:** The Docker image includes all Python dependencies pre-installed. For GPU support, ensure the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) is installed. Mount your models directory to avoid re-downloading.
 
 </details>
 

@@ -205,10 +205,10 @@ class TerminalUI:
 [yellow]/system <prompt>[/yellow] - Change system prompt
 [yellow]/model <name>[/yellow] - Switch model (if available)
 [yellow]/temp <float>[/yellow] - Change temperature (0.0-2.0)
-            [yellow]/reflect on|off[/yellow] - Toggle self-reflection
-            [yellow]/think on|off[/yellow] - Show model's step-by-step reasoning process
-            [yellow]/thinking on|off[/yellow] - Alias for /think
-            [yellow]/rag on|off[/yellow] - Toggle RAG (if available)
+ [yellow]/reflect on|off[/yellow] - Toggle self-reflection
+ [yellow]/think on|off[/yellow] - Show model's step-by-step reasoning process
+ [yellow]/thinking on|off[/yellow] - Alias for /think
+ [yellow]/rag on|off[/yellow] - Toggle RAG (if available)
 [yellow]/rml on|off|stats|good|bad|reset[/yellow] - Reinforcement ML: learn from your feedback
 [yellow]/memory [on|off|add|forget|clear|extract][/yellow] - Cross-session memory: facts Mythos remembers
 [yellow]/summary[/yellow] - Generate a structured digest of this session
@@ -233,6 +233,14 @@ class TerminalUI:
 [yellow]/wc[/yellow] - Word/char count and session duration stats
 [yellow]/persona <name|desc>[/yellow] - Switch persona template or set custom
 [yellow]/export[/yellow] - Export conversation as text
+[yellow]/markdown[/yellow] - Export conversation as formatted Markdown
+[yellow]/search <query>[/yellow] - Search through conversation history
+[yellow]/cost[/yellow] - Estimate token usage and API-equivalent cost
+[yellow]/models[/yellow] - List available GGUF models and switch
+[yellow]/redo[/yellow] - Regenerate the last assistant response
+[yellow]/edit[/yellow] - Edit and resubmit your last message
+[yellow]/auto-title[/yellow] - Auto-generate a conversation title from context
+[yellow]/sysinfo[/yellow] - Show system/hardware info for performance tuning
 [yellow]/quit[/yellow] - Exit the chat
 
 [bold cyan]🔥 Enhanced Coding Modes:[/bold cyan]
@@ -963,6 +971,321 @@ class TerminalUI:
                 for t in templates:
                     self.console.print(f"  [yellow]{t}[/yellow]")
                 self.console.print("[dim]Usage: /persona <name> or /persona <description>[/dim]")
+
+        elif cmd == "/markdown":
+            # Export conversation as well-formatted Markdown
+            lines = ["# Mythos Conversation", ""]
+            name = self.memory.metadata.get("name")
+            if name:
+                lines.append(f"**Name:** {name}")
+            created = self.memory.metadata.get("created_at", "")
+            if created:
+                lines.append(f"**Date:** {created[:19]}")
+            lines.append("")
+            lines.append("---")
+            lines.append("")
+            for msg in self.memory.messages:
+                role = msg["role"]
+                content = msg.get("content", "")
+                if role == "system":
+                    lines.append("### System Prompt")
+                    lines.append("")
+                    lines.append(content)
+                elif role == "user":
+                    lines.append("### User")
+                    lines.append("")
+                    lines.append(content)
+                elif role == "assistant":
+                    lines.append("### Assistant")
+                    lines.append("")
+                    lines.append(content)
+                lines.append("")
+                lines.append("---")
+                lines.append("")
+            md_text = "\n".join(lines)
+            if args:
+                target_path = Path(args.strip()).expanduser().resolve()
+            else:
+                target_path = Path("conversation_export.md")
+            try:
+                with open(target_path, "w") as f_md:
+                    f_md.write(md_text)
+                self.console.print(f"[green]Markdown exported to: {target_path}[/green]")
+            except Exception as e:
+                self.console.print(f"[red]Failed to export markdown: {e}[/red]")
+
+        elif cmd == "/search":
+            if not args.strip():
+                self.console.print("[red]Usage: /search <query>[/red]")
+                self.console.print("[dim]Searches through all messages in this session.[/dim]")
+                return True
+            query = args.strip().lower()
+            results = []
+            for i, msg in enumerate(self.memory.messages):
+                content = msg.get("content", "")
+                if query in content.lower():
+                    role = msg["role"]
+                    preview = content[:120].replace("\n", " ") + ("..." if len(content) > 120 else "")
+                    ts = msg.get("timestamp", "")[:19]
+                    results.append((i, role, preview, ts))
+            if not results:
+                self.console.print(f"[yellow]No messages matching '{args.strip()}'[/yellow]")
+                return True
+            table = Table(title=f"Search Results: '{args.strip()}'")
+            table.add_column("#", style="dim", width=4)
+            table.add_column("Role", style="cyan", width=10)
+            table.add_column("Preview", style="green", max_width=60)
+            table.add_column("Time", style="dim", width=19)
+            for idx, role, preview, ts in results:
+                table.add_row(str(idx), role, preview, ts)
+            self.console.print(table)
+            self.console.print(f"[dim]{len(results)} match(es) found[/dim]")
+
+        elif cmd == "/cost":
+            # Estimate token usage and API-equivalent cost
+            non_system = [m for m in self.memory.messages if m["role"] != "system"]
+            total_chars = sum(len(m.get("content", "")) for m in self.memory.messages)
+            total_words = sum(len(m.get("content", "").split()) for m in self.memory.messages)
+            est_input_tokens = int(total_chars / 3.5)
+            est_output_tokens = sum(
+                len(m.get("content", "").split()) for m in non_system if m["role"] == "assistant"
+            )
+            est_output_tokens = int(est_output_tokens * 1.33)
+            input_cost = est_input_tokens * 2.50 / 1_000_000
+            output_cost = est_output_tokens * 10.00 / 1_000_000
+            total_cost = input_cost + output_cost
+            table = Table(title="Token Usage & Cost Estimate")
+            table.add_column("Metric", style="cyan")
+            table.add_column("Value", style="green", justify="right")
+            table.add_row("Total messages", str(len(non_system)))
+            table.add_row("Total characters", f"{total_chars:,}")
+            table.add_row("Total words", f"{total_words:,}")
+            table.add_row("Est. input tokens", f"{est_input_tokens:,}")
+            table.add_row("Est. output tokens", f"{est_output_tokens:,}")
+            table.add_row("Est. total tokens", f"{est_input_tokens + est_output_tokens:,}")
+            table.add_row("---", "---")
+            table.add_row("API-equiv. input cost", f"${input_cost:.4f}")
+            table.add_row("API-equiv. output cost", f"${output_cost:.4f}")
+            table.add_row("API-equiv. total cost", f"${total_cost:.4f}")
+            table.add_row("---", "---")
+            table.add_row("Local inference cost", "$0.00 (free!)")
+            table.add_row("Savings vs cloud API", f"${total_cost:.4f}")
+            self.console.print(table)
+            self.console.print("[dim]Cost estimates use GPT-4o pricing as a reference.[/dim]")
+            self.console.print("[dim]Actual token counts may vary by model and tokenizer.[/dim]")
+
+        elif cmd == "/models":
+            # List available GGUF models and switch
+            model_dir = self.engine.model_path.parent if hasattr(self.engine, "model_path") else Path("models")
+            gguf_files = sorted(model_dir.glob("**/*.gguf")) if model_dir.exists() else []
+            fallbacks = self.engine.config.get("model", {}).get("fallbacks", [])
+            fb_paths = []
+            for fb in fallbacks:
+                fb_path = Path(fb.get("path", ""))
+                if fb_path.exists():
+                    fb_paths.append(fb_path)
+            all_models = list(dict.fromkeys([self.engine.model_path] + gguf_files + fb_paths))
+            all_models = [p for p in all_models if p.suffix == ".gguf"]
+            if not all_models:
+                self.console.print("[yellow]No GGUF models found[/yellow]")
+                return True
+            current = self.engine.model_path
+            table = Table(title="Available Models")
+            table.add_column("#", style="dim", width=4)
+            table.add_column("Model", style="cyan")
+            table.add_column("Size", style="green", justify="right")
+            table.add_column("Status", style="yellow")
+            for i, p in enumerate(all_models, 1):
+                size_gb = p.stat().st_size / (1024 ** 3) if p.exists() else 0
+                status = "active" if p == current else ""
+                table.add_row(str(i), p.name, f"{size_gb:.2f} GB", status)
+            self.console.print(table)
+            if args:
+                try:
+                    if args.strip().isdigit():
+                        idx = int(args.strip()) - 1
+                        if 0 <= idx < len(all_models):
+                            new_model = all_models[idx]
+                        else:
+                            self.console.print("[red]Invalid model number[/red]")
+                            return True
+                    else:
+                        new_model = model_dir / args.strip()
+                        if not new_model.exists():
+                            self.console.print(f"[red]Model not found: {args.strip()}[/red]")
+                            return True
+                    self.console.print(f"[cyan]Switching to {new_model.name}...[/cyan]")
+                    try:
+                        self.engine.load_model(str(new_model))
+                        self.engine.config["model"]["path"] = str(new_model)
+                        self.console.print(f"[green]Model switched to: {new_model.name}[/green]")
+                    except Exception as e:
+                        self.console.print(f"[red]Failed to load model: {e}[/red]")
+                except (ValueError, IndexError):
+                    self.console.print("[red]Invalid selection[/red]")
+            else:
+                self.console.print("[dim]Use /models <#> to switch to a different model[/dim]")
+
+        elif cmd == "/redo":
+            # Regenerate the last assistant response
+            non_system = [m for m in self.memory.messages if m["role"] != "system"]
+            if len(non_system) < 2:
+                self.console.print("[yellow]Not enough conversation to redo[/yellow]")
+                return True
+            last_user_msg = None
+            for msg in reversed(self.memory.messages):
+                if msg["role"] == "assistant":
+                    self.memory.messages.remove(msg)
+                    break
+            for msg in reversed(self.memory.messages):
+                if msg["role"] == "user":
+                    last_user_msg = msg.get("content", "")
+                    break
+            if last_user_msg:
+                self.console.print("[cyan]Regenerating last response...[/cyan]")
+                self._last_response_text = ""
+                self.generate_response(last_user_msg)
+            else:
+                self.console.print("[yellow]No user message found to regenerate from[/yellow]")
+
+        elif cmd == "/edit":
+            # Edit and resubmit the last user message
+            non_system = [m for m in self.memory.messages if m["role"] != "system"]
+            if not non_system:
+                self.console.print("[yellow]No messages to edit[/yellow]")
+                return True
+            last_user_idx = None
+            for i in range(len(self.memory.messages) - 1, -1, -1):
+                if self.memory.messages[i]["role"] == "user":
+                    last_user_idx = i
+                    break
+            if last_user_idx is None:
+                self.console.print("[yellow]No user message found[/yellow]")
+                return True
+            old_content = self.memory.messages[last_user_idx].get("content", "")
+            short = old_content[:100] + ("..." if len(old_content) > 100 else "")
+            self.console.print(f"[dim]Last message: {short}[/dim]")
+            new_content = Prompt.ask("Edit message", default=old_content)
+            if new_content.strip() and new_content != old_content:
+                self.memory.messages = self.memory.messages[:last_user_idx]
+                self.console.print("[green]Message edited, regenerating response...[/green]")
+                self._last_response_text = ""
+                self.generate_response(new_content)
+            else:
+                self.console.print("[yellow]No changes made[/yellow]")
+
+        elif cmd == "/sysinfo":
+            # Display system/hardware information for performance tuning
+            import platform as _platform
+            import multiprocessing as _mp
+            table = Table(title="System Information")
+            table.add_column("Property", style="cyan")
+            table.add_column("Value", style="green")
+            table.add_row("OS", _platform.system())
+            table.add_row("OS Version", _platform.version())
+            table.add_row("Architecture", _platform.machine())
+            table.add_row("Processor", _platform.processor() or "N/A")
+            table.add_row("CPU Cores (logical)", str(_mp.cpu_count()))
+            # RAM detection
+            try:
+                import subprocess as _sp
+                result = _sp.run(
+                    ["free", "-h"], capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split("\n"):
+                        if "Mem:" in line:
+                            parts = line.split()
+                            if len(parts) >= 3:
+                                table.add_row("Total RAM", parts[1])
+                                table.add_row("Available RAM", parts[-1] if len(parts) >= 7 else parts[2])
+                            break
+            except Exception:
+                try:
+                    import subprocess as _sp
+                    result = _sp.run(
+                        ["vm_stat"], capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0:
+                        for line in result.stdout.strip().split("\n"):
+                            if "free" in line.lower():
+                                table.add_row("Memory info", line.strip()[:50])
+                                break
+                except Exception:
+                    table.add_row("RAM", "(unable to detect)")
+            # GPU detection
+            try:
+                import subprocess as _sp
+                result = _sp.run(
+                    ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if result.returncode == 0:
+                    for gi, line in enumerate(result.stdout.strip().split("\n")):
+                        parts = [p.strip() for p in line.split(",")]
+                        label = f"GPU {gi}" if gi > 0 else "GPU"
+                        table.add_row(label, " | ".join(parts))
+                else:
+                    table.add_row("GPU", "NVIDIA driver not found")
+            except (FileNotFoundError, Exception):
+                if _platform.system() == "Darwin" and "arm" in _platform.machine().lower():
+                    table.add_row("GPU", "Apple Silicon (Metal)")
+                else:
+                    table.add_row("GPU", "None detected")
+            # Python and model config
+            table.add_row("Python", _platform.python_version())
+            table.add_row("--- Model Config ---", "")
+            table.add_row("Context length", f"{self.engine.context_length:,}")
+            n_gpu = self.engine.config.get("model", {}).get("n_gpu_layers", 0)
+            table.add_row("GPU layers", str(n_gpu) + " (0=auto, -1=all)")
+            n_threads = self.engine.config.get("model", {}).get("n_threads", 0)
+            table.add_row("Threads", str(n_threads) + " (0=auto)")
+            n_batch = self.engine.config.get("model", {}).get("n_batch", 512)
+            table.add_row("Batch size", str(n_batch))
+            use_mmap = self.engine.config.get("model", {}).get("use_mmap", True)
+            table.add_row("Memory-mapped", str(use_mmap))
+            self.console.print(table)
+            self.console.print("[dim]Tip: set n_gpu_layers=-1 in config.yaml for full GPU acceleration[/dim]")
+            self.console.print("[dim]Tip: set n_threads=0 to auto-detect optimal thread count[/dim]")
+
+        elif cmd == "/auto-title":
+            # Generate a conversation title from the first exchange
+            non_system = [m for m in self.memory.messages if m["role"] != "system"]
+            if len(non_system) < 2:
+                self.console.print("[yellow]Need at least one exchange to generate a title[/yellow]")
+                return True
+            first_user = ""
+            first_assistant = ""
+            for msg in non_system:
+                if msg["role"] == "user" and not first_user:
+                    first_user = msg.get("content", "")[:200]
+                elif msg["role"] == "assistant" and not first_assistant:
+                    first_assistant = msg.get("content", "")[:200]
+                if first_user and first_assistant:
+                    break
+            prompt = (
+                "Generate a short 3-6 word title for this conversation. "
+                "Only output the title, nothing else.\n\n"
+                f"User: {first_user}\n"
+                f"Assistant: {first_assistant[:200]}"
+            )
+            self.console.print("[cyan]Generating conversation title...[/cyan]")
+            try:
+                title = self.engine.generate(
+                    self.engine.format_chat_prompt(
+                        [{"role": "user", "content": prompt}],
+                        "You generate concise conversation titles. Output ONLY the title."
+                    ),
+                    max_tokens=30,
+                    temperature=0.3,
+                    stream=False,
+                ).strip().strip('"').strip("'")
+                if len(title) > 60:
+                    title = title[:60].rsplit(" ", 1)[0]
+                self.memory.metadata["name"] = title
+                self.console.print(f"[green]Conversation titled: {title}[/green]")
+            except Exception as e:
+                self.console.print(f"[red]Failed to generate title: {e}[/red]")
 
         elif cmd == "/quit":
             self.console.print("[cyan]Goodbye![/cyan]")

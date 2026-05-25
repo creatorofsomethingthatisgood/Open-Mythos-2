@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node (not needed in Docker)
+node_modules/
+
+# Data (mount these as volumes instead)
+conversations/
+chroma_db/
+rag_docs/
+
+# Large model files (mount as volume)
+models/*.gguf
+
+# Documentation (not needed at runtime)
+*.md
+!README.md
+LICENSE
+CONTRIBUTING.md
+
+# Scripts not needed in container
+scripts/
+
+# Test files
+tests/
