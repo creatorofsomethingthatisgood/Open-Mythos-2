@@ -217,6 +217,19 @@ class TerminalUI:
 [yellow]/rewrite <path>[/yellow] - Rewrite file(s) on disk (LLM + auto-write)
 [yellow]/benchmark[/yellow] - Run benchmark suite
 [yellow]/config[/yellow] - Show current configuration
+[yellow]/version[/yellow] - Show Mythos version and model info
+[yellow]/tokens[/yellow] - Show token/generation stats table
+[yellow]/topp <0.0-1.0>[/yellow] - Set top-p (nucleus sampling)
+[yellow]/topk <1-200>[/yellow] - Set top-k (token filtering)
+[yellow]/reppen <1.0-2.0>[/yellow] - Set repeat penalty (alias: /repeat_penalty)
+[yellow]/maxtokens <128-65536>[/yellow] - Set max generation tokens
+[yellow]/history[/yellow] - Browse conversation message history
+[yellow]/compact[/yellow] - Compress older messages into a summary
+[yellow]/copy[/yellow] - Copy last response to clipboard
+[yellow]/rename <name>[/yellow] - Rename this conversation
+[yellow]/dump [path][/yellow] - Dump conversation to a text file
+[yellow]/wc[/yellow] - Word/char count and session duration stats
+[yellow]/persona <name|desc>[/yellow] - Switch persona template or set custom
 [yellow]/export[/yellow] - Export conversation as text
 [yellow]/quit[/yellow] - Exit the chat
 
@@ -257,15 +270,18 @@ class TerminalUI:
         table.add_column("Setting", style="cyan")
         table.add_column("Value", style="green")
         
+        
         table.add_row("Model", str(self.engine.model_path.name))
         table.add_row("Temperature", str(self.engine.config.get('generation', {}).get('temperature', 0.7)))
         table.add_row("Max Tokens", str(self.engine.config.get('generation', {}).get('max_tokens', 2048)))
+        table.add_row("Top-p", str(self.engine.config.get('generation', {}).get('top_p', 0.9)))
+        table.add_row("Top-k", str(self.engine.config.get('generation', {}).get('top_k', 40)))
+        table.add_row("Repeat Penalty", str(self.engine.config.get('generation', {}).get('repeat_penalty', 1.1)))
         table.add_row("Self-Reflection", "On" if self.reflector.should_reflect() else "Off")
         table.add_row("Thinking Mode", "On" if self.reflector.should_think() else "Off")
         table.add_row("RAG", "On" if self.rag_enabled and self.rag else "Off")
         table.add_row("RML", "On" if self.rml.enabled else "Off")
         table.add_row("Session Summaries", "On" if self.session_summaries.enabled else "Off")
- 
         self.console.print(table)
     
     def handle_command(self, command: str) -> bool:
@@ -724,10 +740,232 @@ class TerminalUI:
             count = self.session_summaries.clear_all()
             self.console.print(f"[green]Cleared {count} session summary/ies.[/green]")
 
+        elif cmd == "/version":
+            from mythos_cli import __version__
+            self.console.print(f"[cyan]Mythos[/cyan] [bold]{__version__}[/bold]")
+            self.console.print(f"[dim]Model: {self.engine.model_path.name}[/dim]")
+
+        elif cmd == "/tokens":
+            gen_cfg = self.engine.config.get('generation', {})
+            ctx_len = self.engine.context_length
+            max_tok = gen_cfg.get('max_tokens', 2048)
+            temp = gen_cfg.get('temperature', 0.7)
+            top_p = gen_cfg.get('top_p', 0.9)
+            top_k = gen_cfg.get('top_k', 40)
+            rp = gen_cfg.get('repeat_penalty', 1.1)
+            table = Table(title="Token & Generation Stats")
+            table.add_column("Setting", style="cyan")
+            table.add_column("Value", style="green")
+            table.add_row("Context window", f"{ctx_len:,}")
+            table.add_row("Max tokens", str(max_tok))
+            table.add_row("Temperature", str(temp))
+            table.add_row("Top-p", str(top_p))
+            table.add_row("Top-k", str(top_k))
+            table.add_row("Repeat penalty", str(rp))
+            table.add_row("Messages in memory", str(len(self.memory.messages)))
+            self.console.print(table)
+
+        elif cmd == "/topp":
+            try:
+                val = float(args)
+                if 0.0 <= val <= 1.0:
+                    self.engine.config['generation']['top_p'] = val
+                    self.console.print(f"[green]Top-p set to {val}[/green]")
+                else:
+                    self.console.print("[red]Top-p must be between 0.0 and 1.0[/red]")
+            except (ValueError, IndexError):
+                current = self.engine.config.get('generation', {}).get('top_p', 0.9)
+                self.console.print(f"[yellow]Current top-p: {current}[/yellow]")
+                self.console.print("[dim]Usage: /topp <0.0-1.0>[/dim]")
+
+        elif cmd == "/topk":
+            try:
+                val = int(args)
+                if 1 <= val <= 200:
+                    self.engine.config['generation']['top_k'] = val
+                    self.console.print(f"[green]Top-k set to {val}[/green]")
+                else:
+                    self.console.print("[red]Top-k must be between 1 and 200[/red]")
+            except (ValueError, IndexError):
+                current = self.engine.config.get('generation', {}).get('top_k', 40)
+                self.console.print(f"[yellow]Current top-k: {current}[/yellow]")
+                self.console.print("[dim]Usage: /topk <1-200>[/dim]")
+
+        elif cmd == "/reppen" or cmd == "/repeat_penalty":
+            try:
+                val = float(args)
+                if 1.0 <= val <= 2.0:
+                    self.engine.config['generation']['repeat_penalty'] = val
+                    self.console.print(f"[green]Repeat penalty set to {val}[/green]")
+                else:
+                    self.console.print("[red]Repeat penalty must be between 1.0 and 2.0[/red]")
+            except (ValueError, IndexError):
+                current = self.engine.config.get('generation', {}).get('repeat_penalty', 1.1)
+                self.console.print(f"[yellow]Current repeat penalty: {current}[/yellow]")
+                self.console.print("[dim]Usage: /reppen <1.0-2.0>[/dim]")
+
+        elif cmd == "/maxtokens":
+            try:
+                val = int(args)
+                if 128 <= val <= 65536:
+                    self.engine.config['generation']['max_tokens'] = val
+                    self.console.print(f"[green]Max tokens set to {val:,}[/green]")
+                else:
+                    self.console.print("[red]Max tokens must be between 128 and 65536[/red]")
+            except (ValueError, IndexError):
+                current = self.engine.config.get('generation', {}).get('max_tokens', 2048)
+                self.console.print(f"[yellow]Current max tokens: {current:,}[/yellow]")
+                self.console.print("[dim]Usage: /maxtokens <128-65536>[/dim]")
+
+        elif cmd == "/history":
+            non_system = [m for m in self.memory.messages if m['role'] != 'system']
+            if not non_system:
+                self.console.print("[yellow]No conversation history[/yellow]")
+                return True
+            table = Table(title="Conversation History")
+            table.add_column("#", style="dim", width=4)
+            table.add_column("Role", style="cyan", width=10)
+            table.add_column("Preview", style="green", max_width=60)
+            table.add_column("Time", style="dim", width=19)
+            for i, msg in enumerate(non_system, 1):
+                role = msg['role']
+                content = msg.get('content', '')
+                preview = content[:80].replace('\n', ' ') + ('...' if len(content) > 80 else '')
+                ts = msg.get('timestamp', '')[:19]
+                table.add_row(str(i), role, preview, ts)
+            self.console.print(table)
+            self.console.print(f"[dim]{len(non_system)} message(s) total[/dim]")
+
+        elif cmd == "/compact":
+            non_system = [m for m in self.memory.messages if m['role'] != 'system']
+            if len(non_system) < 6:
+                self.console.print("[yellow]Not enough history to compact (need at least 3 turns)[/yellow]")
+                return True
+            self.console.print("[cyan]Compacting conversation...[/cyan]")
+            # Keep the last 4 messages (2 turns), summarize the rest
+            old_msgs = non_system[:-4]
+            recent = non_system[-4:]
+            # Build a compact summary of old messages
+            summary_lines = ["[Previous conversation summary:]"]
+            for m in old_msgs:
+                role = m['role'].upper()
+                text = m.get('content', '')[:200]
+                summary_lines.append(f"{role}: {text}")
+            summary_text = "\n".join(summary_lines)
+            # Rebuild messages: system + compact summary + recent
+            self.memory.messages = [
+                {'role': 'system', 'content': summary_text, 'timestamp': datetime.now().isoformat()}
+            ] + recent
+            self.console.print(f"[green]Compacted {len(old_msgs)} older messages into a summary[/green]")
+            self.console.print(f"[dim]Kept {len(recent)} recent messages[/dim]")
+
+        elif cmd == "/copy":
+            if not self._last_response_text:
+                self.console.print("[yellow]No previous response to copy[/yellow]")
+                return True
+            try:
+                import subprocess
+                process = subprocess.Popen(
+                    ['xclip', '-selection', 'clipboard'],
+                    stdin=subprocess.PIPE,
+                )
+                process.communicate(self._last_response_text.encode('utf-8'))
+                if process.returncode == 0:
+                    self.console.print(f"[green]Copied {len(self._last_response_text)} chars to clipboard (xclip)[/green]")
+                else:
+                    raise RuntimeError("xclip failed")
+            except FileNotFoundError:
+                # Try xsel as fallback
+                try:
+                    import subprocess
+                    process = subprocess.Popen(
+                        ['xsel', '--clipboard', '--input'],
+                        stdin=subprocess.PIPE,
+                    )
+                    process.communicate(self._last_response_text.encode('utf-8'))
+                    self.console.print(f"[green]Copied {len(self._last_response_text)} chars to clipboard (xsel)[/green]")
+                except FileNotFoundError:
+                    # Try pbcopy (macOS)
+                    try:
+                        import subprocess
+                        process = subprocess.Popen(
+                            ['pbcopy'],
+                            stdin=subprocess.PIPE,
+                        )
+                        process.communicate(self._last_response_text.encode('utf-8'))
+                        self.console.print(f"[green]Copied {len(self._last_response_text)} chars to clipboard (pbcopy)[/green]")
+                    except FileNotFoundError:
+                        self.console.print("[yellow]No clipboard tool found. Install xclip, xsel, or pbcopy.[/yellow]")
+
+        elif cmd == "/rename":
+            if args:
+                self.memory.metadata['name'] = args.strip()
+                self.console.print(f"[green]Conversation renamed to: {args.strip()}[/green]")
+            else:
+                current = self.memory.metadata.get('name', 'untitled')
+                self.console.print(f"[yellow]Current name: {current}[/yellow]")
+                self.console.print("[dim]Usage: /rename <name>[/dim]")
+
+        elif cmd == "/dump":
+            if args:
+                target_path = Path(args.strip()).expanduser().resolve()
+            else:
+                target_path = Path("mythos_dump.txt")
+            try:
+                text = self.memory.export_text()
+                with open(target_path, 'w') as f:
+                    f.write(text)
+                self.console.print(f"[green]Conversation dumped to: {target_path}[/green]")
+            except Exception as e:
+                self.console.print(f"[red]Failed to dump: {e}[/red]")
+
+        elif cmd == "/wc":
+            non_system = [m for m in self.memory.messages if m['role'] != 'system']
+            user_msgs = [m for m in non_system if m['role'] == 'user']
+            asst_msgs = [m for m in non_system if m['role'] == 'assistant']
+            user_words = sum(len(m.get('content', '').split()) for m in user_msgs)
+            asst_words = sum(len(m.get('content', '').split()) for m in asst_msgs)
+            total_words = user_words + asst_words
+            total_chars = sum(len(m.get('content', '')) for m in non_system)
+            table = Table(title="Conversation Stats")
+            table.add_column("Metric", style="cyan")
+            table.add_column("Value", style="green")
+            table.add_row("User messages", str(len(user_msgs)))
+            table.add_row("Assistant messages", str(len(asst_msgs)))
+            table.add_row("User words", f"{user_words:,}")
+            table.add_row("Assistant words", f"{asst_words:,}")
+            table.add_row("Total words", f"{total_words:,}")
+            table.add_row("Total characters", f"{total_chars:,}")
+            elapsed = time.time() - getattr(self, '_session_start_time', time.time())
+            if elapsed > 0:
+                mins = int(elapsed // 60)
+                secs = int(elapsed % 60)
+                table.add_row("Session duration", f"{mins}m {secs}s")
+            self.console.print(table)
+
+        elif cmd == "/persona":
+            if args:
+                templates = self.prompt_manager.list_templates()
+                if args in templates:
+                    prompt = self.prompt_manager.load_prompt(args)
+                    self.prompt_manager.set_prompt(prompt)
+                    self.console.print(f"[green]Switched to persona: {args}[/green]")
+                else:
+                    # Set a custom persona instruction
+                    custom = f"You are {args}. Respond in that voice and style."
+                    self.prompt_manager.set_prompt(custom)
+                    self.console.print(f"[green]Custom persona set: {args}[/green]")
+            else:
+                templates = self.prompt_manager.list_templates()
+                self.console.print("[cyan]Available personas:[/cyan]")
+                for t in templates:
+                    self.console.print(f"  [yellow]{t}[/yellow]")
+                self.console.print("[dim]Usage: /persona <name> or /persona <description>[/dim]")
+
         elif cmd == "/quit":
             self.console.print("[cyan]Goodbye![/cyan]")
             return False
-        
+
         else:
             self.console.print(f"[red]Unknown command: {cmd}[/red]")
             self.console.print("Type [bold]/help[/bold] for available commands")

@@ -510,6 +510,250 @@ def _cmd_update(_args: argparse.Namespace) -> int:
     return 0
 
 
+# ── models (list available GGUF models) ────────────────────────────
+
+def _cmd_models(_args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_DIM, STYLE_INFO
+    from rich.table import Table
+
+    ensure_initialized()
+    model_dir = models_hint_dir()
+    if not model_dir.exists():
+        console.print(f"[{STYLE_WARN}]Models directory not found:[/] [dim]{model_dir}[/dim]")
+        console.print(f"Run [bold]mythos model download[/bold] to get a model.")
+        return 1
+
+    gguf_files = sorted(model_dir.glob("**/*.gguf"))
+    if not gguf_files:
+        console.print(f"[{STYLE_WARN}]No GGUF models found in[/]: [dim]{model_dir}[/dim]")
+        console.print(f"Run [bold]mythos model download[/bold] to get a model.")
+        return 1
+
+    table = Table(title="Available Models", show_lines=False)
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Model", style="cyan")
+    table.add_column("Size", style="green", justify="right")
+    table.add_column("Path", style="dim", max_width=50)
+
+    for i, f in enumerate(gguf_files, 1):
+        size_gb = f.stat().st_size / (1024 ** 3)
+        table.add_row(str(i), f.name, f"{size_gb:.2f} GB", str(f.parent) + "/")
+
+    console.print(table)
+    console.print(f"\n[{STYLE_INFO}]{len(gguf_files)} model(s) found[/{STYLE_INFO}]")
+    return 0
+
+
+# ── config show (display full resolved config) ────────────────────
+
+def _cmd_config_show(_args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_DIM, STYLE_INFO
+    from rich.table import Table
+
+    ensure_initialized()
+    cfg_path = llm_config_path()
+    if not cfg_path.exists():
+        console.print(f"[{STYLE_WARN}]LLM config not found:[/] [dim]{cfg_path}[/dim]")
+        console.print(f"Run [bold]mythos init[/bold] first.")
+        return 1
+
+    import yaml
+    try:
+        with open(cfg_path, "r") as f:
+            cfg = yaml.safe_load(f) or {}
+    except Exception as e:
+        console.print(f"[bold red]Error reading config:[/] {e}")
+        return 1
+
+    table = Table(title=f"Configuration: {cfg_path}", show_lines=False)
+    table.add_column("Section", style="bold cyan")
+    table.add_column("Key", style="cyan")
+    table.add_column("Value", style="green")
+
+    def _flatten(d, prefix=""):
+        items = []
+        for k, v in d.items():
+            key = f"{prefix}.{k}" if prefix else k
+            if isinstance(v, dict):
+                items.extend(_flatten(v, key))
+            elif isinstance(v, list):
+                items.append((prefix or "root", k, ", ".join(str(i) for i in v)))
+            else:
+                section = prefix.split(".")[-1] if prefix else "root"
+                items.append((section, k, str(v)))
+        return items
+
+    rows = _flatten(cfg)
+    for section, key, value in rows:
+        table.add_row(section, key, value[:80])
+
+    console.print(table)
+    return 0
+
+
+# ── doctor (diagnose setup issues) ────────────────────────────────
+
+def _cmd_doctor(_args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_ERR, STYLE_DIM, STYLE_INFO
+    from rich.table import Table
+
+    ensure_initialized()
+    checks = []
+
+    # Check 1: Python version
+    import sys as _sys
+    py_ver = f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}"
+    py_ok = _sys.version_info >= (3, 10)
+    checks.append(("Python", py_ver, "ok" if py_ok else "need 3.10+"))
+
+    # Check 2: Config files
+    cfg = user_config_path()
+    llm = llm_config_path()
+    checks.append(("User config", "exists" if cfg.exists() else "missing", "ok" if cfg.exists() else "run mythos init"))
+    checks.append(("LLM config", "exists" if llm.exists() else "missing", "ok" if llm.exists() else "run mythos init"))
+
+    # Check 3: Models
+    model_dir = models_hint_dir()
+    gguf = list(model_dir.glob("**/*.gguf")) if model_dir.exists() else []
+    checks.append(("Models", f"{len(gguf)} found" if gguf else "none", "ok" if gguf else "run mythos model download"))
+
+    # Check 4: Key dependencies
+    deps = ["yaml", "rich", "llama_cpp"]
+    for dep in deps:
+        try:
+            __import__(dep)
+            checks.append((f"Package: {dep}", "installed", "ok"))
+        except ImportError:
+            checks.append((f"Package: {dep}", "missing", f"pip install {dep}"))
+
+    # Check 5: Mythos home writable
+    home = mythos_home()
+    try:
+        home.mkdir(parents=True, exist_ok=True)
+        test_file = home / ".doctor_write_test"
+        test_file.write_text("ok")
+        test_file.unlink()
+        checks.append(("Config home", f"writable ({home})", "ok"))
+    except Exception as e:
+        checks.append(("Config home", f"not writable: {e}", "fix permissions"))
+
+    # Render results
+    table = Table(title="Mythos Doctor", show_lines=False)
+    table.add_column("Check", style="cyan", min_width=18)
+    table.add_column("Status", style="bold")
+    table.add_column("Advice", style="dim")
+
+    for name, status, advice in checks:
+        if advice == "ok":
+            status_str = f"[{STYLE_OK}]{status} ✓[/{STYLE_OK}]"
+        elif "missing" in status or "none" in status or "not" in status:
+            status_str = f"[{STYLE_ERR}]{status} ✗[/{STYLE_ERR}]"
+        else:
+            status_str = f"[{STYLE_WARN}]{status}[/]"
+        table.add_row(name, status_str, advice if advice != "ok" else "")
+
+    console.print(table)
+
+    errors = sum(1 for _, _, a in checks if a != "ok")
+    if errors == 0:
+        console.print(f"\n[{STYLE_OK}]All checks passed — Mythos is healthy![/{STYLE_OK}]")
+    else:
+        console.print(f"\n[{STYLE_WARN}]{errors} issue(s) found. Follow the advice above.[/{STYLE_WARN}]")
+    return 0 if errors == 0 else 1
+
+
+# ── sessions (list saved session summaries) ────────────────────────
+
+def _cmd_sessions(args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_DIM, STYLE_INFO
+    from rich.table import Table
+
+    ensure_initialized()
+    home = mythos_home()
+    sessions_dir = home / "sessions"
+    if not sessions_dir.exists() or not any(sessions_dir.iterdir()):
+        console.print(f"[{STYLE_WARN}]No saved sessions found.[/{STYLE_WARN}]")
+        console.print(f"[dim]Sessions are saved automatically when you use /summary in chat.[/dim]")
+        return 0
+
+    session_files = sorted(sessions_dir.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    if args.limit:
+        session_files = session_files[:args.limit]
+
+    if not session_files:
+        console.print(f"[{STYLE_WARN}]No session files found.[/{STYLE_WARN}]")
+        return 0
+
+    table = Table(title="Session Summaries", show_lines=False)
+    table.add_column("#", style="dim", width=4)
+    table.add_column("ID", style="cyan", max_width=20)
+    table.add_column("Date", style="green")
+    table.add_column("Topic", style="yellow", max_width=40)
+
+    for i, sf in enumerate(session_files, 1):
+        import json
+        try:
+            data = json.loads(sf.read_text())
+            sid = sf.stem[:16]
+            date = data.get("timestamp", sf.stat().st_mtime)[:19]
+            topic = data.get("topic", data.get("summary", ""))[:40]
+            table.add_row(str(i), sid, str(date)[:19], topic)
+        except Exception:
+            table.add_row(str(i), sf.stem[:16], "?", "(unreadable)")
+
+    console.print(table)
+    console.print(f"\n[{STYLE_INFO}]{len(session_files)} session(s)[/{STYLE_INFO}]")
+    return 0
+
+
+# ── history (list saved conversations) ────────────────────────────
+
+def _cmd_history(args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_DIM, STYLE_INFO
+    from rich.table import Table
+
+    ensure_initialized()
+    home = mythos_home()
+    convs_dir = home / "conversations"
+    if not convs_dir.exists() or not any(convs_dir.iterdir()):
+        console.print(f"[{STYLE_WARN}]No saved conversations found.[/{STYLE_WARN}]")
+        console.print(f"[dim]Use /save in chat to save conversations.[/dim]")
+        return 0
+
+    conv_files = sorted(convs_dir.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    if args.limit:
+        conv_files = conv_files[:args.limit]
+
+    if not conv_files:
+        console.print(f"[{STYLE_WARN}]No conversation files found.[/{STYLE_WARN}]")
+        return 0
+
+    table = Table(title="Conversation History", show_lines=False)
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Name", style="cyan", max_width=24)
+    table.add_column("Date", style="green")
+    table.add_column("Messages", style="yellow", justify="right")
+    table.add_column("Size", style="dim", justify="right")
+
+    for i, cf in enumerate(conv_files, 1):
+        import json
+        try:
+            data = json.loads(cf.read_text())
+            name = data.get("name", cf.stem)[:24]
+            msgs = data.get("messages", [])
+            msg_count = len(msgs) if isinstance(msgs, list) else "?"
+            ts = data.get("timestamp", "")
+            size_kb = cf.stat().st_size / 1024
+            table.add_row(str(i), name, str(ts)[:19] if ts else "?", str(msg_count), f"{size_kb:.1f} KB")
+        except Exception:
+            size_kb = cf.stat().st_size / 1024
+            table.add_row(str(i), cf.stem[:24], "?", "?", f"{size_kb:.1f} KB")
+
+    console.print(table)
+    console.print(f"\n[{STYLE_INFO}]{len(conv_files)} conversation(s)[/{STYLE_INFO}]")
+    return 0
+
+
 # ── argument parser ─────────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
@@ -517,11 +761,11 @@ def build_parser() -> argparse.ArgumentParser:
         prog="mythos",
         description="Mythos — local AI chat + security scanner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+ epilog="""
 Quick start:
-  mythos                  Launch chat (like `claude`)
-  mythos chat             Same as above
-  mythos web              Web UI on http://localhost:7860
+ mythos Launch chat (like `claude`)
+ mythos chat Same as above
+ mythos web Web UI on http://localhost:7860
 
 Security scanning:
  mythos init First-time setup
@@ -530,14 +774,25 @@ Security scanning:
  mythos scan --deep AI-powered audit (needs model)
  mythos fix --path . Auto-fix safe patterns (dry-run; use --apply)
 
+Diagnostics & info:
+ mythos models List available GGUF models
+ mythos config show Display full resolved configuration
+ mythos doctor Diagnose setup issues and dependencies
+ mythos sessions List saved session summaries
+ mythos history List saved conversations
+
 Updates:
  mythos update Pull latest version (preserves settings & models)
 
 Examples:
-  mythos                  # start chatting from any directory
-  mythos chat --config ~/myconfig.yaml
-  mythos web --port 8080 --share
-  mythos scan --deep --path ~/src/my-api
+ mythos # start chatting from any directory
+ mythos chat --config ~/myconfig.yaml
+ mythos web --port 8080 --share
+ mythos scan --deep --path ~/src/my-api
+ mythos doctor # check if everything is set up correctly
+ mythos models # see which local models are installed
+ mythos sessions -n 5 # show last 5 sessions
+ mythos history -n 10 # show last 10 conversations
 """,
     )
     parser.add_argument(
@@ -630,7 +885,32 @@ Examples:
     st = sub.add_parser("status", help="Show configuration and model status")
     st.set_defaults(func=_cmd_status)
 
-    # ── update ──────────────────────────────────────────────────────────
+    # ── models ──────────────────────────────────────────────────────────
+    ml = sub.add_parser("models", help="List available GGUF models")
+    ml.set_defaults(func=_cmd_models)
+
+    # ── config ──────────────────────────────────────────────────────────
+    p_cfg = sub.add_parser("config", help="Show full resolved configuration")
+    cfg_sub = p_cfg.add_subparsers(dest="config_cmd", required=True)
+    cfg_show = cfg_sub.add_parser("show", help="Display full configuration")
+    cfg_show.set_defaults(func=_cmd_config_show)
+
+    # ── doctor ──────────────────────────────────────────────────────────
+    dr = sub.add_parser("doctor", help="Diagnose setup issues and dependencies")
+    dr.set_defaults(func=_cmd_doctor)
+
+    # ── sessions ────────────────────────────────────────────────────────
+    se = sub.add_parser("sessions", help="List saved session summaries")
+    se.add_argument("--limit", "-n", type=int, default=None, help="Max sessions to show")
+    se.set_defaults(func=_cmd_sessions)
+
+    # ── history ─────────────────────────────────────────────────────────
+    hi = sub.add_parser("history", help="List saved conversations")
+    hi.add_argument("--limit", "-n", type=int, default=None, help="Max conversations to show")
+    hi.set_defaults(func=_cmd_history)
+
+
+ # ── update ──────────────────────────────────────────────────────────
     up = sub.add_parser("update", help="Pull latest Mythos from GitHub (preserves settings)")
     up.set_defaults(func=_cmd_update)
 

@@ -193,5 +193,65 @@ rml:
 
 Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
 
+---
+
+## 📜 Command Reference
+
+### CLI Commands (terminal)
+
+| Command | Description |
+|---------|-------------|
+| `mythos` | Launch chat (default) |
+| `mythos chat` | Same as above |
+| `mythos chat --config <path>` | Use a custom config file |
+| `mythos web` | Launch web UI (Gradio) |
+| `mythos web --port 8080 --share` | Custom port + public link |
+| `mythos init` | First-time setup |
+| `mythos status` | Show config & model status |
+| `mythos models` | List available GGUF models |
+| `mythos config show` | Display full resolved configuration |
+| `mythos doctor` | Diagnose setup issues & dependencies |
+| `mythos sessions` | List saved session summaries |
+| `mythos sessions -n 5` | Show last 5 sessions |
+| `mythos history` | List saved conversations |
+| `mythos history -n 10` | Show last 10 conversations |
+| `mythos scan` | Instant static security analysis |
+| `mythos scan --deep` | AI-powered audit (needs model) |
+| `mythos fix --path .` | Auto-fix safe patterns (dry-run) |
+| `mythos fix --path . --apply` | Apply fixes to disk |
+| `mythos path add ~/src` | Register a codebase |
+| `mythos path list` | List registered paths |
+| `mythos path remove <target>` | Remove a registered path |
+| `mythos model download` | Download default GGUF model |
+| `mythos update` | Pull latest from GitHub |
+
+### In-Chat Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show available commands |
+| `/config` | Show current configuration |
+| `/version` | Show Mythos version and model info |
+| `/tokens` | Show token/generation stats |
+| `/topp <0.0-1.0>` | Set top-p (nucleus sampling) |
+| `/topk <int>` | Set top-k sampling |
+| `/reppen <float>` | Set repeat penalty |
+| `/maxtokens <int>` | Set max tokens per generation |
+| `/temp <0.0-2.0>` | Set temperature |
+| `/persona <name>` | Switch persona preset |
+| `/compact` | Compact conversation context |
+| `/copy` | Copy last response to clipboard |
+| `/rename <name>` | Rename current conversation |
+| `/export` | Export conversation as text |
+| `/dump` | Dump raw conversation JSON |
+| `/wc` | Word/char/token count of conversation |
+| `/save` | Save conversation |
+| `/summary` | Generate and save a summary |
+| `/rml on\|off` | Enable/disable RML |
+| `/rml good\|bad` | Mark last response |
+| `/rml stats` | Show RML learning stats |
+| `/rml reset` | Reset RML preferences |
+| `/quit` | Exit the chat |
+
 Thank you for the star if you gave one.
 
