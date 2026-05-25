@@ -32,13 +32,7 @@ Initial response: {response}
 
 Provide your reviewed and improved response:"""
         
-        self.thinking_prompt = """You are a thoughtful assistant. Before answering, reason through the problem step by step inside thinking tags. Use the format:
-
-<thinking>
-Your step-by-step reasoning here...
-</thinking>
-
-Then provide your final answer after the closing tag. Always show your reasoning process."""
+        self.thinking_prompt = """Before answering, reason step by step inside <thinking> tags, then give your final answer after </thinking>. Keep reasoning concise and avoid repetition."""
         
         self._load_settings()
     

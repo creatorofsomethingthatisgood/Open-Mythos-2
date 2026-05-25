@@ -129,10 +129,9 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
             # Inject thinking instructions into system prompt when thinking mode is on
             if req.use_thinking:
                 thinking_instruction = (
-                    "\n\nIMPORTANT: You MUST show your reasoning process before answering. "
-                    "Use <thinking> tags to wrap your step-by-step reasoning, then provide "
-                    "your final answer after the closing </thinking> tag. "
-                    "Example:\n<thinking>\nLet me think about this step by step...\n</thinking>\n\nYour answer here."
+                    "\n\nBefore answering, reason step by step inside <thinking> tags, "
+                    "then give your final answer after </thinking>. "
+                    "Keep reasoning concise and avoid repetition."
                 )
                 sys_prompt = sys_prompt + thinking_instruction
 

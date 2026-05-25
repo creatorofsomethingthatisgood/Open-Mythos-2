@@ -70,69 +70,115 @@ def _cmd_web(args: argparse.Namespace) -> int:
 # ── security scanner ────────────────────────────────────────────────────
 
 def _cmd_init(_args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_OK
+    from mythos_cli.suggest import after_init, show_suggestions
+
     init_config(quiet=False)
+    console.print(f"\n[{STYLE_OK}]✓ Mythos is ready![/]")
+    show_suggestions(after_init())
     return 0
 
 
+def _get_console():
+    """Lazy import of the shared console for use in exception handlers."""
+    from mythos_cli.console import console
+    return console
+
+
 def _cmd_path_add(args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_OK, STYLE_INFO
+    from mythos_cli.suggest import after_path_add, show_suggestions
+    from rich.panel import Panel
+
     ensure_initialized()
     entry = add_scan_path(args.directory, label=args.label)
-    print(f"✓ Added scan path: {entry['label']}")
-    print(f"  {entry['path']}")
-    print("\nRun: mythos scan")
+    console.print()
+    console.print(Panel.fit(
+        f"[{STYLE_OK}]✓ Path registered[/{STYLE_OK}]\n"
+        f"  [{STYLE_INFO}]{entry['label']}[/{STYLE_INFO}]\n"
+        f"  [dim]{entry['path']}[/dim]",
+        border_style="green",
+    ))
+    show_suggestions(after_path_add(entry['label']))
     return 0
 
 
 def _cmd_path_list(_args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_WARN, STYLE_INFO
+    from mythos_cli.suggest import after_path_list, show_suggestions
+
     ensure_initialized()
     paths = list_scan_paths()
     if not paths:
-        print("No paths configured. Add one:")
-        print("  mythos path add /path/to/code")
+        console.print(f"[{STYLE_WARN}]No paths configured.[/{STYLE_WARN}]")
+        show_suggestions(after_path_list(0))
         return 0
-    print("Registered scan paths:\n")
+    console.print(f"\n[{STYLE_INFO}]{len(paths)} registered path(s):[/{STYLE_INFO}]\n")
     for i, entry in enumerate(paths, 1):
-        print(f"  {i}. [{entry.get('id', '?')}] {entry.get('label', '')}")
-        print(f"     {entry['path']}")
+        console.print(f"  {i}. [bold]{entry.get('label', '')}[/bold] [dim]({entry.get('id', '?')})[/dim]")
+        console.print(f"     [dim]{entry['path']}[/dim]")
+    show_suggestions(after_path_list(len(paths)))
     return 0
 
 
 def _cmd_path_remove(args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_OK, STYLE_ERR
+    from mythos_cli.suggest import after_path_removed, show_suggestions, on_error
+
     ensure_initialized()
     if remove_scan_path(args.target):
-        print(f"✓ Removed: {args.target}")
+        console.print(f"[{STYLE_OK}]✓ Removed:[/] {args.target}")
+        show_suggestions(after_path_removed())
         return 0
-    print(f"Not found: {args.target}", file=sys.stderr)
+    console.print(f"[{STYLE_ERR}]Not found:[/] {args.target}")
+    show_suggestions(on_error("path remove"))
     return 1
 
 
 def _cmd_scan(args: argparse.Namespace) -> int:
+    from mythos_cli.console import console
+    from mythos_cli.spinner import spinner
+    from mythos_cli.suggest import after_scan, show_suggestions, on_error
+
     ensure_initialized()
     if args.verbose:
         logging.getLogger().setLevel(logging.INFO)
 
-    try:
-        findings, roots, deep_report = run_scan(
-            path_arg=args.path,
-            deep=args.deep,
-            min_severity=args.severity,
-        )
-    except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-    except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-    except Exception as e:
-        if args.deep:
-            print(
-                f"Deep scan failed: {e}\n"
-                "Ensure the model is installed: mythos model download",
-                file=sys.stderr,
+    scan_label = (
+        "Running deep AI audit (this may take a minute)..."
+        if args.deep
+        else "Scanning files for security issues..."
+    )
+
+    with spinner(scan_label):
+        try:
+            findings, roots, deep_report = run_scan(
+                path_arg=args.path,
+                deep=args.deep,
+                min_severity=args.severity,
             )
-        else:
-            print(f"Scan failed: {e}", file=sys.stderr)
-        return 1
+        except FileNotFoundError as e:
+            console = _get_console()
+            console.print(f"[bold red]Error:[/bold red] {e}")
+            show_suggestions(on_error("scan"))
+            return 1
+        except RuntimeError as e:
+            console = _get_console()
+            console.print(f"[bold red]Error:[/bold red] {e}")
+            show_suggestions(on_error("scan"))
+            return 1
+        except Exception as e:
+            console = _get_console()
+            if args.deep:
+                console.print(
+                    f"[bold red]Deep scan failed:[/bold red] {e}\n"
+                    "[yellow]Ensure the model is installed:[/yellow] "
+                    "[bold]mythos model download[/bold]"
+                )
+            else:
+                console.print(f"[bold red]Scan failed:[/bold red] {e}")
+            show_suggestions(on_error("scan"))
+            return 1
 
     if args.format == "json":
         return print_json(findings, roots, deep_report)
@@ -140,92 +186,147 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     if args.verbose and findings:
         print_verbose_findings(findings)
 
-    return print_summary(findings, roots, deep_report)
+    rc = print_summary(findings, roots, deep_report)
+    has_critical_high = any(f.severity in ("critical", "high") for f in findings)
+    show_suggestions(after_scan(len(findings), has_critical_high))
+    return rc
 
 
 def _cmd_fix(args: argparse.Namespace) -> int:
+    from mythos_cli.console import console
+    from mythos_cli.spinner import spinner
+    from mythos_cli.suggest import after_fix, show_suggestions, on_error
+
     ensure_initialized()
     dry_run = not args.apply
 
-    try:
-        findings, roots, fixes = run_fix(
-            path_arg=args.path,
-            dry_run=dry_run,
-            min_severity=args.severity,
-        )
-    except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-    except Exception as e:
-        print(f"Fix failed: {e}", file=sys.stderr)
-        return 1
+    with spinner("Scanning for auto-fixable patterns..."):
+        try:
+            findings, roots, fixes = run_fix(
+                path_arg=args.path,
+                dry_run=dry_run,
+                min_severity=args.severity,
+            )
+        except FileNotFoundError as e:
+            console.print(f"[bold red]Error:[/bold red] {e}")
+            show_suggestions(on_error("fix"))
+            return 1
+        except Exception as e:
+            console.print(f"[bold red]Fix failed:[/bold red] {e}")
+            show_suggestions(on_error("fix"))
+            return 1
 
-    print_fix_results(fixes, dry_run=dry_run)
+    applied_count = print_fix_results(fixes, dry_run=dry_run)
 
     if findings:
         from mythos_cli.output import print_summary
 
-        print("\n--- Remaining findings after fix ---")
-        return print_summary(findings, roots, None)
+        console.print(f"\n[bold yellow]Remaining findings after fix:[/bold yellow]")
+        rc = print_summary(findings, roots, None)
+    else:
+        console.print(f"\n[green]✓ No remaining static findings at configured severity.[/green]")
+        rc = 0
 
-    print("\nNo remaining static findings at configured severity.")
-    return 0
+    show_suggestions(after_fix(applied_count, dry_run))
+    return rc
 
 
 def _cmd_explore(args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_ERR, STYLE_INFO, STYLE_DIM
+    from mythos_cli.suggest import after_explore, show_suggestions
+
     ensure_initialized()
     from engine.rag import RAGPipeline
 
     config = llm_config_path()
     if not config.exists():
-        print("Run `mythos init` first.", file=sys.stderr)
+        console.print(f"[{STYLE_ERR}]Run [bold]mythos init[/bold] first.[/{STYLE_ERR}]")
         return 1
 
     rag = RAGPipeline(str(config))
     summary = rag.explore_directory(args.path)
-    print(f"\nDirectory: {summary['directory']}")
+    console.print(f"\n[{STYLE_INFO}]Directory:[/] [bold]{summary['directory']}[/bold]")
     if not summary.get("exists"):
-        print("Directory does not exist.")
+        console.print(f"[{STYLE_ERR}]Directory does not exist.[/{STYLE_ERR}]")
         return 1
-    print(f"Indexable files: {summary['file_count']}")
-    print(f"Total size: {summary['total_bytes']} bytes")
+    console.print(f"  [bold]Indexable files:[/] {summary['file_count']}")
+    console.print(f"  [bold]Total size:[/] {summary['total_bytes']} bytes")
     if summary.get("sample_files"):
-        print("\nSample files:")
+        console.print(f"\n[{STYLE_INFO}]Sample files:[/{STYLE_INFO}]")
         for rel in summary["sample_files"][:15]:
-            print(f"  {rel}")
+            console.print(f"  [{STYLE_DIM}]{rel}[/{STYLE_DIM}]")
+    show_suggestions(after_explore())
     return 0
 
 
 def _cmd_model_download(_args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN
+    from mythos_cli.suggest import after_model_download, show_suggestions
+
     ensure_initialized()
     from engine.model_manager import ModelManager
 
     config = llm_config_path()
-    print("Downloading default security audit model (~4.5 GB)...")
+    console.print(f"[{STYLE_WARN}]Downloading default security audit model (~4.5 GB)...[/{STYLE_WARN}]")
+    console.print("[dim]This may take a while depending on your internet speed.[/dim]")
     manager = ModelManager(str(config))
     path = manager.download_default()
-    print(f"✓ Model ready: {path}")
+    console.print(f"\n[{STYLE_OK}]✓ Model ready:[/] [dim]{path}[/dim]")
+    show_suggestions(after_model_download())
     return 0
 
 
 def _cmd_status(_args: argparse.Namespace) -> int:
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_DIM, STYLE_ERR
+    from mythos_cli.suggest import after_status, show_suggestions
+    from rich.table import Table
+    from rich.panel import Panel
+
     home = mythos_home()
     cfg = user_config_path()
     llm = llm_config_path()
     paths = list_scan_paths() if cfg.exists() else []
 
-    print("Mythos status\n")
-    print(f"  Version: {__version__}")
-    print(f"  Config home: {home}")
-    print(f"  User config: {'yes' if cfg.exists() else 'no — run mythos init'}")
-    print(f"  LLM config: {'yes' if llm.exists() else 'no'}")
-    print(f"  Scan paths: {len(paths)}")
+    console.print()
+    console.print(Panel.fit(
+        "[bold cyan]╔══ Mythos ══╗[/bold cyan]",
+        border_style="cyan",
+    ))
+    console.print()
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column("Key", style="bold cyan", min_width=16)
+    table.add_column("Value", min_width=48)
+
+    table.add_row("Version", f"[bold]{__version__}[/bold]")
+    table.add_row("Config home", f"[dim]{home}[/dim]")
+    table.add_row(
+        "User config",
+        f"[{STYLE_OK}]ready ✓[/{STYLE_OK}]" if cfg.exists()
+        else f"[{STYLE_WARN}]not initialized[/{STYLE_WARN}] — run [bold]mythos init[/bold]",
+    )
+    table.add_row(
+        "LLM config",
+        f"[{STYLE_OK}]ready ✓[/{STYLE_OK}]" if llm.exists() else f"[{STYLE_WARN}]missing[/{STYLE_WARN}]",
+    )
+    table.add_row(
+        "Scan paths",
+        f"[bold]{len(paths)}[/bold] registered",
+    )
     for entry in paths:
-        print(f"   - {entry.get('label')}: {entry['path']}")
+        table.add_row("", f"  [dim]- {entry.get('label')}: {entry['path']}[/dim]")
 
     model_dir = models_hint_dir()
     gguf = list(model_dir.glob("*.gguf")) if model_dir.exists() else []
-    print(f"  Models: {len(gguf)} in {model_dir}")
+    model_status = (
+        f"[{STYLE_OK}]{len(gguf)} model(s) ✓[/{STYLE_OK}] in [dim]{model_dir}[/dim]"
+        if gguf
+        else f"[{STYLE_WARN}]No models found[/{STYLE_WARN}] — run [bold]mythos model download[/bold]"
+    )
+    table.add_row("Models", model_status)
+
+    console.print(table)
+    show_suggestions(after_status())
     return 0
 
 
@@ -235,11 +336,15 @@ def _cmd_update(_args: argparse.Namespace) -> int:
     import subprocess
     import tempfile
 
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_ERR, STYLE_DIM, STYLE_INFO
+    from rich.panel import Panel
+
     PACKAGE_DIR = str(PACKAGE_ROOT)
 
     # ── 1. Snapshot current version ──────────────────────────────────────
     old_version = __version__
-    print(f"  Current version: {old_version}")
+    console.print(f"\n[{STYLE_INFO}]Mythos Update[/{STYLE_INFO}]")
+    console.print(f"  Current version: [bold]{old_version}[/bold]")
 
     # ── 2. Backup user data from ~/.config/mythos ────────────────────────
     home = mythos_home()
@@ -266,10 +371,10 @@ def _cmd_update(_args: argparse.Namespace) -> int:
         backed_up.append("conversations/")
 
     if backed_up:
-        print(f"  Backed up: {', '.join(backed_up)}")
+        console.print(f"  [{STYLE_DIM}]Backed up:[/] {', '.join(backed_up)}")
 
     # ── 3. Git pull ─────────────────────────────────────────────────────
-    print("  Fetching latest version from GitHub...")
+    console.print(f"  [{STYLE_WARN}]Fetching latest version from GitHub...[/{STYLE_WARN}]")
 
     try:
         # Stash any uncommitted local changes
@@ -300,8 +405,8 @@ def _cmd_update(_args: argparse.Namespace) -> int:
                     text=True,
                     timeout=30,
                 )
-            print(f"  Update failed: {result.stderr.strip() or result.stdout.strip()}", file=sys.stderr)
-            print("  Resolve git conflicts manually, then re-run: mythos update", file=sys.stderr)
+            console.print(f"  [{STYLE_ERR}]Update failed:[/] {result.stderr.strip() or result.stdout.strip()}")
+            console.print(f"  [{STYLE_WARN}]Resolve git conflicts manually, then re-run:[/] [bold]mythos update[/bold]")
             return 1
 
         # Pop stash if we stashed
@@ -315,10 +420,10 @@ def _cmd_update(_args: argparse.Namespace) -> int:
             )
 
     except FileNotFoundError:
-        print("  Error: git not found. Install git or update manually.", file=sys.stderr)
+        console.print(f"  [{STYLE_ERR}]Error: git not found. Install git or update manually.[/{STYLE_ERR}]")
         return 1
     except subprocess.TimeoutExpired:
-        print("  Error: git pull timed out. Check your network.", file=sys.stderr)
+        console.print(f"  [{STYLE_ERR}]Error: git pull timed out. Check your network.[/{STYLE_ERR}]")
         return 1
 
     # ── 4. Read new version ─────────────────────────────────────────────
@@ -352,7 +457,7 @@ def _cmd_update(_args: argparse.Namespace) -> int:
         restored.append("conversations/")
 
     if restored:
-        print(f"  Restored: {', '.join(restored)}")
+        console.print(f"  [{STYLE_DIM}]Restored:[/] {', '.join(restored)}")
 
     # Clean up temp dir
     shutil.rmtree(backup_dir, ignore_errors=True)
@@ -365,7 +470,7 @@ def _cmd_update(_args: argparse.Namespace) -> int:
         _patch_llm_config_for_user(llm)
 
     # ── 7. Reinstall Python deps (pip skips already-satisfied) ──────────
-    print("  Updating Python dependencies (skips already installed)...")
+    console.print(f"  [{STYLE_DIM}]Updating Python dependencies...[/{STYLE_DIM}]")
     venv_python = PACKAGE_ROOT / "venv" / "bin" / "python3"
     if venv_python.exists():
         try:
@@ -377,21 +482,31 @@ def _cmd_update(_args: argparse.Namespace) -> int:
                 timeout=300,
             )
             if result.returncode == 0:
-                print("  Dependencies up to date")
+                console.print(f"  [{STYLE_DIM}]Dependencies up to date[/{STYLE_DIM}]")
             else:
-                print(f"  Warning: some deps may need manual install: {result.stderr.strip()}", file=sys.stderr)
+                console.print(f"  [{STYLE_WARN}]Warning:[/] some deps may need manual install: {result.stderr.strip()}")
         except subprocess.TimeoutExpired:
-            print("  Warning: pip install timed out. Run manually: ./venv/bin/pip install -e .", file=sys.stderr)
+            console.print(f"  [{STYLE_WARN}]Warning:[/] pip install timed out. Run: ./venv/bin/pip install -e .")
     else:
-        print("  Warning: venv not found. Run setup.sh first.", file=sys.stderr)
+        console.print(f"  [{STYLE_WARN}]Warning: venv not found. Run setup.sh first.[/{STYLE_WARN}]")
 
     # ── 8. Done ─────────────────────────────────────────────────────────
+    console.print()
     if new_version != old_version:
-        print(f"\n  Updated: {old_version} -> {new_version}")
+        console.print(Panel.fit(
+            f"[{STYLE_OK}]Updated: [bold]{old_version}[/bold] → [bold]{new_version}[/bold][/{STYLE_OK}]",
+            border_style="green",
+        ))
     else:
-        print(f"\n  Already on version {new_version} (no version change)")
+        console.print(Panel.fit(
+            f"[{STYLE_OK}]Already on version [bold]{new_version}[/bold] (no version change)[/{STYLE_OK}]",
+            border_style="green",
+        ))
 
-    print("  Update complete. Your settings and models are preserved.")
+    console.print(f"  [{STYLE_DIM}]Update complete. Your settings and models are preserved.[/{STYLE_DIM}]")
+
+    from mythos_cli.suggest import after_update, show_suggestions
+    show_suggestions(after_update(new_version != old_version))
     return 0
 
 
@@ -544,10 +659,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except KeyboardInterrupt:
-        print("\nInterrupted.")
+        from mythos_cli.console import console
+        console.print("\n[bold yellow]Interrupted.[/bold yellow]")
         return 0
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        from mythos_cli.console import console
+        console.print(f"\n[bold red]Error:[/bold red] {e}")
         logging.getLogger().exception("fatal error")
         return 1
 

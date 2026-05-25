@@ -179,6 +179,11 @@ export function SettingsPanel({
         onChange={(v) => set("useReflection", v)}
       />
       <Toggle
+        label="Thinking Mode (show step-by-step reasoning)"
+        checked={settings.useThinking}
+        onChange={(v) => set("useThinking", v)}
+      />
+      <Toggle
         label="RAG (Retrieval-Augmented Generation)"
         checked={settings.useRag}
         onChange={(v) => set("useRag", v)}

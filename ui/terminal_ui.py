@@ -205,6 +205,7 @@ class TerminalUI:
 [yellow]/temp <float>[/yellow] - Change temperature (0.0-2.0)
             [yellow]/reflect on|off[/yellow] - Toggle self-reflection
             [yellow]/think on|off[/yellow] - Show model's step-by-step reasoning process
+            [yellow]/thinking on|off[/yellow] - Alias for /think
             [yellow]/rag on|off[/yellow] - Toggle RAG (if available)
 [yellow]/rml on|off|stats|good|bad|reset[/yellow] - Reinforcement ML: learn from your feedback
 [yellow]/memory [on|off|add|forget|clear|extract][/yellow] - Cross-session memory: facts Mythos remembers
@@ -703,7 +704,7 @@ class TerminalUI:
                 listings = self.session_summaries.list_summaries(limit=20)
                 self.console.print(self.session_summaries.format_sessions_list(listings))
 
-        elif cmd == "/think":
+        elif cmd == "/think" or cmd == "/thinking":
             if args.lower() == "on":
                 self.engine.config['system']['thinking_mode'] = True
                 self.reflector.config.setdefault('system', {})['thinking_mode'] = True
@@ -1031,7 +1032,7 @@ class TerminalUI:
                             self.console.print(_display_buf, end="", style=style)
                         else:
                             self.console.print(_display_buf, end="")
-
+                        _display_buf = ""
                 self.console.print()
 
                 elapsed = time.time() - start_time

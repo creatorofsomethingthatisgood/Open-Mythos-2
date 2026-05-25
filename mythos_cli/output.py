@@ -6,10 +6,10 @@ import json
 from collections import Counter
 from typing import List, Optional
 
+from mythos_cli.console import console
 from mythos_cli.static_scanner import Finding, SEVERITY_ORDER
 
 try:
-    from rich.console import Console
     from rich.table import Table
     from rich.panel import Panel
     from rich import box
@@ -43,26 +43,36 @@ def _print_plain(
     counts: Counter,
     deep_report: Optional[str],
 ) -> int:
-    print("\n=== Mythos Security Scan ===\n")
+    from mythos_cli.console import STYLE_ERR, STYLE_OK, STYLE_DIM
+
+    console.print("\n[bold cyan]╔══ Mythos Security Scan ══╗[/bold cyan]")
+    console.print()
     for root in roots:
-        print(f"  Scanned: {root}")
-    print()
-    print(f"  Critical: {counts.get('critical', 0)}  High: {counts.get('high', 0)}  "
-          f"Medium: {counts.get('medium', 0)}  Low: {counts.get('low', 0)}  "
-          f"Info: {counts.get('info', 0)}")
-    print()
+        console.print(f"  [dim]Scanned:[/dim] {root}")
+    console.print()
+    console.print(
+        f"  [bold red]Critical:[/bold red] {counts.get('critical', 0)}  "
+        f"[red]High:[/red] {counts.get('high', 0)}  "
+        f"[yellow]Medium:[/yellow] {counts.get('medium', 0)}  "
+        f"[blue]Low:[/blue] {counts.get('low', 0)}  "
+        f"[dim]Info:[/dim] {counts.get('info', 0)}"
+    )
+    console.print()
 
     for f in findings:
-        print(f"[{f.severity.upper()}] {f.rule_id} {f.path}:{f.line}")
-        print(f"  {f.title}")
-        print(f"  {f.snippet}")
-        print(f"  → {f.recommendation}\n")
+        style = SEVERITY_STYLE.get(f.severity, "")
+        console.print(f"[{style}][{f.severity.upper()}][/{style}] "
+                      f"[bold]{f.rule_id}[/bold] {f.path}:{f.line}")
+        console.print(f"  {f.title}")
+        console.print(f"  [{STYLE_DIM}]{f.snippet}[/{STYLE_DIM}]")
+        console.print(f"  → {f.recommendation}\n")
 
     if deep_report:
-        print("\n--- AI Deep Audit ---\n")
-        print(deep_report)
+        console.print("\n[bold magenta]── AI Deep Audit ──[/bold magenta]\n")
+        console.print(deep_report)
 
     if counts.get("critical") or counts.get("high"):
+        console.print(f"\n[{STYLE_ERR}]Failed: critical or high severity findings present.[/{STYLE_ERR}]")
         return 1
     return 0
 
@@ -73,7 +83,6 @@ def _print_rich(
     counts: Counter,
     deep_report: Optional[str],
 ) -> int:
-    console = Console()
     console.print()
     console.print(
         Panel.fit(
@@ -131,7 +140,6 @@ def print_verbose_findings(findings: List[Finding]) -> None:
         for f in findings:
             print(f"\n{f.rule_id} @ {f.path}:{f.line}\n  {f.snippet}\n  → {f.recommendation}")
         return
-    console = Console()
     for f in findings:
         style = SEVERITY_STYLE.get(f.severity, "")
         console.print(

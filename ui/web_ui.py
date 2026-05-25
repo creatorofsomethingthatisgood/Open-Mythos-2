@@ -113,7 +113,8 @@ class WebUI:
         max_tokens: int,
         repeat_penalty: float,
         use_reflection: bool,
-        use_rag: bool
+        use_rag: bool,
+        use_thinking: bool = True
     ) -> tuple[ChatHistory, str]:
         """
         Handle chat interaction
@@ -129,6 +130,7 @@ class WebUI:
             repeat_penalty: Repetition penalty
             use_reflection: Enable self-reflection
             use_rag: Enable RAG
+            use_thinking: Enable thinking/reasoning display
             
         Returns:
             Tuple of (updated_history, status_message)
@@ -161,6 +163,16 @@ class WebUI:
             messages = self.memory.get_recent_context(max_turns=max_turns)
 
             sys_prompt = system_prompt
+            
+            # Inject thinking instructions into system prompt when thinking mode is on
+            if use_thinking:
+                thinking_instruction = (
+                    "\n\nBefore answering, reason step by step inside <thinking> tags, "
+                    "then give your final answer after </thinking>. "
+                    "Keep reasoning concise and avoid repetition."
+                )
+                sys_prompt = sys_prompt + thinking_instruction
+            
             extra_context = "\n\n".join(
                 part for part in (rag_context, local_context) if part
             )
@@ -188,6 +200,15 @@ class WebUI:
                 stream=False
             )
             
+            # Extract thinking/reasoning from the response if thinking mode is on
+            reasoning = None
+            if use_thinking:
+                reasoning, answer = self.reflector.extract_reasoning(response)
+                if reasoning:
+                    response = answer
+                else:
+                    reasoning = None
+            
             # Apply reflection if enabled
             if use_reflection:
                 response = self.reflector.reflect(
@@ -204,6 +225,8 @@ class WebUI:
             history = _append_chat_messages(history, message, response)
 
             status = f"✓ Generated {len(response.split())} words"
+            if use_thinking and reasoning:
+                status += f" (with thinking: {len(reasoning.split())} words)"
             if use_reflection:
                 status += " (with reflection)"
             if local_notices:
@@ -361,6 +384,11 @@ class WebUI:
                         value=False
                     )
                     
+                    use_thinking = gr.Checkbox(
+                        label="Thinking Mode (show reasoning)",
+                        value=True
+                    )
+                    
                     use_rag = gr.Checkbox(
                         label="RAG (Retrieval-Augmented Generation)",
                         value=False
@@ -402,6 +430,7 @@ class WebUI:
                     max_tokens,
                     repeat_penalty,
                     use_reflection,
+                    use_thinking,
                     use_rag
                 ],
                 outputs=[chatbot, status]
@@ -419,6 +448,7 @@ class WebUI:
                     max_tokens,
                     repeat_penalty,
                     use_reflection,
+                    use_thinking,
                     use_rag
                 ],
                 outputs=[chatbot, status]
