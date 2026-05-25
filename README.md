@@ -194,4 +194,5 @@ rml:
 Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
 
 Thank you for the star if you gave one.
+We love supporters
 
