@@ -32,7 +32,6 @@
 [![Forkers repo roster for @creatorofsomethingthatisgood/Open-Mythos-2](https://reporoster.com/forks/creatorofsomethingthatisgood/Open-Mythos-2)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/network/members)
 
 </div>
-
 ---
 
 ## ⚡ What is OpenMythos-2?
