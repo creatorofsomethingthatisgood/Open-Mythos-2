@@ -192,3 +192,4 @@ Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
 Thank you for the star if you gave one.
 
 [![Stargazers repo roster for @creatorofsomethingthatisgood/Open-Mythos-2](https://reporoster.com/stars/creatorofsomethingthatisgood/Open-Mythos-2)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/stargazers)
+[![Forkers repo roster for @creatorofsomethingthatisgood/Open-Mythos-2](https://reporoster.com/forks/creatorofsomethingthatisgood/Open-Mythos-2)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/network/members)
