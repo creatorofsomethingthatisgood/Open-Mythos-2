@@ -364,6 +364,13 @@ class InferenceEngine:
         return self.generate(prompt, **kwargs)
     
     def __del__(self):
-        """Cleanup on deletion"""
+        """Cleanup on deletion -- interrupt-safe."""
         if hasattr(self, 'model'):
-            del self.model
+            import signal as _signal
+            # Temporarily ignore SIGINT so KeyboardInterrupt can't
+            # fire inside llama_model_free() during shutdown.
+            _signal.signal(_signal.SIGINT, _signal.SIG_IGN)
+            try:
+                del self.model
+            except KeyboardInterrupt:
+                pass

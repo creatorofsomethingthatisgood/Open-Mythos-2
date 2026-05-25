@@ -3,6 +3,8 @@ Terminal UI - Beautiful terminal interface using Rich library
 """
 
 import logging
+import os
+import signal
 import time
 from typing import List, Optional
 from pathlib import Path
@@ -1418,6 +1420,11 @@ class TerminalUI:
                 now = time.time()
                 if now - self._last_ctrl_c_time < 1.0:
                     self.console.print("\n[cyan]Exiting...[/cyan]")
+                    # Install a SIGINT handler that force-kills on the
+                    # NEXT Ctrl+C, so destructors (__del__, atexit) can't
+                    # produce "Exception ignored" spam if the user mashes
+                    # Ctrl+C while the model is being freed.
+                    signal.signal(signal.SIGINT, lambda s, f: os._exit(0))
                     self.running = False
                     break
                 self._last_ctrl_c_time = now

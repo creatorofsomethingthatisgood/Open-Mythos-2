@@ -33,6 +33,7 @@
     "pyproject.toml",
     "setup.sh",
     "setup-macos.sh",
+    "setup-windows.ps1",
     "mythos"
   ],
   "scripts": {

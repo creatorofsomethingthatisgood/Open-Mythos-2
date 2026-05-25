@@ -7,6 +7,8 @@ High-quality local language model (Metal on macOS, Vulkan on Linux AMD).
 
 import argparse
 import logging
+import os
+import signal
 import sys
 from pathlib import Path
 
@@ -361,6 +363,9 @@ def main():
             mode_finetune(str(config_path))
         
     except KeyboardInterrupt:
+        # Force-kill on any further Ctrl+C so __del__/atexit cleanup
+        # can't produce "Exception ignored" traceback spam.
+        signal.signal(signal.SIGINT, lambda s, f: os._exit(0))
         logger.info("\nInterrupted by user")
         sys.exit(0)
     except Exception as e:

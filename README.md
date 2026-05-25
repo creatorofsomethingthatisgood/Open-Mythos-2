@@ -74,39 +74,144 @@ The name draws from **mythos** (μῦθος) — the ancient Greek word for *sto
 
 ### 🔱 Installation
 
+Pick your platform and package manager:
+
+---
+
 <details>
-<summary><strong>Option 1 — Git Clone (recommended)</strong></summary>
+<summary><strong>🐧 Linux — Git Clone (recommended)</strong></summary>
+
+**Ubuntu / Debian:**
 
 ```bash
 # Clone the sacred repository
 git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
-
-# Enter the temple
 cd Open-Mythos-2
 
-# One-time setup (macOS or Linux)
-./setup-macos.sh # or ./setup.sh on Linux
+# One-time setup (installs deps, builds llama-cpp-python with Vulkan/CPU fallback)
+./setup.sh
 
-# Then chat (no `source venv` needed)
+# Download the model (~4.5 GB, first time only)
+./mythos model download
+
+# Start chatting
 ./mythos
-./mythos model download # once per machine (~4.5 GB → ~/.config/mythos/)
+```
 
-# Move your downloads to another PC (no re-download):
-./scripts/mythos-export-data.sh # creates offline-bundle/ (~4.5 GB)
-# On the new machine after setup:
+> **Note:** `./setup.sh` is optimized for Fedora (`dnf`). On Ubuntu/Debian, it will warn but still work — system deps may need manual install:
+> ```bash
+> sudo apt install -y python3 python3-pip python3-dev gcc g++ make cmake git libopenblas-dev libvulkan-dev mesa-vulkan-drivers
+> ```
+
+**Arch Linux:**
+
+```bash
+git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
+cd Open-Mythos-2
+
+# Install system deps first
+sudo pacman -S --needed python python-pip gcc make cmake vulkan-headers vulkan-icd-loader openblas
+
+# Run setup
+./setup.sh
+./mythos model download
+./mythos
+```
+
+**Fedora:**
+
+```bash
+git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
+cd Open-Mythos-2
+
+# One-command setup (Fedora-optimized, includes Vulkan GPU support)
+./setup.sh
+./mythos model download
+./mythos
+```
+
+**Offline / Air-gapped machines:**
+
+```bash
+# On a connected machine:
+./scripts/mythos-export-data.sh   # creates offline-bundle/ (~4.5 GB)
+
+# Transfer the bundle to the target machine, then:
 ./scripts/mythos-import-data.sh ./offline-bundle
 ```
 
 </details>
 
 <details>
-<summary><strong>Option 2 — npm (npx)</strong></summary>
+<summary><strong>🍎 macOS — Git Clone (recommended)</strong></summary>
 
 ```bash
-# Two-command install & run — no manual clone needed
-sudo npm install open-mythos-2@2.0.0
-or 
-sudo npm install -g open-mythos-2 
+# Clone the sacred repository
+git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
+cd Open-Mythos-2
+
+# One-time setup (Metal GPU on Apple Silicon, CPU on Intel Macs)
+./setup-macos.sh
+
+# Download the model (~4.5 GB, first time only)
+./mythos model download
+
+# Start chatting
+./mythos
+```
+
+> **Note:** On Apple Silicon (M1/M2/M3/M4), the setup builds llama-cpp-python with **Metal GPU acceleration** for fast inference. Intel Macs fall back to CPU mode. [Homebrew](https://brew.sh/) is recommended for build dependencies (`brew install cmake`).
+
+**via Homebrew (tap):**
+
+```bash
+brew tap creatorofsomethingthatisgood/tap
+brew install open-mythos-2
+
+mythos model download
+mythos
+```
+
+</details>
+
+<details>
+<summary><strong>🪟 Windows — Git Clone (recommended)</strong></summary>
+
+```powershell
+# Clone the sacred repository
+git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
+cd Open-Mythos-2
+
+# One-time setup (PowerShell — detects CUDA/Vulkan/CPU automatically)
+.\setup-windows.ps1
+
+# Download the model (~4.5 GB, first time only)
+.\mythos.bat model download
+
+# Start chatting
+.\mythos.bat
+```
+
+**Prerequisites:**
+- **Python 3.10+** — [python.org](https://www.python.org/downloads/) (check "Add Python to PATH" during install)
+- **Microsoft C++ Build Tools** — [visualstudio.microsoft.com](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (select "Desktop development with C++" workload)
+- **CMake** — `winget install Kitware.CMake` or [cmake.org](https://cmake.org/download/)
+- **GPU acceleration (optional):**
+  - **NVIDIA:** Install [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) for CUDA support
+  - **AMD/Intel:** Install [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) for Vulkan support
+
+> **Note:** If you skip the build tools, the setup will attempt a prebuilt wheel (CPU-only). For GPU acceleration, the C++ build tools are required.
+
+</details>
+
+---
+
+<details>
+<summary><strong>📦 npm (cross-platform: Windows, macOS, Linux)</strong></summary>
+
+```bash
+# Install globally
+sudo npm install -g open-mythos-2
 
 # Download the model (~4.5 GB, first time only)
 mythos model download
@@ -115,17 +220,92 @@ mythos model download
 mythos
 ```
 
-> **Note:** The npm package wraps the same setup and Python backend under the hood. Node.js 18+ and Python 3.10+ are required. The first `npx` or `mythos` run will automatically set up the virtual environment and dependencies if they aren't already present.
+> **Note:** The npm package wraps the same setup and Python backend under the hood. **Node.js 18+** and **Python 3.10+** are required. The first `mythos` run will automatically set up the virtual environment and dependencies if they aren't already present. On Windows, make sure Python is in your PATH.
 
 </details>
 
 <details>
-<summary><strong>Option 3 — pnpm</strong></summary>
+<summary><strong>📦 pnpm (cross-platform: Windows, macOS, Linux)</strong></summary>
 
 ```bash
-sudo pnpm install open-mythos-2@2.0.0
+# Install globally
+pnpm install -g open-mythos-2
+
+# Download the model (~4.5 GB, first time only)
+mythos model download
+
+# Start chatting
+mythos
+```
 
 > **Note:** [pnpm](https://pnpm.io/) is a fast, disk-efficient package manager. The package wraps the same setup and Python backend under the hood. Node.js 18+ and Python 3.10+ are required. The first run will automatically set up the virtual environment and dependencies if they aren't already present.
+
+</details>
+
+<details>
+<summary><strong>🐍 pipx (Python users — cross-platform)</strong></summary>
+
+```bash
+# Install with pipx (isolated environment, no venv management needed)
+pipx install mythos-sentinel
+
+# Or install from source
+git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
+cd Open-Mythos-2
+pipx install .
+
+# Download the model (~4.5 GB, first time only)
+mythos model download
+
+# Start chatting
+mythos
+```
+
+> **Note:** [pipx](https://pipx.pypa.io/) installs Python CLI tools into isolated virtualenvs. You'll still need the C++ build tools (see platform-specific sections above) for `llama-cpp-python` to compile with GPU support. If building from source, `pipx install .` uses `pyproject.toml`.
+
+</details>
+
+<details>
+<summary><strong>🐳 Docker (cross-platform — no local deps needed)</strong></summary>
+
+```bash
+# Pull and run (CPU-only)
+docker run -it --rm \
+  -v mythos-data:/root/.config/mythos \
+  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest
+
+# With NVIDIA GPU acceleration
+docker run -it --rm --gpus all \
+  -v mythos-data:/root/.config/mythos \
+  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest-cuda
+
+# Download model first (one-time)
+docker run -it --rm \
+  -v mythos-data:/root/.config/mythos \
+  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest \
+  mythos model download
+
+# Web UI
+docker run -it --rm -p 7860:7860 \
+  -v mythos-data:/root/.config/mythos \
+  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest \
+  mythos web --port 7860
+```
+
+> **Note:** Docker avoids the need for local C++ build tools. The CUDA image requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html). Model data persists in the `mythos-data` Docker volume.
+
+</details>
+
+<details>
+<summary><strong>⚡ Quick comparison</strong></summary>
+
+| Method | Platforms | GPU | Best for |
+|--------|-----------|-----|----------|
+| **Git Clone** | Linux, macOS, Windows | Vulkan / Metal / CUDA | Full control, offline setups |
+| **npm / pnpm** | Linux, macOS, Windows | Auto-detect | JS devs, quick install |
+| **pipx** | Linux, macOS, Windows | Manual CMAKE_ARGS | Python users |
+| **Docker** | Linux, macOS, Windows | CUDA (NVIDIA toolkit) | Reproducible, no local deps |
+| **Homebrew** | macOS only | Metal (auto) | Mac users who prefer brew |
 
 </details>
 
