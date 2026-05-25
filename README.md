@@ -105,7 +105,8 @@ cd Open-Mythos-2
 ```bash
 # Two-command install & run — no manual clone needed
 sudo npm install open-mythos-2@2.0.0
-
+or 
+sudo npm install -g open-mythos-2 
 
 # Download the model (~4.5 GB, first time only)
 mythos model download
