@@ -147,6 +147,9 @@ export default function App() {
         case "save":
           handleSave();
           break;
+        case "load":
+          sysMsg("**Load conversation:** Use the Settings panel (Ctrl+B) to load a saved conversation, or drag a .txt/.json file into the chat.");
+          break;
         case "export":
           handleExport();
           break;
