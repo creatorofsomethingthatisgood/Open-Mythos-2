@@ -1,0 +1,101 @@
+# GitHub Pages — Jekyll configuration
+# Site renders the README.md as the landing page plus any *.md under docs/
+
+title: Open Mythos-2
+description: >-
+  Fully local, offline AI that lives in your terminal.
+  No API keys, no cloud, no limits.
+url: https://creatorofsomethingthatisgood.github.io
+baseurl: /Open-Mythos-2
+
+# Pick one of the GitHub Pages supported themes:
+#   jekyll-theme-cayman, jekyll-theme-hacker, jekyll-theme-slate,
+#   jekyll-theme-midnight, jekyll-theme-architect, jekyll-theme-minimal,
+#   jekyll-theme-leap-day, jekyll-theme-merlot, jekyll-theme-modernist,
+#   jekyll-theme-primer, jekyll-theme-tactile, jekyll-theme-time-machine
+theme: jekyll-theme-hacker
+
+show_downloads: false
+
+plugins:
+  - jekyll-relative-links
+  - jekyll-default-layout
+  - jekyll-titles-from-headings
+
+relative_links:
+  enabled: true
+  collections: false
+
+# Render README.md as index.html
+include:
+  - README.md
+
+# Keep source code, models, build artifacts, and other repo content out of
+# the rendered site. Listed explicitly so a stray *.md file does not
+# accidentally become a public page.
+exclude:
+  - .dockerignore
+  - .gitignore
+  - .npmignore
+  - .vercelignore
+  - .github/
+  - .test-venv/
+  - .vercel/
+  - venv/
+  - node_modules/
+  - models/
+  - benchmarks/
+  - lora/
+  - rag_docs/
+  - conversations/
+  - chroma_db/
+  - src/
+  - api/
+  - engine/
+  - mythos_cli/
+  - ui/
+  - tests/
+  - training/
+  - scripts/
+  - install-pip/
+  - prompts/
+  - bin/
+  - Dockerfile
+  - LICENSE
+  - CONTRIBUTING.md
+  - CHECKLIST.txt
+  - CODING_ACTIVATED.txt
+  - CODING_GUIDE.md
+  - ELITE_CODING_MODE.txt
+  - FINAL_INSTRUCTIONS.txt
+  - FINAL_SUMMARY.md
+  - FIXED_README.txt
+  - README_SIMPLE.md
+  - RUN_THIS.txt
+  - START_HERE.txt
+  - cli.js
+  - debug_config.py
+  - main.py
+  - mythos
+  - package.json
+  - package-lock.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - pyproject.toml
+  - requirements.txt
+  - run_chat.sh
+  - run_web.sh
+  - setup.sh
+  - setup-macos.sh
+  - setup-windows.ps1
+  - show_config.sh
+  - show_download_url.py
+  - test_coding.sh
+  - test_download.py
+  - tsconfig.json
+  - vercel.json
+  - vite.config.ts
+  - verify_coding_mode.sh
+  - verify_setup.sh
+  - index.html
+  - github-page-deploy-instructions.md
