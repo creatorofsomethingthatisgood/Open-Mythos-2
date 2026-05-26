@@ -25,16 +25,19 @@ dependencies = [
   "pyyaml>=6.0",
   "rich>=13.0",
   "gradio>=4.0",
-  "chromadb>=0.4.0",
-  "sentence-transformers>=2.2.0",
-  "PyPDF2>=3.0.0",
   "numpy>=1.24.0",
   "tqdm>=4.65.0",
 ]
 
 [project.optional-dependencies]
-web = ["gradio>=4.0"]  # alias; gradio is in core deps
+web = ["gradio>=4.0"]
+rag = [
+  "chromadb>=0.4.0",
+  "sentence-transformers>=2.2.0",
+  "PyPDF2>=3.0.0",
+]
 dev = ["pytest>=7.0"]
+all = ["mythos-sentinel[web,rag,dev]"]
 
 [project.scripts]
 mythos = "mythos_cli.main:cli_main"

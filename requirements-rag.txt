@@ -1,0 +1,6 @@
+# RAG (Retrieval-Augmented Generation) dependencies
+# Install with: pip install -r requirements-rag.txt
+# Or: pip install -e ".[rag]"
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+PyPDF2>=3.0.0

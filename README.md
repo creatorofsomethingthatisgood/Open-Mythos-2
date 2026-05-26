@@ -69,25 +69,25 @@ Like Prometheus stealing fire from the gods, OpenMythos-2 brings the fire of AI 
 
 ## 🏛️ Features
 
-| ✨ Feature | 📖 Description |
+| Feature |  Description |
 |---|---|
-| ⚡ **No API Required** | Fully local — nothing ever leaves your machine |
-| 🖥️ **Terminal Native** | Built from the ground up for the command line |
-| 🧠 **Intelligent Reasoning** | Context-aware, multi-turn conversations |
-| 🌑 **Offline First** | Works anywhere — planes, bunkers, the underworld |
-| 🔱 **Mythos Persona** | Answers in the voice of an ancient, wise oracle |
-| 🪶 **Lightweight** | Minimal dependencies, blazing fast startup |
-| 🔓 **Open Source** | Fully transparent and community-driven |
-| 🛡️ **Private by Design** | Your conversations are yours alone |
-| 🔄 **RML (Reinforcement ML)** | Learns from your feedback and adapts — edits system prompt and generation params to match your preferences | when command is /rml on |
+|  **No API Required** | Fully local — nothing ever leaves your machine |
+|  **Terminal Native** | Built from the ground up for the command line |
+|  **Intelligent Reasoning** | Context-aware, multi-turn conversations |
+|  **Offline First** | Works anywhere — planes, bunkers, the underworld |
+|  **Mythos Persona** | Answers in the voice of an ancient, wise oracle |
+|  **Lightweight** | Minimal dependencies, blazing fast startup |
+|  **Open Source** | Fully transparent and community-driven |
+|  **Private by Design** | Your conversations are yours alone |
+|  **RML (Reinforcement ML)** | Learns from your feedback and adapts — edits system prompt and generation params to match your preferences | when command is /rml on |
 
-## 🌊 The Myth Behind the Machine
+##  The Myth Behind the Machine
 
 The name draws from **mythos** (μῦθος) — the ancient Greek word for *story*, *legend*, and *the spoken word of truth*. OpenMythos-2 embodies that spirit: a storyteller, reasoner, and companion that runs **entirely on your machine**, with no external gods (servers) to pray to.
 
 ---
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Prerequisites
 
@@ -95,14 +95,14 @@ The name draws from **mythos** (μῦθος) — the ancient Greek word for *sto
 - `pip`
 - A terminal (bash, zsh, PowerShell, cmd)
 
-### 🔱 Installation
+###  Installation
 
 Pick your platform and package manager:
 
 ---
 
 <details>
-<summary><strong>🐧 Linux — Git Clone (recommended)</strong></summary>
+<summary><strong> Linux — Git Clone (recommended)</strong></summary>
 
 **Ubuntu / Debian:**
 
@@ -166,7 +166,7 @@ mythos
 </details>
 
 <details>
-<summary><strong>🍎 macOS — Git Clone (recommended)</strong></summary>
+<summary><strong> macOS — Git Clone (recommended)</strong></summary>
 
 ```bash
 # Clone the sacred repository
@@ -198,7 +198,7 @@ mythos
 </details>
 
 <details>
-<summary><strong>🪟 Windows — Git Clone (recommended)</strong></summary>
+<summary><strong> Windows — Git Clone (recommended)</strong></summary>
 
 ```powershell
 # Clone the sacred repository
@@ -230,7 +230,7 @@ cd Open-Mythos-2
 ---
 
 <details>
-<summary><strong>📦 npm (cross-platform: Windows, macOS, Linux)</strong></summary>
+<summary><strong> npm (cross-platform: Windows, macOS, Linux)</strong></summary>
 
 ```bash
 # Install globally
@@ -248,7 +248,7 @@ mythos
 </details>
 
 <details>
-<summary><strong>📦 pnpm (cross-platform: Windows, macOS, Linux)</strong></summary>
+<summary><strong> pnpm (cross-platform: Windows, macOS, Linux)</strong></summary>
 
 ```bash
 # Install globally
@@ -266,7 +266,7 @@ mythos
 </details>
 
 <details>
-<summary><strong>🐍 pipx (Python users — cross-platform)</strong></summary>
+<summary><strong> pipx (Python users — cross-platform)</strong></summary>
 
 ```bash
 # Install with pipx (isolated environment, no venv management needed)
@@ -289,7 +289,7 @@ mythos
 </details>
 
 <details>
-<summary><strong>🐳 Docker (cross-platform — no local deps needed)</strong></summary>
+<summary><strong> Docker (cross-platform — no local deps needed)</strong></summary>
 
 ```bash
 # Pull and run (CPU-only)
@@ -335,7 +335,7 @@ docker run -it --rm -p 7860:7860 \
 
 ---
 
-## 🔄 RML — Reinforcement Machine Learning
+##  RML — Reinforcement Machine Learning
 
 RML is a feedback-driven self-improvement loop that learns your preferences over time and adapts Mythos to match. It does **two things automatically**:
 
@@ -492,4 +492,4 @@ See [Issues](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issue
 </div>
 
 
-Disclaimer theese answers may not be true by the model.
+Disclaimer these answers may not be true by the model.

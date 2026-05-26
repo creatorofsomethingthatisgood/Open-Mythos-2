@@ -8,7 +8,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
 fi
 
 echo "==================================================================="
-echo "  Mythos Local - High-Quality Local LLM for AMD/Fedora Linux"
+echo " Mythos Local - High-Quality Local LLM for AMD/Fedora Linux"
 echo "==================================================================="
 echo ""
 
@@ -73,9 +73,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/install-common.sh
 source "$SCRIPT_DIR/scripts/install-common.sh"
 
-# Upgrade pip
-echo "Upgrading pip..."
-pip install --upgrade pip setuptools wheel
+# Upgrade pip (skip if already recent — saves a network round-trip)
+if python3 -c "import pip; from packaging.version import Version; assert Version(pip.__version__) >= Version('23')" 2>/dev/null; then
+    echo -e "${GREEN}✓ pip is up to date${NC}"
+else
+    echo "Upgrading pip..."
+    pip install --upgrade pip setuptools wheel
+fi
 
 VULKAN_SUCCESS=0
 
@@ -85,29 +89,41 @@ if llama_cpp_import_ok; then
 else
     echo ""
     echo "==================================================================="
-    echo "  Building llama-cpp-python (first run only — may take several minutes)..."
+    echo " Installing llama-cpp-python (first run only)..."
     echo "==================================================================="
-    echo ""
 
-    echo "Attempting Vulkan build for AMD GPU acceleration..."
-    if CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python --no-cache-dir 2>&1 | tee /tmp/vulkan_build.log; then
-        if grep -q "error" /tmp/vulkan_build.log; then
-            echo -e "${RED}✗ Vulkan build completed with errors${NC}"
-        else
-            echo -e "${GREEN}✓ Vulkan backend installed successfully${NC}"
-            VULKAN_SUCCESS=1
-        fi
-    else
-        echo -e "${RED}✗ Vulkan build failed${NC}"
+    # Try prebuilt wheel first — much faster than compiling from source
+    echo "Trying prebuilt Vulkan wheel..."
+    if pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/vulkan 2>/dev/null && llama_cpp_import_ok; then
+        echo -e "${GREEN}✓ Prebuilt Vulkan wheel installed${NC}"
+        VULKAN_SUCCESS=1
     fi
 
     if [ $VULKAN_SUCCESS -eq 0 ]; then
-        echo ""
-        echo "Falling back to OpenBLAS (CPU-only) backend..."
-        pip uninstall -y llama-cpp-python 2>/dev/null || true
-        CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python --no-cache-dir
-        echo -e "${GREEN}✓ OpenBLAS (CPU) backend installed successfully${NC}"
-        echo -e "${YELLOW}Note: Running on CPU only. Performance will be slower.${NC}"
+        # Try CPU prebuilt wheel before compiling from source
+        echo "Trying prebuilt CPU wheel..."
+        if pip install llama-cpp-python 2>/dev/null && llama_cpp_import_ok; then
+            echo -e "${YELLOW}✓ Prebuilt CPU wheel installed (no GPU accel)${NC}"
+            echo -e "${YELLOW}Note: Rebuild with Vulkan for GPU speed: CMAKE_ARGS='-DGGML_VULKAN=on' pip install llama-cpp-python --no-cache-dir --force-reinstall${NC}"
+        else
+            # Last resort: compile from source with Vulkan
+            echo "Compiling from source with Vulkan..."
+            if CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python --no-cache-dir 2>&1 | tee /tmp/vulkan_build.log; then
+                if ! grep -q "error" /tmp/vulkan_build.log; then
+                    echo -e "${GREEN}✓ Vulkan backend compiled successfully${NC}"
+                    VULKAN_SUCCESS=1
+                fi
+            fi
+
+            if [ $VULKAN_SUCCESS -eq 0 ]; then
+                echo -e "${RED}✗ Vulkan build failed${NC}"
+                echo "Falling back to OpenBLAS (CPU-only) compile..."
+                pip uninstall -y llama-cpp-python 2>/dev/null || true
+                CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python --no-cache-dir
+                echo -e "${GREEN}✓ OpenBLAS (CPU) backend installed${NC}"
+                echo -e "${YELLOW}Note: Running on CPU only. Performance will be slower.${NC}"
+            fi
+        fi
     fi
 fi
 
@@ -154,7 +170,7 @@ fi
 # Ask user if they want to download the model now
 echo ""
 echo "==================================================================="
-echo "  Model Download"
+echo " Model Download"
 echo "==================================================================="
 echo ""
 echo "The default model (Qwen2.5-7B-Instruct-Q4_K_M) is approximately 4.5GB."
@@ -162,7 +178,6 @@ echo "This download may take some time depending on your connection."
 echo ""
 read -p "Download model now? (y/n) " -n 1 -r
 echo
-
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Downloading default model..."
     python3 -c "
@@ -185,10 +200,9 @@ fi
 # Run a quick test
 echo ""
 echo "==================================================================="
-echo "  Testing Installation"
+echo " Testing Installation"
 echo "==================================================================="
 echo ""
-
 if [ -f "models/qwen2.5-7b-instruct-q4_k_m.gguf" ] || [ -f "models/mistral-7b-instruct-v0.3.Q4_K_M.gguf" ]; then
     echo "Running quick inference test..."
     python3 -c "
@@ -212,35 +226,33 @@ fi
 # Final instructions
 echo ""
 echo "==================================================================="
-echo "  Setup Complete!"
+echo " Setup Complete!"
 echo "==================================================================="
 echo ""
 echo "To get started:"
 echo ""
-echo "  1. Activate the virtual environment:"
-echo "     source venv/bin/activate"
+echo " 1. Activate the virtual environment:"
+echo "    source venv/bin/activate"
 echo ""
-echo "  2. Run chat (no need to activate venv):"
-echo "     ./mythos"
+echo " 2. Run chat (no need to activate venv):"
+echo "    ./mythos"
 echo ""
-echo "  3. Or run the web interface:"
-echo "     ./mythos web"
+echo " 3. Or run the web interface:"
+echo "    ./mythos web"
 echo ""
-echo "  4. Run benchmarks:"
-echo "     python3 main.py --mode benchmark"
+echo " 4. Run benchmarks:"
+echo "    python3 main.py --mode benchmark"
 echo ""
-echo "  5. For help:"
-echo "     python3 main.py --help"
+echo " 5. For help:"
+echo "    python3 main.py --help"
 echo ""
 echo "==================================================================="
 echo ""
-
 if [ $VULKAN_SUCCESS -eq 1 ]; then
     echo -e "${GREEN}GPU acceleration (Vulkan) is enabled!${NC}"
 else
     echo -e "${YELLOW}Running in CPU mode. For better performance, ensure Vulkan drivers are installed.${NC}"
 fi
-
 echo ""
 chmod +x "$SCRIPT_DIR/mythos" 2>/dev/null || true
 print_mythos_usage

@@ -13,16 +13,15 @@ rich>=13.0
 # Web UI
 gradio>=4.0
 
-# RAG (Retrieval-Augmented Generation)
-chromadb>=0.4.0
-sentence-transformers>=2.2.0
-
-# Document processing
-PyPDF2>=3.0.0
-
 # Utilities
 numpy>=1.24.0
 tqdm>=4.65.0
+
+# RAG (Retrieval-Augmented Generation) — install with: pip install -e ".[rag]"
+# or: pip install -r requirements-rag.txt
+# chromadb>=0.4.0
+# sentence-transformers>=2.2.0
+# PyPDF2>=3.0.0
 
 # Optional: Fine-tuning (CPU-compatible)
 # torch>=2.0.0

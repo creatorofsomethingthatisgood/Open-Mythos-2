@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
 from pathlib import Path
 from typing import Any, List, Optional
 
@@ -57,9 +59,12 @@ class SaveRequest(BaseModel):
 def create_app(config_path: str = "config.yaml") -> FastAPI:
     app = FastAPI(title="Mythos Local API", version="2.0.5")
 
+    cors_origins = os.getenv("MYTHOS_CORS_ORIGINS", "").split(",")
+    cors_origins = [o.strip() for o in cors_origins if o.strip()] or ["http://localhost:7860", "http://127.0.0.1:7860"]
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -237,11 +242,15 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
 
     @app.get("/api/prompt")
     async def get_prompt(name: str = "default"):
-        prompts_dir = Path("prompts")
-        prompt_file = prompts_dir / f"{name}.txt"
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+            raise HTTPException(400, "Invalid prompt name")
+        prompts_dir = Path("prompts").resolve()
+        prompt_file = (prompts_dir / f"{name}.txt").resolve()
+        if not prompt_file.is_relative_to(prompts_dir):
+            raise HTTPException(400, "Invalid prompt name")
         if prompt_file.exists():
             return PlainTextResponse(prompt_file.read_text())
-        raise HTTPException(404, f"Prompt '{name}' not found")
+        raise HTTPException(404, "Prompt not found")
 
     @app.get("/api/health")
     async def health():
