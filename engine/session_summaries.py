@@ -16,6 +16,7 @@ is unavailable.
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import os
@@ -63,9 +64,13 @@ def _summary_path(session_id: str) -> Path:
     return _summaries_dir() / f"{session_id}.json"
 
 
+_id_counter = itertools.count()
+
+
 def _generate_session_id() -> str:
-    """Generate a unique session ID based on timestamp."""
-    return f"s_{int(time.time() * 1000)}"
+    """Generate a unique session ID. Nanosecond timestamp plus a process-local
+    counter so back-to-back calls within the same tick never collide."""
+    return f"s_{time.time_ns()}_{next(_id_counter)}"
 
 
 # ── engine ──────────────────────────────────────────────────────────────
