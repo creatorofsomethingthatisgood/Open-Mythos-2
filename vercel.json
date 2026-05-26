@@ -2,6 +2,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "git": {
+    "deploymentEnabled": false
+  },
   "installCommand": "npm install",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" }
