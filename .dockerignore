@@ -1,50 +1,198 @@
-# Git
+# --- Git ---
 .git
 .gitignore
+.gitattributes
+.github/
 
-# Python cache
+# --- Python build / cache ---
 __pycache__
+**/__pycache__
 *.pyc
 *.pyo
+*.pyd
+*.egg
 *.egg-info
+.eggs/
 dist/
 build/
-*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
 
-# Virtual environments
+# --- Virtual environments (every name we've ever seen) ---
 venv/
 .venv/
 env/
+ENV/
+.mythos-venv/
+.test-venv/
+*-venv/
+.*-venv/
+venv-*/
 
-# IDE
+# --- Node / frontend (not used by the Python container) ---
+node_modules/
+src/
+api/
+package.json
+package-lock.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+vite.config.ts
+tsconfig.json
+index.html
+*.code-workspace
+.vercel/
+.vercelignore
+
+# --- IDE / editor / AI tool state ---
 .vscode/
 .idea/
+.cursor/
+.windsurf/
+.claude/
+.aider*
+.continue/
+.zed/
+.history/
 *.swp
 *.swo
+*~
 
-# OS files
-.DS_Store
-Thumbs.db
+# --- Secrets, keys, credentials — NEVER ship these in an image ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.kdbx
+*.gpg
+*.asc
+.aws/
+.gcloud/
+.gcp/
+.azure/
+.kube/
+kubeconfig
+kubeconfig.*
+.docker/
+.netrc
+.pypirc
+.git-credentials
+.gitconfig.local
+.hf_token
+huggingface_token*
+.openai_key
+.anthropic_key
+*secret*.json
+*secrets*.yaml
+*secrets*.yml
+*credentials*.json
+*credentials*.yaml
+token.txt
+tokens.txt
+auth.json
 
-# Node (not needed in Docker)
-node_modules/
-
-# Data (mount these as volumes instead)
+# --- User runtime data (mount as volumes, don't bake in) ---
 conversations/
 chroma_db/
 rag_docs/
+sessions/
+session_summaries/
+rml_preferences.json
+bitacora/
+mythos_home/
+.mythos/
 
-# Large model files (mount as volume)
+# --- Local models (~4.5 GB — mount instead) ---
 models/*.gguf
+models/*.bin
+models/*.safetensors
+models/.cache/
+.cache/
+offline-bundle/
 
-# Documentation (not needed at runtime)
+# --- Benchmarks and LoRA outputs (user data) ---
+benchmarks/*
+!benchmarks/.gitkeep
+lora/*
+!lora/.gitkeep
+
+# --- Logs and personal scratch ---
+*.log
+mythos.log
+scratch/
+tmp/
+_tmp/
+.tmp/
+TODO.local
+TODO.local.*
+NOTES.local
+NOTES.local.*
+*.local.md
+*.local.txt
+*.scratch
+*.bak
+*.orig
+*.rej
+*.dump
+*.sql.dump
+*.pcap
+*.har
+
+# --- OS files ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# --- Documentation (README is included via re-add below) ---
 *.md
 !README.md
 LICENSE
 CONTRIBUTING.md
 
-# Scripts not needed in container
-scripts/
+# --- Root-level marketing / scratch docs (not needed in image) ---
+FINAL_INSTRUCTIONS.txt
+FINAL_SUMMARY.md
+FIXED_README.txt
+START_HERE.txt
+RUN_THIS.txt
+CHECKLIST.txt
+CODING_ACTIVATED.txt
+CODING_GUIDE.md
+ELITE_CODING_MODE.txt
+README_SIMPLE.md
 
-# Test files
+# --- Scripts / setup files not needed at runtime ---
+scripts/
+setup-windows.ps1
+setup-macos.sh
+test_coding.sh
+verify_setup.sh
+verify_coding_mode.sh
+show_config.sh
+show_download_url.py
+test_download.py
+debug_config.py
+run_chat.sh
+run_web.sh
+
+# --- Tests ---
 tests/
+
+# --- Docker build artifacts (avoid recursive copy if BuildKit cache lives in tree) ---
+Dockerfile
+.dockerignore
+docker-compose*.yml
