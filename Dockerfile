@@ -54,8 +54,17 @@ RUN pip install --upgrade pip setuptools wheel
 WORKDIR /app
 
 # Dependency layer: only invalidated when manifests change.
+#
+# Pull llama-cpp-python from abetlen's prebuilt CPU wheel index instead of
+# compiling from source. Source-builds the CPU-only wheel take 15-25 min,
+# burn the CPU at full parallelism, and have been observed to fail with a
+# g++ ICE on heat-stressed build hosts. The prebuilt index serves
+# manylinux wheels for python 3.10/3.11/3.12 directly. PyPI is kept as
+# the primary index so every other dep resolves normally.
 COPY requirements.txt pyproject.toml ./
-RUN pip install -r requirements.txt
+RUN pip install \
+        --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+        -r requirements.txt
 
 # Source layer.
 COPY . .
@@ -70,7 +79,8 @@ FROM python:${PYTHON_VERSION}-slim-${DEBIAN_RELEASE} AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/mythos-venv/bin:${PATH}" \
-    MYTHOS_HOME=/home/mythos/.config/mythos
+    MYTHOS_HOME=/home/mythos/.config/mythos \
+    MYTHOS_HOST=0.0.0.0
 
 # libgomp1 is needed at runtime by llama-cpp-python (OpenMP threading).
 RUN apt-get update && apt-get install -y --no-install-recommends \
