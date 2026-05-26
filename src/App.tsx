@@ -172,6 +172,8 @@ export default function App() {
           if (lastAssistant) {
             navigator.clipboard.writeText(lastAssistant.content).then(() => {
               setStatusText("Last response copied to clipboard");
+            }).catch(() => {
+              setStatusText("Failed to copy to clipboard");
             });
           } else {
             setStatusText("No assistant response to copy");

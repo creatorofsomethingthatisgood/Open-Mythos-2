@@ -7,7 +7,9 @@ flaws are reported but not auto-edited.
 
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -39,8 +41,13 @@ class FixResult:
 def _fix_line(rule_id: str, line: str) -> Tuple[str, Optional[str]]:
     """Return (new_line, detail) or (line, None) if no change."""
     if rule_id == "SEC008":
-        if "yaml.load(" in line and "safe_load" not in line:
-            new = line.replace("yaml.load(", "yaml.safe_load(")
+        # Match yaml.load( but not yaml.safe_load( or lines that are comments
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            return line, None
+        m = re.search(r"\byaml\.load\s*\(", line)
+        if m and "safe_load" not in line:
+            new = re.sub(r"\byaml\.load\s*\(", "yaml.safe_load(", line)
             return new, "yaml.load → yaml.safe_load"
         return line, None
 
@@ -102,17 +109,16 @@ def apply_fixes_to_file(
         if f.rule_id not in SKIP_RULES
         and (f.path == rel_name or str(filepath).endswith(f.path))
     ]
-    # Dedupe by line — one fix attempt per line
-    by_line: dict[int, Finding] = {}
+    # Group by line — multiple findings per line are applied iteratively
+    by_line: dict[int, List[Finding]] = {}
     for f in applicable:
-        if f.line not in by_line:
-            by_line[f.line] = f
+        by_line.setdefault(f.line, []).append(f)
 
     if not by_line:
         return results
 
     try:
-        lines = filepath.read_text(encoding="utf-8", errors="ignore").splitlines(keepends=True)
+        lines = filepath.read_text(encoding="utf-8", errors="surrogateescape").splitlines(keepends=True)
     except OSError as exc:
         return [
             FixResult(
@@ -126,57 +132,77 @@ def apply_fixes_to_file(
 
     changed = False
     for lineno in sorted(by_line.keys()):
-        finding = by_line[lineno]
+        findings_for_line = by_line[lineno]
         idx = lineno - 1
         if idx < 0 or idx >= len(lines):
-            results.append(
-                FixResult(
-                    rule_id=finding.rule_id,
-                    path=finding.path,
-                    line=lineno,
-                    status="skipped",
-                    detail="Line out of range",
+            for finding in findings_for_line:
+                results.append(
+                    FixResult(
+                        rule_id=finding.rule_id,
+                        path=finding.path,
+                        line=lineno,
+                        status="skipped",
+                        detail="Line out of range",
+                    )
                 )
-            )
             continue
 
         old = lines[idx]
-        new, detail = _fix_line(finding.rule_id, old.rstrip("\n\r"))
-        if not detail or new == old.rstrip("\n\r"):
+        current = old.rstrip("\n\r")
+        for finding in findings_for_line:
+            new, detail = _fix_line(finding.rule_id, current)
+            if not detail or new == current:
+                results.append(
+                    FixResult(
+                        rule_id=finding.rule_id,
+                        path=finding.path,
+                        line=lineno,
+                        status="skipped",
+                        detail="No safe automatic fix for this pattern",
+                        before=old.strip(),
+                    )
+                )
+                continue
+
             results.append(
                 FixResult(
                     rule_id=finding.rule_id,
                     path=finding.path,
                     line=lineno,
-                    status="skipped",
-                    detail="No safe automatic fix for this pattern",
+                    status="applied" if not dry_run else "pending",
+                    detail=detail,
                     before=old.strip(),
+                    after=new.strip(),
                 )
             )
-            continue
+            current = new
+            changed = True
 
-        newline = new
-        if old.endswith("\n"):
-            newline += "\n"
-        elif old.endswith("\r\n"):
-            newline += "\r\n"
-
-        results.append(
-            FixResult(
-                rule_id=finding.rule_id,
-                path=finding.path,
-                line=lineno,
-                status="applied" if not dry_run else "pending",
-                detail=detail,
-                before=old.strip(),
-                after=newline.strip(),
-            )
-        )
-        lines[idx] = newline
-        changed = True
+        if current != old.rstrip("\n\r"):
+            newline = current
+            if old.endswith("\r\n"):
+                newline += "\r\n"
+            elif old.endswith("\n"):
+                newline += "\n"
+            lines[idx] = newline
 
     if changed and not dry_run:
-        filepath.write_text("".join(lines), encoding="utf-8")
+        # Atomic write: write to temp file then rename to avoid corruption
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=str(filepath.parent), suffix=".tmp")
+        try:
+            os.write(tmp_fd, "".join(lines).encode("utf-8", errors="surrogateescape"))
+            os.close(tmp_fd)
+            os.replace(tmp_path, str(filepath))
+        except BaseException:
+            try:
+                os.close(tmp_fd)
+            except OSError:
+                pass
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     return results
 
@@ -193,8 +219,21 @@ def apply_fixes_to_tree(
     for f in findings:
         by_file.setdefault(f.path, []).append(f)
 
+    resolved_root = root.resolve()
     for rel, file_findings in by_file.items():
         full = (root / rel).resolve()
+        # C-3 fix: prevent path traversal — file must be under scan root
+        if not str(full).startswith(str(resolved_root) + os.sep) and full != resolved_root:
+            all_results.append(
+                FixResult(
+                    rule_id="",
+                    path=rel,
+                    line=0,
+                    status="skipped",
+                    detail="Path escapes scan root — possible path traversal",
+                )
+            )
+            continue
         if not full.is_file():
             all_results.append(
                 FixResult(

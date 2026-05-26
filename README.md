@@ -112,13 +112,13 @@ git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
 cd Open-Mythos-2
 
 # One-time setup (installs deps, builds llama-cpp-python with Vulkan/CPU fallback)
-./setup.sh
+sudo bash setup.sh
 
 # Download the model (~4.5 GB, first time only)
-./mythos model download
+mythos model download
 
 # Start chatting
-./mythos
+mythos
 ```
 
 > **Note:** `./setup.sh` is optimized for Fedora (`dnf`). On Ubuntu/Debian, it will warn but still work — system deps may need manual install:
@@ -136,9 +136,9 @@ cd Open-Mythos-2
 sudo pacman -S --needed python python-pip gcc make cmake vulkan-headers vulkan-icd-loader openblas
 
 # Run setup
-./setup.sh
-./mythos model download
-./mythos
+sudo bash setup.sh
+mythos model download
+mythos
 ```
 
 **Fedora:**
@@ -148,9 +148,9 @@ git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
 cd Open-Mythos-2
 
 # One-command setup (Fedora-optimized, includes Vulkan GPU support)
-./setup.sh
-./mythos model download
-./mythos
+sudo bash setup.sh
+mythos model download
+mythos
 ```
 
 **Offline / Air-gapped machines:**

@@ -195,8 +195,6 @@ auth.json
 .cursor/
 .windsurf/
 .aider*
-<<<<<<< HEAD
-
 # --- Contributor safeguards ---
 # AI / IDE state
 .claude/
@@ -269,4 +267,4 @@ coverage.xml
 *.private.*
 private/
 PRIVATE/
->>>>>>> 37e416edbebb16d1430aaff28f9b0e9d7ee0f664
+.test-venv/

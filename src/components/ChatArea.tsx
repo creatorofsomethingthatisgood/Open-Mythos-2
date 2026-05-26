@@ -76,7 +76,9 @@ function formatInlineMarkdown(text: string): string {
   let html = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
   html = html.replace(
     /`([^`]+)`/g,
@@ -190,7 +192,7 @@ export function ChatArea({
   const bottomRef = useRef<HTMLDivElement>(null);
   const handleCopyMessage = useCallback(
     (text: string) => {
-      navigator.clipboard.writeText(text);
+      navigator.clipboard.writeText(text).catch(() => {});
     },
     []
   );

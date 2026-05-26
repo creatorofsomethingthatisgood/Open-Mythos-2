@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo } from "react";
 import hljs from "highlight.js";
 
 interface CodeBlockProps {
@@ -19,23 +19,25 @@ export function CodeBlock({
   fontSize,
 }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
-  const codeRef = useRef<HTMLElement>(null);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    }).catch(() => {});
   }, [code]);
 
   const langLabel = language || "text";
   const langIcon = getLangIcon(langLabel);
 
-  useEffect(() => {
-    if (codeRef.current) {
-      hljs.highlightElement(codeRef.current);
+  const highlightedHtml = useMemo(() => {
+    try {
+      const result = hljs.highlight(code, { language: langLabel });
+      return result.value;
+    } catch {
+      return code;
     }
-  }, [code, language]);
+  }, [code, langLabel]);
 
   const lines = code.split("\n");
   const lineNums = showLineNumbers ? (

@@ -27,8 +27,12 @@ async function proxy(path: string, req: VercelRequest, res: VercelResponse) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // Enable CORS — restrict to configured origin; default to same-origin
+  const corsOrigin = process.env.MYTHOS_CORS_ORIGIN || "";
+  if (corsOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", corsOrigin);
+    res.setHeader("Vary", "Origin");
+  }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -37,5 +41,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const subpath = (req.query?.path as string) || "";
+  // Prevent path traversal — reject anything that could escape /api/
+  if (subpath.includes("..") || subpath.includes("\0")) {
+    return res.status(400).json({ error: "Invalid path" });
+  }
   await proxy(`/api/${subpath}`, req, res);
 }
