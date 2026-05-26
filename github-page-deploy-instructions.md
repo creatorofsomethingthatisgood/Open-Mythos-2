@@ -1,319 +1,313 @@
 # GitHub Pages Deployment — Assessment & Instructions
 
-A practical guide for deploying the Open-Mythos-2 web frontend to GitHub Pages (free tier). Read the **assessment** first — there's a real architectural mismatch you should understand before doing the work.
+**Scope (corrected):** The GitHub Pages site is a **public landing / reference page** — project description, badges, fork & star rosters, attribution, contribution pointer. It is **not** a deployed copy of the interactive chat UI. The React app under `src/` and the serverless proxy under `api/` continue to target **Vercel**, where the chat can actually call a backend; GH Pages serves a static, theme-rendered version of the README plus optional extra pages.
 
 ---
 
 ## 1. Assessment
 
-### What's in `src/` today
+### What we have that's relevant
 
-| Piece | What it is |
-|---|---|
-| `src/main.tsx` | React 19 entry point. |
-| `src/App.tsx` | Main chat UI shell (~530 lines). |
-| `src/api.ts` | All HTTP calls — hardcoded `const API_BASE = "/api"`. Hits `/api/chat`, `/api/prompt`, `/api/clear`, `/api/export`, `/api/save`, `/api/rag-upload`. |
-| `src/components/` | `ChatArea`, `InputBar`, `CommandPalette`, `SettingsPanel`, `CodeBlock`, `ThinkingBlock`, `ExportModal`, `QuickActions`, `ModeSelector`, `StatusBar`. |
-| `src/index.css` | Tailwind v4 styles. |
-| `index.html` | Single root div + `/src/main.tsx` script tag. |
+| Asset | Role on GH Pages |
+| --- | --- |
+| `README.md` | The landing page. Already has the ASCII banner, badges, stars/forks roster, feature table, install instructions, command reference, supporter shoutout. Render this with a Jekyll theme and the site is essentially done. |
+| `src/` (React) | **Not deployed to Pages.** Stays for Vercel. |
+| `api/index.ts` (Vercel serverless) | **Not deployed to Pages.** Stays for Vercel. |
+| `vercel.json` | **Not deployed to Pages.** Stays for Vercel. |
+| `LICENSE` (Unlicense) | Linked from the badge; Jekyll picks it up automatically. |
 
-Build toolchain (from `package.json` + `vite.config.ts`):
+### Why this is much easier than I first wrote
 
-- **Vite 7** + `@vitejs/plugin-react` + `@tailwindcss/vite` + **`vite-plugin-singlefile`**.
-- `vite build` produces a self-contained `dist/index.html` with all JS and CSS **inlined** (no separate asset files thanks to `vite-plugin-singlefile`).
+GitHub Pages has built-in Jekyll rendering for the README. You don't need a workflow, a Node build, Vite, or any code changes. **Settings → Pages → Source → "Deploy from a branch" → `main` / root** does ~95 % of the work; picking a theme finishes it.
 
-### How the current architecture is supposed to work
+### What works out of the box from the current README
 
-```
-[ Browser ]  ──HTTP──>  [ Vercel serverless fn /api/index.ts ]  ──HTTP──>  [ Local Python FastAPI on port 7860 ]
-                              ^                                                       ^
-                              |                                                       |
-                              Reads MYTHOS_BACKEND env var                            engine/api_server.py
-```
+- Markdown headings, lists, tables, blockquotes — fine.
+- `<div align="center">`, `<details>` / `<summary>`, `<img>` tags — fine (kramdown allows HTML).
+- `https://img.shields.io/...` badges — fine, they're images.
+- `https://reporoster.com/stars/...` and `.../forks/...` rosters — fine, also images.
+- `https://readme-typing-svg.demolab.com/...` animated SVG — fine.
 
-The `api/index.ts` Vercel function is a thin **proxy** that forwards `/api/*` to the user's locally-running Python backend (default `http://localhost:7860`). It exists because Vercel can run server-side code; that's how `vercel.json` is wired (`{ "framework": "vite", "rewrites": [{ "source": "/api/:path*", "destination": "/api/:path*" }] }`).
+### What needs a small touch
 
-### Why GitHub Pages is **not a drop-in replacement**
+- The repo's banner image URL points to `user-attachments/assets/...` which is a private GitHub asset and **may not render anonymously on the Pages domain.** Replace with a committed file under `assets/` or `docs/assets/` if it breaks.
+- One stray double-pipe (`||`) in the feature table (from a recent merge) renders an empty left column. Cosmetic; one-line fix in README.
+- ASCII banner inside `<pre>` is fine in monospace but the Jekyll theme controls the font — pick a theme that uses a monospace `<pre>` style (Cayman, Hacker, Slate all do).
 
-GitHub Pages serves **static files only** — no serverless functions, no proxies, no environment variables for runtime config. If you deploy the current frontend to GH Pages as-is:
+### Cost (GitHub Pages free tier)
 
-- The HTML, CSS, and React app **load fine**.
-- The first `fetch('/api/prompt?name=...')` on app init returns **404** (no such route on Pages).
-- Every chat send returns 404 too.
-- The user sees the UI but the chat is dead.
-
-There is no way to make `/api/*` work on GH Pages without changing the frontend code. **GitHub Pages requires either**:
-
-1. **Option A — static demo only**: ship the UI as a non-functional preview / landing page. Zero code changes. Honest about what it does.
-2. **Option B — configurable backend URL**: small code change (~10 lines) so the frontend points at a user-configurable backend URL instead of `/api`. The user runs Mythos locally on `:7860`, exposes it (CORS already permissive — `engine/api_server.py:62` sets `allow_origins=["*"]`), and types the URL into a settings field on the deployed site.
-3. **Option C — in-browser WASM inference**: out of scope. Would need a different model and a different runtime (llama.cpp WASM build, web-llm, etc.) — a separate, large project.
-
-### Existing alternative the project already supports
-
-`vercel.json` is fully wired and `api/index.ts` already exists. **The path of least resistance for a hosted chat is Vercel, not GitHub Pages** — both are free for public projects, but Vercel runs the proxy you need. If you only deploy to Pages, expect to add Option B or live with Option A.
-
-### Cost & limits (GitHub Pages free tier)
-
-- Free for **public** repositories (private repos need GitHub Pro/Team/Enterprise).
-- Soft limits: **1 GB site size**, **100 GB/month bandwidth**, **10 builds/hour**.
-- Custom domain supported (free), automatic HTTPS via Let's Encrypt.
-- Build time per deploy: ~1–2 min for this project.
+- Free for **public** repos. (Private repos need Pro/Team/Enterprise.)
+- 1 GB site size, 100 GB/month bandwidth, 10 builds/hour — none of which we'll get near with a README site.
+- Custom domain free, HTTPS automatic via Let's Encrypt.
 
 ### Verdict
 
-For the lowest-friction path that actually shows the UI: **Option A + a banner explaining that chat needs a local backend.** Pair the README with a link back to the npm/Docker install instructions. If you want functional chat from the hosted page, do Option B (it's small).
+Use the **"Deploy from a branch"** mode (not "GitHub Actions"). README.md becomes the index. Pick a theme. Optionally add an "Attribution" and "Contributing" page under `/docs`. ~15 minutes of work.
 
 ---
 
 ## 2. Step-by-step instructions
 
-These instructions cover **Option A (static-only deploy, no code changes)** and **Option B (configurable backend URL)**. Pick one; the GH Actions workflow and repo settings are identical for both.
-
 ### Step 0 — Prerequisites
 
-- You're an admin or owner of the `Open-Mythos-2` repo (you need Pages settings access).
-- The repo is **public**, or you have GitHub Pro/Team/Enterprise.
-- You can push to `main` or open PRs that get merged.
+- You're an admin or owner of `creatorofsomethingthatisgood/Open-Mythos-2`.
+- Repo is public (it is).
+- `README.md` is in the repo root (it is).
 
-### Step 1 — Enable GitHub Pages with "GitHub Actions" as source
+### Step 1 — Enable Pages with branch-deploy
 
 1. Go to `https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/settings/pages`.
-2. Under **Build and deployment → Source**, select **GitHub Actions**.
-3. (Don't pick "Deploy from a branch" — that mode is for pre-built static files in a branch. We're building via Actions.)
+2. Under **Build and deployment → Source**, pick **Deploy from a branch**.
+3. Under **Branch**, pick `main` and `/ (root)`. Save.
 
-That's it for now. No save button — the choice is persisted.
+GitHub will queue an initial build using the **default Jekyll theme** (Primer). Within ~30 seconds the page is live at:
 
-### Step 2 — Add the deploy workflow
-
-Create the file `.github/workflows/deploy-pages.yml` with the contents below. Commit + push.
-
-```yaml
-name: Deploy to GitHub Pages
-
-on:
-  # Auto-deploy on push to main
-  push:
-    branches: [main]
-  # Allow manual trigger from the Actions tab
-  workflow_dispatch:
-
-# Required permissions for the Pages deployment
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# Only one Pages deploy at a time; cancel any in-progress when a new one starts
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build site
-        run: npm run build
-        env:
-          # Required when serving from https://<user>.github.io/Open-Mythos-2/
-          # so Vite uses /Open-Mythos-2/ as the base path. See Step 3.
-          VITE_BASE: "/Open-Mythos-2/"
-          # Option B only — point the frontend at the user's local backend.
-          # Leave unset for Option A.
-          # VITE_API_BASE: "http://localhost:7860/api"
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-```
-
-### Step 3 — Tell Vite about the GH Pages base path
-
-The site will live at `https://creatorofsomethingthatisgood.github.io/Open-Mythos-2/` — note the `/Open-Mythos-2/` segment. Vite has to know that base, otherwise asset URLs go wrong (mostly cosmetic with `vite-plugin-singlefile`, but the favicon and any future static imports break).
-
-Edit `vite.config.ts`:
-
-```ts
-import path from "path";
-import { fileURLToPath } from "url";
-import tailwindcss from "@tailwindcss/vite";
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
-import { viteSingleFile } from "vite-plugin-singlefile";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-export default defineConfig({
-  // Use VITE_BASE if set (CI), otherwise '/' for local dev
-  base: process.env.VITE_BASE ?? "/",
-  plugins: [react(), tailwindcss(), viteSingleFile()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "src"),
-    },
-  },
-});
-```
-
-This is the **only mandatory change for Option A**. Local `npm run dev` and `npm run build` still produce a root-served build; the CI deploy gets `/Open-Mythos-2/`.
-
-### Step 4a — Option A: static demo only (no further changes)
-
-You're done. Push the workflow file + `vite.config.ts` change to `main`. The Actions tab will show the deploy job; once green, the site is live at:
-
-```
+```text
 https://creatorofsomethingthatisgood.github.io/Open-Mythos-2/
 ```
 
-The UI loads, but every API call will fail with a 404 / "Failed to fetch" error. Users will see whatever fallback the React app shows — currently a banner saying "Backend unreachable" (rendered from `src/App.tsx` around line 67).
+If you stop here, you already have a working landing page. The rest is polish.
 
-**Recommended**: add a visible note to the deployed page so users know it's a static demo. The lowest-impact way is a banner in `App.tsx` gated on `import.meta.env.VITE_BASE` (i.e., "you're looking at the GH Pages demo — chat is offline; for a working chat, install the npm package or run the Docker image"). That's a small UI tweak, not a backend change.
+### Step 2 — Pick a theme
 
-### Step 4b — Option B: configurable backend URL
+Two ways. Either works.
 
-This is the path to a **functional chat** from the deployed page. Two minor edits.
+**Option A — Theme chooser UI (fastest).**
 
-**1. Make `API_BASE` configurable** — edit `src/api.ts`:
+1. Same Pages settings page. Scroll to **Theme**.
+2. Click **Choose a theme**. Pick one (suggestions below).
+3. GitHub commits a `_config.yml` to `main` automatically and rebuilds.
 
-```ts
-import type { Message, Settings } from "./types";
+**Option B — Hand-write `_config.yml`** (if you want more control or you don't want the chooser to push an extra commit).
 
-// Build-time default. Override at runtime by setting
-// localStorage.MYTHOS_API_BASE on the deployed site.
-const DEFAULT_API_BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined) ?? "/api";
-
-function getApiBase(): string {
-  if (typeof window !== "undefined") {
-    const override = window.localStorage.getItem("MYTHOS_API_BASE");
-    if (override) return override.replace(/\/$/, "");
-  }
-  return DEFAULT_API_BASE;
-}
-
-const API_BASE_LAZY = () => getApiBase();
-```
-
-Then replace every `${API_BASE}` template literal in this file with `${API_BASE_LAZY()}`. (One-line search-and-replace.)
-
-**2. Set the build-time default in the workflow** — un-comment the `VITE_API_BASE` line in `.github/workflows/deploy-pages.yml` (Step 2). Example value for a user who runs Mythos locally on port 7860:
+Create `_config.yml` in the repo root:
 
 ```yaml
-VITE_API_BASE: "http://localhost:7860/api"
+# GitHub Pages site configuration
+title: Open Mythos-2
+description: Fully local, offline AI that lives in your terminal. No API keys, no cloud, no limits.
+theme: jekyll-theme-cayman          # see suggestions below
+show_downloads: false                # set true to show "Download .zip / .tar.gz" buttons
+google_analytics:                    # optional, leave blank
+plugins:
+  - jekyll-relative-links            # converts ./docs/foo.md links to .html
+  - jekyll-default-layout
+  - jekyll-titles-from-headings
+relative_links:
+  enabled: true
+  collections: false
+include:
+  - README.md
+exclude:
+  - src/
+  - api/
+  - engine/
+  - mythos_cli/
+  - ui/
+  - tests/
+  - scripts/
+  - models/
+  - benchmarks/
+  - lora/
+  - rag_docs/
+  - conversations/
+  - chroma_db/
+  - .test-venv/
+  - venv/
+  - node_modules/
+  - Dockerfile
+  - .dockerignore
+  - package.json
+  - package-lock.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - vite.config.ts
+  - tsconfig.json
+  - vercel.json
+  - "*.sh"
+  - "*.ps1"
+  - "*.txt"
 ```
 
-**3. (Recommended) Add a settings input** — let users override the backend URL from the deployed page without rebuilding. Anywhere in `src/components/SettingsPanel.tsx` add an `<input>` bound to `localStorage.MYTHOS_API_BASE`. The `getApiBase()` helper above already reads from there.
+The `exclude:` list keeps Jekyll from trying to render source code as pages and from blowing up the build with non-markdown files.
 
-**4. Mythos backend's CORS is already permissive** — `engine/api_server.py:60-66` sets `allow_origins=["*"]`, so a browser at `https://...github.io` can call `http://localhost:7860/api/...` directly. Caveat: **mixed content** rules in browsers block `https → http` calls. Users will need either:
-- a browser flag (Chrome: `chrome://flags/#unsafely-treat-insecure-origin-as-secure`), or
-- a tunnel like `cloudflared tunnel` / `ngrok` to expose `localhost:7860` over HTTPS, or
-- run the GH Pages site from `http://...` (not possible — GH Pages forces HTTPS).
+**Theme suggestions for this project:**
 
-The cloudflared-tunnel path is probably the realistic one. Document it in the README.
+| Theme | Vibe | Why it suits Mythos |
+| --- | --- | --- |
+| `jekyll-theme-cayman` | Clean, modern, dark accent | Default-feeling, plays nicely with the centered ASCII banner. |
+| `jekyll-theme-hacker` | Green-on-black terminal | On-brand for a terminal-AI project. The ASCII banner will look great. |
+| `jekyll-theme-slate` | Minimal, dark sidebar | Good for readability; understated. |
+| `jekyll-theme-midnight` | Dark, blueprint feel | Matches the "Mythos / mystical" tone. |
+| `jekyll-theme-architect` | Clean, light, well-typed | Best for users who want a "documentation" feel rather than a "manifesto" feel. |
 
-### Step 5 — Trigger the first deploy
+My pick: **`jekyll-theme-hacker`** — it matches the project's terminal-first identity and renders the ASCII banner well.
 
-After committing the workflow + `vite.config.ts` change (+ optionally the `api.ts` change for Option B), either:
+### Step 3 — (Optional) Add attribution & contribution pages
 
-- Push to `main` — the workflow triggers automatically, or
-- Go to **Actions → Deploy to GitHub Pages → Run workflow** for a manual trigger.
+Create a small `docs/` folder for pages that don't belong in the README.
 
-The first run takes ~2 min (npm install dominates). Subsequent runs are faster thanks to `actions/setup-node@v4`'s npm cache.
+```text
+docs/
+├── attribution.md
+└── contributing.md
+```
 
-### Step 6 — Verify
+**`docs/attribution.md`** — your "attribution ladder":
 
-1. **Actions tab**: the workflow shows two green checks (`build`, `deploy`).
-2. **Deployment URL**: the `deploy` job prints the URL it deployed to in its output.
-3. **Open the URL**: `https://creatorofsomethingthatisgood.github.io/Open-Mythos-2/` should render the app.
-4. **DevTools → Network**: open the page and watch for `/api/*` requests:
-   - Option A: they will 404. UI loads, chat dead. Expected.
-   - Option B: with backend running + CORS reachable, they return 200. Type into chat and check for a model reply.
+```markdown
+---
+title: Attribution & Credits
+---
 
-### Step 7 (optional) — Custom domain
+# Attribution
 
-If you own a domain (e.g., `mythos.example.com`):
+## Maintainer
 
-1. In your DNS provider, add a `CNAME` record from `mythos` → `creatorofsomethingthatisgood.github.io`.
-2. In **Settings → Pages → Custom domain**, enter `mythos.example.com`. Click Save.
-3. Wait for DNS propagation (minutes to an hour). GitHub will provision a Let's Encrypt cert automatically.
+- **[@creatorofsomethingthatisgood](https://github.com/creatorofsomethingthatisgood)** — project lead
+
+## Contributors
+
+See the full list at [Contributors](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/graphs/contributors).
+
+<!-- Optional: contrib.rocks image -->
+[![Contributors](https://contrib.rocks/image?repo=creatorofsomethingthatisgood/Open-Mythos-2)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/graphs/contributors)
+
+## Built on the shoulders of
+
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) — local LLM inference
+- [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) — Python bindings
+- [Qwen2.5](https://huggingface.co/Qwen) — default model family
+- [bartowski](https://huggingface.co/bartowski) — GGUF quantizations
+- [Hugging Face Hub](https://huggingface.co) — model distribution
+- [ChromaDB](https://github.com/chroma-core/chroma) — RAG vector store
+- [sentence-transformers](https://github.com/UKPLab/sentence-transformers) — embeddings
+- [Gradio](https://www.gradio.app) — web UI
+- [Rich](https://github.com/Textualize/rich) — terminal UI
+- [React](https://react.dev) + [Vite](https://vite.dev) + [Tailwind](https://tailwindcss.com) — web frontend
+
+## Supporters & stars
+
+[![Stargazers](https://reporoster.com/stars/creatorofsomethingthatisgood/Open-Mythos-2)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/stargazers)
+
+[![Forkers](https://reporoster.com/forks/creatorofsomethingthatisgood/Open-Mythos-2)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/network/members)
+
+---
+
+[← Back to project](../)
+```
+
+**`docs/contributing.md`** — point at the existing CONTRIBUTING.md (which was added in commit `15f27c2`):
+
+```markdown
+---
+title: Contributing
+---
+
+# Contributing to Open Mythos-2
+
+See the full guide in [CONTRIBUTING.md](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/blob/main/CONTRIBUTING.md).
+
+## Quick links
+
+- [Open an issue](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issues/new)
+- [Browse open PRs](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/pulls)
+- [Discussions](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/discussions)
+
+[← Back to project](../)
+```
+
+These pages will be reachable at:
+
+- `https://creatorofsomethingthatisgood.github.io/Open-Mythos-2/docs/attribution.html`
+- `https://creatorofsomethingthatisgood.github.io/Open-Mythos-2/docs/contributing.html`
+
+Add a small "Project pages" section near the top of the README so the landing page links to them:
+
+```markdown
+**Pages:** [Attribution](docs/attribution.md) · [Contributing](docs/contributing.md) · [Issues](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issues)
+```
+
+### Step 4 — (Optional) Custom domain
+
+1. In your DNS provider, create either:
+   - `CNAME` → `creatorofsomethingthatisgood.github.io` (for a subdomain like `mythos.example.com`), or
+   - 4× `A` records pointing the apex domain to `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`.
+2. Pages settings → **Custom domain** → enter the domain → Save.
+3. GitHub creates a `CNAME` file in the repo root and provisions HTTPS via Let's Encrypt (~10 min).
 4. Tick **Enforce HTTPS**.
-5. **Update `VITE_BASE`** in the workflow from `/Open-Mythos-2/` back to `/` — at a custom domain root, the base is `/`.
 
-### Step 8 (optional) — Branch protection for the Pages source
+### Step 5 — Verify
 
-If `main` is the source for deploys, consider adding branch protection on `main` so only reviewed PRs land:
+1. Open `https://creatorofsomethingthatisgood.github.io/Open-Mythos-2/`.
+2. Check that:
+   - ASCII banner renders in monospace.
+   - Badges (npm, license, version) load.
+   - Stars / forks rosters load (they take a few seconds — `reporoster.com` is third-party).
+   - `<details>` install blocks expand.
+3. Click the `docs/attribution.md` link from the README. It should resolve to `/Open-Mythos-2/docs/attribution.html` (thanks to `jekyll-relative-links` in `_config.yml`).
+4. Pages tab → most recent deploy shows a green check.
 
-1. **Settings → Branches → Add rule**
-2. Branch name pattern: `main`
-3. Tick **Require a pull request before merging**, **Require status checks** (point at the build job).
+### Step 6 — Keep it fresh
+
+The site rebuilds **automatically** every time you push to `main`. No workflow file needed. To trigger a manual rebuild:
+
+- Repo → **Actions → pages-build-deployment → Run workflow**, or
+- Push an empty commit: `git commit --allow-empty -m "rebuild pages" && git push`.
 
 ---
 
 ## 3. Troubleshooting
 
 | Symptom | Cause | Fix |
-|---|---|---|
-| Workflow fails with "Resource not accessible by integration" | Missing Pages permissions on the workflow. | Verify `permissions:` block (Step 2) includes `pages: write` + `id-token: write`. |
-| Workflow fails with "Get Pages site failed" | Pages source not set to "GitHub Actions". | Redo Step 1. |
-| Deployed page is blank, console shows 404 for `/Open-Mythos-2/assets/index-XXX.js` | `vite-plugin-singlefile` is bundling everything inline — should not request external assets. If you see this, the plugin isn't activating; check `vite.config.ts` includes `viteSingleFile()`. | Confirm `plugins: [react(), tailwindcss(), viteSingleFile()]`. |
-| 404 for the page itself (`/Open-Mythos-2/`) | Wrong base path or trailing-slash issue. | Make sure `VITE_BASE` ends with `/` and matches the repo name exactly. |
-| Mixed-content blocked in browser | HTTPS Pages calling HTTP backend (Option B). | Tunnel backend over HTTPS (cloudflared/ngrok), or document the browser flag workaround. |
-| `npm ci` fails on `tar@^7.5.15` or similar | `package-lock.json` out of sync with `package.json`. | Run `npm install` locally, commit the regenerated lockfile. |
-| Build is much larger than expected (>5 MB) | `vite-plugin-singlefile` inlines assets; large images / fonts blow up the HTML. | Audit `src/` for binary imports; offload large assets to a CDN. |
-| Chat says "Backend unreachable" (Option B) | Local Mythos backend not running, or CORS / mixed-content failure. | Run `python main.py --mode web` locally (port 7860); use cloudflared tunnel if accessing via HTTPS. |
+| --- | --- | --- |
+| README image at top (`user-attachments/assets/...`) is broken | GitHub-hosted user attachment URLs sometimes require auth referrer. | Commit the image under `assets/banner.png` and link to it with a relative path. |
+| Stars / forks rosters slow to load | `reporoster.com` is a third-party rendering service. | Acceptable — they cache for 24 h. Or self-host with `contrib.rocks` style images. |
+| Code blocks look broken in Jekyll output | Jekyll uses Rouge syntax highlighter, not GitHub's. | Most languages work; specify them as ` ```bash `, ` ```yaml `, etc. (you already do). |
+| Empty left column in the Features table | A merge introduced lines starting with `\|\|` instead of `\|`. | Edit README.md, replace `\|\|` with `\|`. One-line fix. |
+| `404` on `https://.../Open-Mythos-2/docs/attribution.html` | `jekyll-relative-links` plugin not enabled, or the `.md` file lacks frontmatter. | Add `relative_links` block to `_config.yml` (shown in Step 2) and ensure each `.md` page starts with `---\ntitle: ...\n---`. |
+| Pages deploys but shows the raw README without theme | `_config.yml` missing or has wrong `theme:` value. | Use one of the supported themes (Step 2). Check spelling — `jekyll-theme-hacker`, not `hacker`. |
+| Pages build fails with a Liquid error | Some text in README uses `{{ }}` or `{% %}` syntax that Jekyll's Liquid parser tries to interpret. | Wrap that text in `{% raw %}...{% endraw %}` blocks. |
+| Custom domain says "domain not properly configured" | DNS hasn't propagated, or CNAME points at the wrong target. | Wait 10 min; verify with `dig +short mythos.example.com`. |
 
 ---
 
 ## 4. Quick reference
 
-**Files this introduces / changes:**
+**Files this introduces (all minimal):**
 
-| File | Option A | Option B |
-|---|---|---|
-| `.github/workflows/deploy-pages.yml` | new | new |
-| `vite.config.ts` | edit (add `base`) | edit (add `base`) |
-| `src/api.ts` | no change | edit (~10 lines) |
-| `src/components/SettingsPanel.tsx` | no change | optional edit (backend URL input) |
-| `src/App.tsx` | optional banner | optional banner |
+| File | Purpose | Required? |
+| --- | --- | --- |
+| `_config.yml` | Theme + Jekyll plugins + exclude list | Recommended (auto-created by theme chooser if you skip writing it) |
+| `docs/attribution.md` | Attribution ladder page | Optional |
+| `docs/contributing.md` | Pointer to CONTRIBUTING.md | Optional |
+| `assets/banner.png` | Self-hosted banner if user-attachments URL breaks | Only if needed |
+
+**Files this does NOT touch:**
+
+- `src/` (React app — stays for Vercel)
+- `api/index.ts` (serverless proxy — stays for Vercel)
+- `vercel.json`, `vite.config.ts`, `package.json` — all unchanged
+- `Dockerfile`, `.dockerignore` — unrelated to Pages
+- The Python backend — unrelated to Pages
 
 **Site URL:** `https://creatorofsomethingthatisgood.github.io/Open-Mythos-2/`
 
-**Build command CI runs:** `npm ci && npm run build` with `VITE_BASE=/Open-Mythos-2/`
+**Pages source:** `main` branch, `/` (root). README.md is the index.
 
-**Deploy trigger:** push to `main` (or manual via Actions tab).
+**Rebuild trigger:** any push to `main`.
 
-**Rollback:** re-run a previous workflow from the Actions tab, or revert the bad commit on `main`.
+**Rollback:** revert the offending commit on `main`. Pages rebuilds within ~30 s.
 
 ---
 
-## 5. What I'd actually recommend
+## 5. What stays where
 
-1. **If goal is "have a public URL for screenshots / npm landing page" → Option A.** ~15 min of work. Honest banner. Done.
-2. **If goal is "let people try Mythos from a browser without installing" → Vercel, not Pages.** The existing `vercel.json` + `api/index.ts` already work; users still need to run the Python backend locally (the Vercel function proxies to `localhost:7860`), but the wiring is in place. Add a `vercel deploy` button to the README and you're done.
-3. **If you really want GH Pages + functional chat → Option B + cloudflared tunnel.** Documented above. Most setup work falls on the end user.
-4. **In-browser WASM inference** is interesting but a separate project — not GH Pages work.
+| Surface | Target | Why |
+| --- | --- | --- |
+| **Public landing / attribution / reference** (this doc) | **GitHub Pages**, free, README-driven Jekyll | Static, public, free, automatic. |
+| **Interactive chat UI** (`src/`) | **Vercel** (or self-hosted) | Needs the `api/index.ts` serverless proxy to reach the user's local Python backend. GH Pages can't host it. |
+| **Terminal chat / scanner** (`mythos_cli`, `engine`, `ui/terminal_ui.py`) | npm install / Docker / `setup.sh` | Runs on user's machine. |
+| **Web UI for chat** (`ui/web_ui.py` Gradio) | User's localhost on port 7860 | Started with `mythos web`. |
+
+Each surface has its own deploy path; nothing overlaps.
