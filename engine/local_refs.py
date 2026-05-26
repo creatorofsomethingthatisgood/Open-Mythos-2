@@ -211,13 +211,7 @@ def _format_findings(findings: List[Any], limit: int = 40) -> str:
         return "No static rule matches (run deeper review for logic flaws)."
     lines = ["STATIC SCAN FINDINGS:"]
     for f in findings[:limit]:
-<<<<<<< HEAD
-        snippet = f.snippet
-        if f.rule_id in SECRET_RULES:
-            snippet = "<redacted>"
-=======
         snippet = _REDACTED_SNIPPET if f.rule_id in SECRET_RULES else f.snippet
->>>>>>> 37e416edbebb16d1430aaff28f9b0e9d7ee0f664
         lines.append(
             f"- [{f.severity.upper()}] {f.rule_id} {f.path}:{f.line} — {f.title}\n"
             f"  {snippet}\n  Fix: {f.recommendation}"
@@ -347,21 +341,12 @@ def build_local_file_context(
                     content, err = _read_file_block(fp, max_file_bytes)
                     if err:
                         continue
-<<<<<<< HEAD
-                    # Redact any secret-bearing lines before embedding the file body.
-                    dir_file_findings = scan_file(fp, target) if scan_file else []
-                    content = _redact_secret_lines(content, dir_file_findings, line_offset=1)
-                    blocks.append(content)
-                    if dir_file_findings:
-                        blocks.append(_format_findings(dir_file_findings))
-=======
                     file_findings = scan_file(fp, target) if scan_file else []
                     # _read_file_block prepends a 1-line "--- FILE: ... ---" header
                     content = _redact_secret_lines(content, file_findings, line_offset=1)
                     blocks.append(content)
                     if scan_file:
                         blocks.append(_format_findings(file_findings))
->>>>>>> 37e416edbebb16d1430aaff28f9b0e9d7ee0f664
                     files_loaded += 1
                     loaded_from_dir += 1
                     notices.append(f"Loaded {fp}")
@@ -390,15 +375,7 @@ def build_local_file_context(
 
         section_parts = [content]
         if static_scan and scan_file:
-<<<<<<< HEAD
-            findings = scan_file(target, target.parent)
-            # Redact secret-bearing lines in the embedded file body.
-            content = _redact_secret_lines(content, findings, line_offset=1)
-            section_parts = [content]
-            section_parts.append(_format_findings(findings))
-=======
             section_parts.append(_format_findings(file_findings))
->>>>>>> 37e416edbebb16d1430aaff28f9b0e9d7ee0f664
         blocks.append("\n\n".join(section_parts))
         files_loaded += 1
         notices.append(f"Loaded {target}")

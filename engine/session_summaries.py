@@ -65,14 +65,6 @@ def _summary_path(session_id: str) -> Path:
     return _summaries_dir() / f"{session_id}.json"
 
 
-<<<<<<< HEAD
-_session_id_counter = itertools.count()
-
-
-def _generate_session_id() -> str:
-    """Generate a unique session ID based on nanosecond timestamp + counter."""
-    return f"s_{time.time_ns()}_{next(_session_id_counter)}"
-=======
 _id_counter = itertools.count()
 
 
@@ -80,7 +72,6 @@ def _generate_session_id() -> str:
     """Generate a unique session ID. Nanosecond timestamp plus a process-local
     counter so back-to-back calls within the same tick never collide."""
     return f"s_{time.time_ns()}_{next(_id_counter)}"
->>>>>>> 37e416edbebb16d1430aaff28f9b0e9d7ee0f664
 
 
 # ── engine ──────────────────────────────────────────────────────────────

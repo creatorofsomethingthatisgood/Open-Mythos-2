@@ -496,7 +496,7 @@ class WebUI:
         demo.launch(
             share=share,
             server_port=port,
-            server_name="0.0.0.0",
+            server_name=os.environ.get("MYTHOS_HOST", "127.0.0.1"),
             theme=gr.themes.Soft(),
         )
 
