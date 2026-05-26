@@ -55,6 +55,41 @@ TEXT_EXTENSIONS = {
     ".md", ".txt", ".csv", ".xml", ".css", ".scss",
 }
 
+# Rules whose findings carry the literal secret on the matched line. We mask
+# those lines (and their snippets) before embedding file contents into a
+# prompt so secrets are not sent to the model.
+SECRET_RULES = frozenset({"SEC001", "SEC002", "SEC003", "SEC004", "SEC005", "SEC014"})
+
+_REDACTED_LINE = "<redacted: secret flagged by static scan>"
+_REDACTED_SNIPPET = "<redacted>"
+
+
+def _redact_secret_lines(
+    text: str,
+    findings: List[Any],
+    line_offset: int = 0,
+) -> str:
+    """Replace lines flagged by SECRET_RULES with a redaction marker.
+
+    line_offset: lines of header prepended to `text` before the file body
+    (finding.line is 1-based against the body, so body-line N maps to
+    text-line N + line_offset).
+    """
+    secret_lines = {
+        f.line + line_offset for f in findings
+        if getattr(f, "rule_id", "") in SECRET_RULES and getattr(f, "line", 0) > 0
+    }
+    if not secret_lines:
+        return text
+    out: List[str] = []
+    for idx, line in enumerate(text.splitlines(keepends=True), start=1):
+        if idx in secret_lines:
+            ending = "\n" if line.endswith(("\n", "\r")) else ""
+            out.append(f"{_REDACTED_LINE}{ending}")
+        else:
+            out.append(line)
+    return "".join(out)
+
 
 def _strip_ref(raw: str) -> str:
     return raw.strip().strip(".,;:!?\"'`)")
@@ -127,9 +162,10 @@ def _format_findings(findings: List[Any], limit: int = 40) -> str:
         return "No static rule matches (run deeper review for logic flaws)."
     lines = ["STATIC SCAN FINDINGS:"]
     for f in findings[:limit]:
+        snippet = _REDACTED_SNIPPET if f.rule_id in SECRET_RULES else f.snippet
         lines.append(
             f"- [{f.severity.upper()}] {f.rule_id} {f.path}:{f.line} — {f.title}\n"
-            f"  {f.snippet}\n  Fix: {f.recommendation}"
+            f"  {snippet}\n  Fix: {f.recommendation}"
         )
     if len(findings) > limit:
         lines.append(f"... and {len(findings) - limit} more findings")
@@ -256,9 +292,12 @@ def build_local_file_context(
                     content, err = _read_file_block(fp, max_file_bytes)
                     if err:
                         continue
+                    file_findings = scan_file(fp, target) if scan_file else []
+                    # _read_file_block prepends a 1-line "--- FILE: ... ---" header
+                    content = _redact_secret_lines(content, file_findings, line_offset=1)
                     blocks.append(content)
                     if scan_file:
-                        blocks.append(_format_findings(scan_file(fp, target)))
+                        blocks.append(_format_findings(file_findings))
                     files_loaded += 1
                     loaded_from_dir += 1
                     notices.append(f"Loaded {fp}")
@@ -279,10 +318,15 @@ def build_local_file_context(
             notices.append(err)
             continue
 
+        file_findings: List[Any] = []
+        if static_scan and scan_file:
+            file_findings = scan_file(target, target.parent)
+            # _read_file_block prepends a 1-line "--- FILE: ... ---" header
+            content = _redact_secret_lines(content, file_findings, line_offset=1)
+
         section_parts = [content]
         if static_scan and scan_file:
-            findings = scan_file(target, target.parent)
-            section_parts.append(_format_findings(findings))
+            section_parts.append(_format_findings(file_findings))
         blocks.append("\n\n".join(section_parts))
         files_loaded += 1
         notices.append(f"Loaded {target}")
