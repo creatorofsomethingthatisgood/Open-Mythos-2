@@ -490,3 +490,6 @@ See [Issues](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issue
 [![Star History Chart](https://api.star-history.com/svg?repos=creatorofsomethingthatisgood/Open-Mythos-2&type=Date)](https://star-history.com/#creatorofsomethingthatisgood/Open-Mythos-2&Date)
 
 </div>
+
+
+Disclaimer theese answers may not be true by the model.
