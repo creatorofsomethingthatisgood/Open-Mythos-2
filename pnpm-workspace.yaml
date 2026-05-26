@@ -3,6 +3,6 @@ allowBuilds:
   open-mythos-2: true
 minimumReleaseAge: 0
 minimumReleaseAgeExclude:
-  - open-mythos-2@2.0.0
+  - open-mythos-2@2.0.5
 overrides:
   open-mythos-2: 'link:'

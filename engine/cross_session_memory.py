@@ -285,6 +285,11 @@ class CrossSessionMemory:
 
         transcript = "\n".join(transcript_parts)
         if len(transcript) < 50:
+<<<<<<< HEAD
+=======
+            # Transcript too short to be worth an LLM call, but the heuristic
+            # can still pick up self-referential statements like "I prefer X".
+>>>>>>> 37e416edbebb16d1430aaff28f9b0e9d7ee0f664
             return self._extract_heuristic(messages)
 
         extraction_prompt = (
