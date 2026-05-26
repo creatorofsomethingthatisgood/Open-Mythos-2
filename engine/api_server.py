@@ -55,7 +55,7 @@ class SaveRequest(BaseModel):
 # --- App ---
 
 def create_app(config_path: str = "config.yaml") -> FastAPI:
-    app = FastAPI(title="Mythos Local API", version="0.2.0")
+    app = FastAPI(title="Mythos Local API", version="2.0.5")
 
     app.add_middleware(
         CORSMiddleware,
