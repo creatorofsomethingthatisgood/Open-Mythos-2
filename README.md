@@ -1,11 +1,11 @@
-<img width="845" height="372" alt="Screenshot from 2026-05-24 20-57-50" src="https://github.com/user-attachments/assets/8e3b6a5b-117a-41c6-afbb-394e5cb8c023" />
 <div align="center">
+
 <pre>
-                  ██████╗ ██████╗ ███████╗███╗   ██╗
-                 ██╔═══██╗██╔══██╗██╔════╝████╗  ██║
-                 ██║   ██║██████╔╝█████╗  ██╔██╗ ██║
-                 ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║
-                 ╚██████╔╝██║     ███████╗██║ ╚████║
+                  ██████╗ ██████╗ ███████╗ ███╗   ██╗
+                 ██╔═══██╗██╔══██╗██╔════╝ ████╗  ██║
+                 ██║   ██║██████╔╝█████╗   ██╔██╗ ██║
+                 ██║   ██║██╔═══╝ ██╔══╝   ██║╚██╗██║
+                 ╚██████╔╝██║     ███████╗ ██║ ╚████║
                   ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝
 ███╗   ███╗██╗   ██╗████████╗██╗  ██╗ ██████╗ ███████╗       ██████╗
 ████╗ ████║╚██╗ ██╔╝╚══██╔══╝██║  ██║██╔═══██╗██╔════╝       ╚════██╗
@@ -23,17 +23,40 @@
 
 <br>
 
+<img width="845" height="372" alt="OpenMythos-2 in action" src="https://github.com/user-attachments/assets/8e3b6a5b-117a-41c6-afbb-394e5cb8c023" />
+
+<br>
+
 [![npm published](https://img.shields.io/npm/v/open-mythos-2?style=for-the-badge&label=npm&color=cb3837)](https://www.npmjs.com/package/open-mythos-2)
-[![License: Unlicense](https://img.shields.io/badge/License-Unlicense-gold?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.0.5-blueviolet?style=for-the-badge)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2)
+[![GitHub stars](https://img.shields.io/github/stars/creatorofsomethingthatisgood/Open-Mythos-2?style=for-the-badge&logo=github&color=FFD700&label=Stars)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/creatorofsomethingthatisgood/Open-Mythos-2?style=for-the-badge&logo=github&color=9cf&label=Forks)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/network/members)
+[![License: MIT](https://img.shields.io/badge/License-MIT-gold?style=for-the-badge)](LICENSE)
 [![No API Required](https://img.shields.io/badge/No%20API-Required-darkgreen?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![Runs in Terminal](https://img.shields.io/badge/Runs%20In-Terminal-black?style=for-the-badge&logo=windowsterminal&logoColor=white)]()
 [![Open Source](https://img.shields.io/badge/Open-Source-orange?style=for-the-badge&logo=opensourceinitiative&logoColor=white)]()
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)]()
-[![Stargazers repo roster for @creatorofsomethingthatisgood/Open-Mythos-2](https://reporoster.com/stars/creatorofsomethingthatisgood/Open-Mythos-2)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/stargazers)
-[![Forkers repo roster for @creatorofsomethingthatisgood/Open-Mythos-2](https://reporoster.com/forks/creatorofsomethingthatisgood/Open-Mythos-2)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/network/members)
+
+<br>
+
+**Fully local, offline AI in your terminal. Zero API keys. Zero cloud. Zero limits.**
+
+[Get started in 30 seconds](#-getting-started) · [Features](#-features) · [Commands](#-command-reference) · [RML](#-rml--reinforcement-machine-learning) · [Contributing](#-contributing)
 
 </div>
+
+---
+
+## Why OpenMythos-2?
+
+| | Cloud AI (ChatGPT, Claude, etc.) | **OpenMythos-2** |
+|---|---|---|
+| **Privacy** | Your data leaves your machine | **Everything stays local** |
+| **Cost** | Monthly subscription or per-token fees | **Free forever** |
+| **Offline** | Requires internet | **Works anywhere** |
+| **Setup** | API keys, accounts, billing | **Just run it** |
+| **Customization** | Locked persona & behavior | **RML adapts to you** |
+| **Security scanning** | Separate tool needed | **Built-in SAST + AI audit** |
+
 ---
 
 ## ⚡ What is OpenMythos-2?
@@ -56,16 +79,7 @@ Like Prometheus stealing fire from the gods, OpenMythos-2 brings the fire of AI 
 | 🪶 **Lightweight** | Minimal dependencies, blazing fast startup |
 | 🔓 **Open Source** | Fully transparent and community-driven |
 | 🛡️ **Private by Design** | Your conversations are yours alone |
-|| 🔄 **RML (Reinforcement ML)** | Learns from your feedback and adapts — edits system prompt and generation params to match your preferences | when command is /rml on |
-|| 🐳 **Docker Support** | One-command deployment with Docker — CPU or NVIDIA GPU |
-|| 📝 **Markdown Export** | `/markdown` — export conversations as clean, structured Markdown files |
-|| 🔍 **Conversation Search** | `/search <query>` — find anything in your session history instantly |
-|| 💰 **Cost Estimator** | `/cost` — see token usage and what you'd pay with a cloud API (spoiler: you're saving 100%) |
-|| 🔄 **Model Switching** | `/models` — list and switch between GGUF models without restarting |
-|| 🔁 **Regenerate** | `/redo` — regenerate the last response with a fresh sample |
-|| ✏️ **Edit & Resubmit** | `/edit` — tweak your last message and get a new response |
-|| 🏷️ **Auto-Title** | `/auto-title` — LLM generates a conversation name from context |
-|| 🖥️ **System Info** | `/sysinfo` — hardware diagnostics: CPU, RAM, GPU, Python, model config |
+| 🔄 **RML (Reinforcement ML)** | Learns from your feedback and adapts — edits system prompt and generation params to match your preferences | when command is /rml on |
 
 ## 🌊 The Myth Behind the Machine
 
@@ -143,7 +157,7 @@ cd Open-Mythos-2
 
 ```bash
 # On a connected machine:
-./scripts/mythos-export-data.sh   # creates offline-bundle/ (~4.5 GB)
+./scripts/mythos-export-data.sh # creates offline-bundle/ (~4.5 GB)
 
 # Transfer the bundle to the target machine, then:
 ./scripts/mythos-import-data.sh ./offline-bundle
@@ -275,33 +289,33 @@ mythos
 </details>
 
 <details>
-<summary><strong>🐳 Docker (quickest way to try it)</strong></summary>
+<summary><strong>🐳 Docker (cross-platform — no local deps needed)</strong></summary>
 
 ```bash
-# Clone
-git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git
-cd Open-Mythos-2
-
-# Build (CPU)
-docker build -t mythos .
-
-# Run terminal chat (CPU)
-docker run -it --rm mythos
-
-# Run with NVIDIA GPU acceleration
-docker run -it --rm --gpus all mythos
-
-# Run with persistent config & models
+# Pull and run (CPU-only)
 docker run -it --rm \
-  -v ~/.config/mythos:/root/.config/mythos \
-  -v ./models:/app/models \
-  mythos
+  -v mythos-data:/root/.config/mythos \
+  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest
 
-# Run web UI on port 7860
-docker run -it --rm -p 7860:7860 mythos web --port 7860
+# With NVIDIA GPU acceleration
+docker run -it --rm --gpus all \
+  -v mythos-data:/root/.config/mythos \
+  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest-cuda
+
+# Download model first (one-time)
+docker run -it --rm \
+  -v mythos-data:/root/.config/mythos \
+  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest \
+  mythos model download
+
+# Web UI
+docker run -it --rm -p 7860:7860 \
+  -v mythos-data:/root/.config/mythos \
+  ghcr.io/creatorofsomethingthatisgood/open-mythos-2:latest \
+  mythos web --port 7860
 ```
 
-> **Note:** The Docker image includes all Python dependencies pre-installed. For GPU support, ensure the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) is installed. Mount your models directory to avoid re-downloading.
+> **Note:** Docker avoids the need for local C++ build tools. The CUDA image requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html). Model data persists in the `mythos-data` Docker volume.
 
 </details>
 
@@ -442,5 +456,37 @@ Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
 | `/rml reset` | Reset RML preferences |
 | `/quit` | Exit the chat |
 
-Thank you for the star if you gave one.
+---
 
+## Roadmap
+
+- [ ] Multi-model support (swap between GGUF models in-chat)
+- [ ] MCP (Model Context Protocol) server integration
+- [ ] LoRA fine-tuning from within the CLI
+- [ ] RAG over local documents
+- [ ] Plugin system for community extensions
+- [ ] Voice input/output via Whisper + Coqui TTS
+
+---
+
+## Contributing
+
+We welcome contributions of all kinds — bug fixes, features, docs, and ideas.
+
+1. **Fork** the repo
+2. **Create a branch**: `git checkout -b feature/your-idea`
+3. **Commit your changes**: `git commit -m "Add your idea"`
+4. **Push**: `git push origin feature/your-idea`
+5. **Open a Pull Request**
+
+See [Issues](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issues) for open tasks. Feel free to open a new issue for bugs, feature requests, or questions.
+
+---
+
+<div align="center">
+
+**If OpenMythos-2 speaks to you, leave a star — it helps others find the oracle.**
+
+[![Star History Chart](https://api.star-history.com/svg?repos=creatorofsomethingthatisgood/Open-Mythos-2&type=Date)](https://star-history.com/#creatorofsomethingthatisgood/Open-Mythos-2&Date)
+
+</div>

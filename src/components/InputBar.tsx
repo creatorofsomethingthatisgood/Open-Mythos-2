@@ -1,35 +1,87 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { CommandPalette } from "./CommandPalette";
+import type { SlashCommand } from "../types";
 
 interface InputBarProps {
   onSend: (message: string) => void;
   disabled: boolean;
+  onCommand: (name: string, args: string) => void;
   onQuickAction?: (prompt: string) => void;
 }
 
-export function InputBar({ onSend, disabled }: InputBarProps) {
+export function InputBar({ onSend, disabled, onCommand }: InputBarProps) {
   const [text, setText] = useState("");
   const [mono, setMono] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
+
+    // Slash command detection
+    if (trimmed.startsWith("/")) {
+      const parts = trimmed.split(/\s+/);
+      const cmdName = parts[0].slice(1).toLowerCase();
+      const cmdArgs = parts.slice(1).join(" ");
+      onCommand(cmdName, cmdArgs);
+      setText("");
+      setCommandPaletteOpen(false);
+      setTimeout(() => textareaRef.current?.focus(), 50);
+      return;
+    }
+
     onSend(trimmed);
     setText("");
-    // Refocus textarea
+    setCommandPaletteOpen(false);
     setTimeout(() => textareaRef.current?.focus(), 50);
-  }, [text, disabled, onSend]);
+  }, [text, disabled, onSend, onCommand]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // If command palette is open, let it handle navigation keys
+      if (commandPaletteOpen && text.startsWith("/")) {
+        if (["ArrowUp", "ArrowDown", "Tab"].includes(e.key)) {
+          return; // CommandPalette will handle these via its own listener
+        }
+        if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) {
+          // CommandPalette will handle autocomplete on Enter
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setCommandPaletteOpen(false);
+          return;
+        }
+      }
+
       if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey) {
         e.preventDefault();
         handleSend();
       }
-      // Ctrl+N: new chat (let parent handle)
     },
-    [handleSend]
+    [handleSend, commandPaletteOpen, text]
   );
+
+  const handleCommandSelect = useCallback(
+    (cmd: SlashCommand) => {
+      // Insert command name, keep cursor positioned for args
+      const prefix = cmd.args ? `/${cmd.name} ` : `/${cmd.name}`;
+      setText(prefix);
+      setCommandPaletteOpen(false);
+      setTimeout(() => textareaRef.current?.focus(), 10);
+    },
+    []
+  );
+
+  // Track whether input starts with "/" for command palette
+  useEffect(() => {
+    if (text.startsWith("/")) {
+      setCommandPaletteOpen(true);
+    } else {
+      setCommandPaletteOpen(false);
+    }
+  }, [text]);
 
   // Auto-resize textarea
   const adjustHeight = useCallback(() => {
@@ -47,7 +99,6 @@ export function InputBar({ onSend, disabled }: InputBarProps) {
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
       const pasted = e.clipboardData.getData("text");
-      // Auto-enable mono mode if pasting code
       if (
         pasted.includes("```") ||
         pasted.includes("function ") ||
@@ -67,11 +118,22 @@ export function InputBar({ onSend, disabled }: InputBarProps) {
   const charCount = text.length;
   const lineCount = text.split("\n").length;
 
+  const showPalette = commandPaletteOpen && text.startsWith("/") && !disabled;
+
   return (
     <div className="border-t border-[var(--mythos-border)] bg-[var(--mythos-surface)]">
       {/* Input area */}
       <div className="flex items-end gap-2 px-3 py-2">
         <div className="flex-1 relative">
+          {/* Command palette dropdown */}
+          {showPalette && (
+            <CommandPalette
+              input={text}
+              inputRef={textareaRef}
+              onSelect={handleCommandSelect}
+              onClose={() => setCommandPaletteOpen(false)}
+            />
+          )}
           <textarea
             ref={textareaRef}
             value={text}
@@ -81,7 +143,7 @@ export function InputBar({ onSend, disabled }: InputBarProps) {
             placeholder={
               mono
                 ? "Paste or type code here..."
-                : "Ask Mythos... (Shift+Enter for newline)"
+                : "Ask Mythos... (type / for commands)"
             }
             disabled={disabled}
             rows={3}

@@ -346,3 +346,148 @@ input[type="checkbox"] {
   font-size: 10px;
   line-height: 1.4;
 }
+
+/* ===== COMMAND PALETTE ===== */
+.mythos-command-palette {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  z-index: 50;
+}
+
+.mythos-command-list {
+  background: var(--mythos-surface);
+  border: 1px solid var(--mythos-border);
+  border-radius: 10px;
+  padding: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.mythos-command-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.mythos-command-item:hover,
+.mythos-command-item.selected {
+  background: var(--mythos-accent-dim);
+}
+
+.mythos-command-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mythos-accent2);
+  flex-shrink: 0;
+}
+
+.mythos-command-alias {
+  font-weight: 400;
+  color: var(--mythos-text3);
+  font-size: 11px;
+}
+
+.mythos-command-args {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mythos-text3);
+  flex-shrink: 0;
+}
+
+.mythos-command-desc {
+  font-size: 11px;
+  color: var(--mythos-text2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== HELP OVERLAY ===== */
+.mythos-help-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.mythos-help-modal {
+  background: var(--mythos-surface);
+  border: 1px solid var(--mythos-border);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 640px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px 24px;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+}
+
+.mythos-help-close {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--mythos-border);
+  background: var(--mythos-surface2);
+  color: var(--mythos-text3);
+  cursor: pointer;
+}
+
+.mythos-help-close:hover {
+  background: var(--mythos-surface3);
+  color: var(--mythos-text);
+}
+
+.mythos-help-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mythos-help-category {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mythos-help-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.mythos-help-cmd {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mythos-accent2);
+  flex-shrink: 0;
+  min-width: 90px;
+}
+
+.mythos-help-alias {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mythos-text3);
+  flex-shrink: 0;
+}
+
+.mythos-help-desc {
+  font-size: 12px;
+  color: var(--mythos-text2);
+}
