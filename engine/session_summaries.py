@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import re
+import itertools
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -63,9 +64,12 @@ def _summary_path(session_id: str) -> Path:
     return _summaries_dir() / f"{session_id}.json"
 
 
+_session_id_counter = itertools.count()
+
+
 def _generate_session_id() -> str:
-    """Generate a unique session ID based on timestamp."""
-    return f"s_{int(time.time() * 1000)}"
+    """Generate a unique session ID based on nanosecond timestamp + counter."""
+    return f"s_{time.time_ns()}_{next(_session_id_counter)}"
 
 
 # ── engine ──────────────────────────────────────────────────────────────

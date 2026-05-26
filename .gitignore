@@ -69,6 +69,15 @@ rag_docs/*
 *.pem
 **/flow_keys/
 **/private_key*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.keystore
+credentials.json
+service-account*.json
+.aws/
 
 # Local Mythos CLI test config
 .mythos-test/
@@ -97,3 +106,26 @@ Thumbs.db
 .vercel
 .npmrc
 .aider*
+
+# --- Contributor safeguards ---
+# AI / IDE state
+.claude/
+.cursor/
+.copilot/
+.windsurf/
+.augment/
+# Scratch / temp files
+*.tmp
+*.bak
+*.orig
+*.patch
+# Shell history (may contain secrets in commands)
+.bash_history
+.zsh_history
+.python_history
+# Coverage artifacts
+coverage/
+.nyc_output/
+# Private / local-only files
+*.local
+private/

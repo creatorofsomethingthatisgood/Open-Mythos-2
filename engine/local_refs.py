@@ -7,12 +7,22 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import unquote, urlparse
 
 from engine.chat_config import file_limit, merge_chat_defaults
 
 logger = logging.getLogger(__name__)
+
+# Rule IDs whose findings expose a literal secret on the matched line.
+SECRET_RULES: Set[str] = {
+    "SEC001",  # Private key / PEM block
+    "SEC002",  # AWS access key
+    "SEC003",  # Hardcoded password
+    "SEC004",  # API key / token
+    "SEC005",  # JWT secret / signing key
+    "SEC014",  # Generic secret assignment
+}
 
 
 def _truncate_text(text: str, max_chars: int) -> str:
@@ -122,14 +132,56 @@ def extract_local_refs_from_messages(messages: List[Dict[str, str]]) -> List[str
     return refs
 
 
+def _redact_secret_lines(
+    text: str, findings: List[Any], line_offset: int = 0
+) -> str:
+    """Replace lines flagged by secret rules with a redaction placeholder.
+
+    *line_offset* accounts for extra header lines prepended by the caller
+    (e.g. the ``--- FILE: … ---`` header from ``_read_file_block`` adds 1).
+    """
+    # Collect 0-based line indices (in *text*) that must be redacted.
+    redact_lines: Set[int] = set()
+    for f in findings:
+        if f.rule_id in SECRET_RULES:
+            # f.line is 1-based in the *original* file; shift by offset
+            # to map into the *text* string's line numbering.
+            idx = f.line - 1 + line_offset
+            redact_lines.add(idx)
+            # SEC001 (PEM private key): the BEGIN line is flagged, but the
+            # key body and END line also contain secret material.  Redact
+            # the full PEM block so the base64 payload doesn't leak.
+            if f.rule_id == "SEC001":
+                text_lines = text.split("\n")
+                i = idx
+                while i < len(text_lines):
+                    i += 1
+                    if i < len(text_lines):
+                        redact_lines.add(i)
+                    if i < len(text_lines) and "-----END" in text_lines[i]:
+                        break
+
+    if not redact_lines:
+        return text
+
+    text_lines = text.split("\n")
+    for idx in sorted(redact_lines):
+        if 0 <= idx < len(text_lines):
+            text_lines[idx] = "<redacted: secret flagged by static scan>"
+    return "\n".join(text_lines)
+
+
 def _format_findings(findings: List[Any], limit: int = 40) -> str:
     if not findings:
         return "No static rule matches (run deeper review for logic flaws)."
     lines = ["STATIC SCAN FINDINGS:"]
     for f in findings[:limit]:
+        snippet = f.snippet
+        if f.rule_id in SECRET_RULES:
+            snippet = "<redacted>"
         lines.append(
             f"- [{f.severity.upper()}] {f.rule_id} {f.path}:{f.line} — {f.title}\n"
-            f"  {f.snippet}\n  Fix: {f.recommendation}"
+            f"  {snippet}\n  Fix: {f.recommendation}"
         )
     if len(findings) > limit:
         lines.append(f"... and {len(findings) - limit} more findings")
@@ -256,9 +308,12 @@ def build_local_file_context(
                     content, err = _read_file_block(fp, max_file_bytes)
                     if err:
                         continue
+                    # Redact any secret-bearing lines before embedding the file body.
+                    dir_file_findings = scan_file(fp, target) if scan_file else []
+                    content = _redact_secret_lines(content, dir_file_findings, line_offset=1)
                     blocks.append(content)
-                    if scan_file:
-                        blocks.append(_format_findings(scan_file(fp, target)))
+                    if dir_file_findings:
+                        blocks.append(_format_findings(dir_file_findings))
                     files_loaded += 1
                     loaded_from_dir += 1
                     notices.append(f"Loaded {fp}")
@@ -282,6 +337,9 @@ def build_local_file_context(
         section_parts = [content]
         if static_scan and scan_file:
             findings = scan_file(target, target.parent)
+            # Redact secret-bearing lines in the embedded file body.
+            content = _redact_secret_lines(content, findings, line_offset=1)
+            section_parts = [content]
             section_parts.append(_format_findings(findings))
         blocks.append("\n\n".join(section_parts))
         files_loaded += 1

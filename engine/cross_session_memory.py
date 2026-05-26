@@ -285,7 +285,7 @@ class CrossSessionMemory:
 
         transcript = "\n".join(transcript_parts)
         if len(transcript) < 50:
-            return 0
+            return self._extract_heuristic(messages)
 
         extraction_prompt = (
             "Below is a conversation between a user and an AI assistant. "
