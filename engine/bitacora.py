@@ -76,8 +76,26 @@ class Bitacora:
         lines = self._format_lines(max_lines=max_lines)
         return "\n".join(lines) if lines else "(empty)"
 
-    def render_rich(self, *, max_lines: int = 22) -> str:
-        """Rich markup for Panel body."""
+    def render_rich(self, *, max_lines: int = 22):
+        """Build a Renderable for the bitácora Panel body.
+
+        Entries whose `kind` is "stream" represent the model's thinking
+        state (token streaming during generation). They are rendered
+        center-aligned in the panel, without the `HH:MM:SS` timestamp
+        prefix, to set them apart from operational log lines. Everything
+        else stays left-aligned in the familiar `HH:MM:SS  message` form.
+
+        Returns a `rich.console.Group` so the Panel content can mix
+        alignment per line; the previous markup-string version forced a
+        single justification for the whole block.
+        """
+        # Lazy import: keep bitácora usable in headless / library contexts
+        # where `rich` is not installed; the renderable path is only
+        # exercised by terminal_bitacora.py, which already requires rich.
+        from rich.align import Align
+        from rich.console import Group
+        from rich.text import Text
+
         style_map = {
             "write": "bold green",
             "error": "bold red",
@@ -87,18 +105,36 @@ class Bitacora:
             "stream": "dim italic",
             "info": "white",
         }
-        out: List[str] = []
+
+        renderables: List = []
+
+        if len(self.entries) > max_lines:
+            renderables.append(
+                Text(
+                    f"… {len(self.entries) - max_lines} earlier entries",
+                    style="dim",
+                )
+            )
+
         for entry in self.entries[-max_lines:]:
             style = style_map.get(entry.kind, "white")
-            out.append(
-                f"[dim]{entry.time}[/dim] [{style}]{entry.message}[/{style}]"
-            )
-        if len(self.entries) > max_lines:
-            out.insert(
-                0,
-                f"[dim]… {len(self.entries) - max_lines} earlier entries[/dim]",
-            )
-        return "\n".join(out) if out else "[dim]Waiting for events…[/dim]"
+            if entry.kind == "stream":
+                # Thinking state — centered, drop the timestamp clutter.
+                renderables.append(
+                    Align.center(Text(entry.message, style=style))
+                )
+            else:
+                renderables.append(
+                    Text.assemble(
+                        (entry.time + "  ", "dim"),
+                        (entry.message, style),
+                    )
+                )
+
+        if not renderables:
+            renderables.append(Text("Waiting for events…", style="dim"))
+
+        return Group(*renderables)
 
     def _format_lines(self, *, max_lines: int) -> List[str]:
         visible = self.entries[-max_lines:]

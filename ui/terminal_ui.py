@@ -1519,6 +1519,12 @@ class TerminalUI:
             _partial_close = ("»»»", "»»", "»", "</thinking", "</thinkin", "</thinki", "</think", "</thin", "</thi", "</th", "</t", "</")
             _max_tag_len = 11  # length of "</thinking>" — the longest tag
 
+            # Style applied to the model's answer (non-thinking) output as it
+            # streams. Grey instead of the default terminal foreground so the
+            # answer reads as quieter prose after the bright-yellow thinking
+            # block; users can still copy/paste it normally.
+            _answer_style = "grey70"
+
             def _safe_print(buf: str, in_think: bool) -> str:
                 """Print as much of buf as safe, keeping possible partial tags.
                 Returns the unprinted suffix (potential partial tag)."""
@@ -1530,10 +1536,10 @@ class TerminalUI:
                     for p in partials:
                         if suffix == p or suffix.startswith(p):
                             if i > 0:
-                                style = "yellow italic" if in_think else ""
+                                style = "yellow italic" if in_think else _answer_style
                                 self.console.print(buf[:i], end="", style=style)
                             return buf[i:]
-                style = "yellow italic" if in_think else ""
+                style = "yellow italic" if in_think else _answer_style
                 self.console.print(buf, end="", style=style)
                 return ""
 
@@ -1550,7 +1556,7 @@ class TerminalUI:
 
                     if not thinking_mode:
                         # Normal streaming — no tag processing
-                        self.console.print(chunk, end="")
+                        self.console.print(chunk, end="", style=_answer_style)
                         continue
 
                     # Thinking-mode: process buffer for think-tag display
@@ -1575,10 +1581,18 @@ class TerminalUI:
                             else:
                                 # Print content before the opening tag (if any)
                                 if earliest > 0:
-                                    self.console.print(_display_buf[:earliest], end="")
-                                # Print "Thinking:" header in yellow instead of showing the raw tag
+                                    self.console.print(
+                                        _display_buf[:earliest], end="", style=_answer_style
+                                    )
+                                # Render "<Thinking>" header in place of the raw tag.
+                                # Angle brackets are rendered in black so they
+                                # blend into a dark terminal background; the word
+                                # itself stays highlighted.
                                 if not _think_header_printed:
-                                    self.console.print("\nThinking: ", style="bold yellow", end="")
+                                    self.console.print(
+                                        "\n[black]<[/black][bold yellow]Thinking[/bold yellow][black]>[/black] ",
+                                        end="",
+                                    )
                                     _think_header_printed = True
                                 # Skip the opening tag itself
                                 _display_buf = _display_buf[earliest + tag_len:]
@@ -1613,11 +1627,8 @@ class TerminalUI:
 
                     # Flush any remaining display buffer
                     if _display_buf:
-                        style = "yellow italic" if _in_think else ""
-                        if style:
-                            self.console.print(_display_buf, end="", style=style)
-                        else:
-                            self.console.print(_display_buf, end="")
+                        style = "yellow italic" if _in_think else _answer_style
+                        self.console.print(_display_buf, end="", style=style)
                         _display_buf = ""
                 self.console.print()
 
