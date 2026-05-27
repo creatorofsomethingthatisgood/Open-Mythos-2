@@ -493,6 +493,8 @@ See [Issues](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issue
 
 [![Star History Chart](https://api.star-history.com/svg?repos=creatorofsomethingthatisgood/Open-Mythos-2&type=Date)](https://star-history.com/#creatorofsomethingthatisgood/Open-Mythos-2&Date)
 
+[![Stargazers repo roster for @creatorofsomethingthatisgood/Open-Mythos-2](https://reporoster.com/stars/creatorofsomethingthatisgood/Open-Mythos-2)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/stargazers)
+[![Forkers repo roster for @creatorofsomethingthatisgood/Open-Mythos-2](https://reporoster.com/forks/creatorofsomethingthatisgood/Open-Mythos-2)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/network/members)
 </div>
 
 

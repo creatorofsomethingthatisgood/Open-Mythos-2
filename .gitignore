@@ -260,10 +260,9 @@ coverage.xml
 .coverage.*
 *.prof
 *.profraw
-
-# --- Anything explicitly marked private ---
 *.private
 *.private.*
 private/
 PRIVATE/
 .test-venv/
+mythos_audit.py
