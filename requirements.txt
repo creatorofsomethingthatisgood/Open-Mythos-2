@@ -1,5 +1,7 @@
 # Core LLM inference
 llama-cpp-python>=0.2.0
+# Cloud API support
+httpx>=0.25.0
 
 # Model management
 huggingface_hub>=0.20.0

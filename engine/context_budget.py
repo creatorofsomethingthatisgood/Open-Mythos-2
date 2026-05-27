@@ -11,9 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 def count_tokens(engine: Any, text: str) -> int:
-    """Count tokens using the loaded llama.cpp model."""
+    """Count tokens using the loaded llama.cpp model, or approximate for cloud."""
     if not text:
         return 0
+    if hasattr(engine, "count_tokens"):
+        return engine.count_tokens(text)
     return len(engine.model.tokenize(text.encode("utf-8"), add_bos=False))
 
 

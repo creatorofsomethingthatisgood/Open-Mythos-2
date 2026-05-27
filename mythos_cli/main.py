@@ -4,6 +4,8 @@ Mythos — your local AI assistant and security scanner.
 
  mythos # launch chat (like `claude`)
  mythos chat # same thing
+ mythos cloud # chat using cloud API (OpenAI-compatible)
+ mythos cloud set-key <key> # save API key for cloud mode
  mythos web # web UI
  mythos scan # security scan
  mythos init # first-time setup
@@ -44,6 +46,114 @@ logging.basicConfig(
     level=logging.WARNING,
     format="%(levelname)s: %(message)s",
 )
+
+
+# ── cloud ─────────────────────────────────────────────────────────────
+
+def _cmd_cloud(args: argparse.Namespace) -> int:
+    """Launch chat using cloud API instead of local model."""
+    import os
+    os.environ["MYTHOS_CLOUD"] = "1"
+    from mythos_cli.chat import launch_chat
+    launch_chat(
+        config_path=args.config if args.config != "config.yaml" else None,
+        verbose=args.verbose,
+    )
+    return 0
+
+
+def _cmd_cloud_set_key(args: argparse.Namespace) -> int:
+    """Save an API key for cloud mode."""
+    import yaml
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN
+
+    ensure_initialized()
+    cfg_path = llm_config_path()
+    cfg = {}
+    if cfg_path.exists():
+        with open(cfg_path, "r") as f:
+            cfg = yaml.safe_load(f) or {}
+
+    cloud = cfg.setdefault("cloud", {})
+    cloud["api_key"] = args.api_key
+
+    if args.provider:
+        from engine.cloud_inference import PROVIDERS
+        if args.provider in PROVIDERS:
+            preset = PROVIDERS[args.provider]
+            cloud["provider"] = args.provider
+            cloud.setdefault("base_url", preset["base_url"])
+            cloud.setdefault("model", preset["model"])
+        else:
+            available = ", ".join(PROVIDERS.keys())
+            console.print(f"[red]Unknown provider '{args.provider}'. Available: {available}[/red]")
+            return 1
+
+    if args.base_url:
+        cloud["base_url"] = args.base_url
+    if args.model:
+        cloud["model"] = args.model
+
+    with open(cfg_path, "w") as f:
+        yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+
+    masked = args.api_key[:4] + "..." + args.api_key[-4:] if len(args.api_key) > 8 else "***"
+    console.print(f"\n[{STYLE_OK}]Cloud API key saved:[/] [dim]{masked}[/dim]")
+    provider = cloud.get("provider", "custom")
+    console.print(f"[dim]  Provider: {provider}[/dim]")
+    console.print(f"[dim]  Base URL: {cloud.get('base_url', 'default')}[/dim]")
+    console.print(f"[dim]  Model: {cloud.get('model', 'default')}[/dim]")
+    console.print(f"\n[{STYLE_WARN}]Note:[/] Local AI is recommended for privacy. Use [bold]mythos cloud[/bold] to chat with cloud API.")
+    return 0
+
+
+def _cmd_cloud_status(_args: argparse.Namespace) -> int:
+    """Show cloud configuration status."""
+    import yaml
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_DIM, STYLE_INFO
+
+    ensure_initialized()
+    cfg_path = llm_config_path()
+    cfg = {}
+    if cfg_path.exists():
+        with open(cfg_path, "r") as f:
+            cfg = yaml.safe_load(f) or {}
+
+    cloud = cfg.get("cloud", {})
+    console.print(f"\n[{STYLE_INFO}]Cloud Mode Status[/]")
+    if cloud.get("api_key"):
+        masked = cloud["api_key"][:4] + "..." + cloud["api_key"][-4:]
+        console.print(f"  API Key: [{STYLE_OK}]{masked}[/{STYLE_OK}]")
+    else:
+        console.print(f"  API Key: [{STYLE_WARN}]not set[/{STYLE_WARN}] — run [bold]mythos cloud set-key <key>[/bold]")
+
+    console.print(f"  Provider: {cloud.get('provider', 'custom')}")
+    console.print(f"  Base URL: {cloud.get('base_url', 'https://api.openai.com/v1')}")
+    console.print(f"  Model: {cloud.get('model', 'gpt-4o-mini')}")
+    console.print(f"\n[{STYLE_DIM}]Recommended: Use local AI ([bold]mythos chat[/bold]) for privacy and no API costs.[/{STYLE_DIM}]")
+    return 0
+
+
+def _cmd_cloud_clear(_args: argparse.Namespace) -> int:
+    """Remove cloud API key from config."""
+    import yaml
+    from mythos_cli.console import console, STYLE_OK
+
+    ensure_initialized()
+    cfg_path = llm_config_path()
+    cfg = {}
+    if cfg_path.exists():
+        with open(cfg_path, "r") as f:
+            cfg = yaml.safe_load(f) or {}
+
+    cloud = cfg.setdefault("cloud", {})
+    cloud.pop("api_key", None)
+
+    with open(cfg_path, "w") as f:
+        yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+
+    console.print(f"\n[{STYLE_OK}]Cloud API key removed.[/] Local AI mode will be used by default.")
+    return 0
 
 
 # ── chat / web ──────────────────────────────────────────────────────────
@@ -800,6 +910,27 @@ Examples:
     )
 
     sub = parser.add_subparsers(dest="command")
+
+    # ── cloud ─────────────────────────────────────────────────────────
+    p_cloud = sub.add_parser("cloud", help="Chat using cloud API (OpenAI-compatible)")
+    p_cloud.add_argument("--config", default="config.yaml", help="Config file path")
+    p_cloud.add_argument("--verbose", action="store_true", help="Debug logging")
+    p_cloud.set_defaults(func=_cmd_cloud)
+
+    cloud_sub = p_cloud.add_subparsers(dest="cloud_cmd")
+
+    ck = cloud_sub.add_parser("set-key", help="Save cloud API key")
+    ck.add_argument("api_key", help="Your API key")
+    ck.add_argument("--provider", choices=["openai", "nvidia", "together", "groq"], help="Provider preset (nvidia, openai, together, groq)")
+    ck.add_argument("--base-url", help="API base URL (overrides provider default)")
+    ck.add_argument("--model", help="Model name (overrides provider default)")
+    ck.set_defaults(func=_cmd_cloud_set_key)
+
+    cs = cloud_sub.add_parser("status", help="Show cloud configuration")
+    cs.set_defaults(func=_cmd_cloud_status)
+
+    cc = cloud_sub.add_parser("clear", help="Remove cloud API key")
+    cc.set_defaults(func=_cmd_cloud_clear)
 
     # ── chat (default when no subcommand) ───────────────────────────────
     p_chat = sub.add_parser("chat", help="Launch terminal chat interface (default)")

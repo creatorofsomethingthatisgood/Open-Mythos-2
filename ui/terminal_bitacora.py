@@ -54,9 +54,7 @@ class TerminalBitacoraSession:
     def stream_callback(self) -> StreamCallback:
         def _on_chunk(chunk: str) -> None:
             self.bitacora.log_stream_chunk(chunk)
-            if self._live is not None:
-                self._live.console.print(chunk, end="", style="dim")
-            else:
+            if self._live is None:
                 self.console.print(chunk, end="", style="dim")
         return _on_chunk
 

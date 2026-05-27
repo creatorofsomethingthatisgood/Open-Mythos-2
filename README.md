@@ -405,7 +405,11 @@ Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
 | Command | Description |
 |---------|-------------|
 | `mythos` | Launch chat (default) |
-| `mythos chat` | Same as above |
+| `mythos chat` | Same as above (local, recommended) |
+| `mythos cloud` | Chat via cloud API (OpenAI-compatible) |
+| `mythos cloud set-key <key> --provider nvidia` | Save API key with provider (nvidia, openai, together, groq) |
+| `mythos cloud status` | Show cloud configuration |
+| `mythos cloud clear` | Remove cloud API key |
 | `mythos chat --config <path>` | Use a custom config file |
 | `mythos web` | Launch web UI (Gradio) |
 | `mythos web --port 8080 --share` | Custom port + public link |

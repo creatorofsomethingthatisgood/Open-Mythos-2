@@ -23,6 +23,7 @@ except ImportError:
     logging.warning("Rich library not available")
 
 from engine.inference import InferenceEngine
+from engine.cloud_inference import CloudInferenceEngine
 from engine.prompt_manager import PromptManager
 from engine.memory import ConversationMemory
 from engine.rag import RAGPipeline
@@ -75,40 +76,61 @@ class TerminalUI:
         
         self.console = Console()
         self.config_path = config_path
-        
-        # Initialize components
-        self.console.print("[bold cyan]Initializing Mythos Local...[/bold cyan]")
-        
+
+        # Detect cloud mode (env var or config)
+        import yaml as _yaml
+        _cfg_raw = {}
         try:
-            self.engine = InferenceEngine(config_path)
+            with open(config_path, "r") as _f:
+                _cfg_raw = _yaml.safe_load(_f) or {}
+        except Exception:
+            pass
+        _cloud_cfg = _cfg_raw.get("cloud", {})
+        self.cloud_mode = (
+            os.environ.get("MYTHOS_CLOUD") == "1"
+            or bool(_cloud_cfg.get("api_key"))
+        )
+
+        # Initialize components
+        if self.cloud_mode:
+            self.console.print("[bold cyan]Initializing Mythos Cloud...[/bold cyan]")
+        else:
+            self.console.print("[bold cyan]Initializing Mythos Local...[/bold cyan]")
+
+        try:
+            if self.cloud_mode:
+                self.engine = CloudInferenceEngine(config_path)
+            else:
+                self.engine = InferenceEngine(config_path)
             self.prompt_manager = PromptManager(config_path)
             self.memory = ConversationMemory(config_path)
             self.reflector = SelfReflector(config_path)
-            
-            # RAG is optional
+
+            # RAG is optional (local only)
             self.rag = None
             self.rag_enabled = False
-            try:
-                self.rag = RAGPipeline(config_path)
-                stats = self.rag.get_stats()
-                self.console.print(
-                    f"[green]RAG ready[/green] ({stats['total_chunks']} chunks indexed)"
-                )
-            except Exception as rag_err:
-                logger.exception("RAG init failed")
-                self.console.print(f"[yellow]RAG not available: {rag_err}[/yellow]")
-                self.console.print(
-                    "[dim] Fix: python main.py --mode rag-index --path <dir> "
-                    "(needs network once for the embedding model)[/dim]"
-                )
-            
-            # Benchmark suite
-            self.benchmark = BenchmarkSuite(config_path)
-        
+            if not self.cloud_mode:
+                try:
+                    self.rag = RAGPipeline(config_path)
+                    stats = self.rag.get_stats()
+                    self.console.print(
+                        f"[green]RAG ready[/green] ({stats['total_chunks']} chunks indexed)"
+                    )
+                except Exception as rag_err:
+                    logger.exception("RAG init failed")
+                    self.console.print(f"[yellow]RAG not available: {rag_err}[/yellow]")
+                    self.console.print(
+                        "[dim] Fix: python main.py --mode rag-index --path <dir> "
+                        "(needs network once for the embedding model)[/dim]"
+                    )
+
+            # Benchmark suite (local only)
+            if not self.cloud_mode:
+                self.benchmark = BenchmarkSuite(config_path)
+
         except Exception as e:
             self.console.print(f"[bold red]Error initializing engine: {e}[/bold red]")
             raise
-        
         # RML (Reinforcement Machine Learning) engine
         self.rml = RMLEngine(self.engine.config)
         if self.rml.enabled:
@@ -147,7 +169,7 @@ class TerminalUI:
             'system', {}
         ).get('prompt_file', 'prompts/security_fix.txt')
         mode_name = Path(current_prompt_file).stem.replace('_', ' ').title()
-        
+
         mode_emoji = {
             'Default': '🚀',
             'Coding': '💻',
@@ -160,22 +182,31 @@ class TerminalUI:
             'Security Fix': '🔧',
         }
         emoji = mode_emoji.get(mode_name, '🚀')
-        
-        header = """
+
+        if self.cloud_mode:
+            header = """
 ╔═══════════════════════════════════════════════════════════════╗
-║                     MYTHOS LOCAL                              ║
-║            High-Quality Local Language Model                   ║
+║ MYTHOS CLOUD                                                 ║
+║ Cloud-Powered AI via OpenAI-Compatible API                   ║
 ╚═══════════════════════════════════════════════════════════════╝
-        """
-        self.console.print(header, style="bold cyan")
-        self.console.print(f"Model: [green]{self.engine.model_path.name}[/green]")
-        self.console.print(
-            f"Context: [green]{self.engine.context_length:,}[/green] tokens"
-        )
+            """
+            self.console.print(header, style="bold cyan")
+            self.console.print(f"Model: [green]{self.engine.model_name}[/green]")
+            self.console.print(f"Context: [green]{self.engine.context_length:,}[/green] tokens")
+            self.console.print(f"Endpoint: [dim]{self.engine.base_url}[/dim]")
+        else:
+            header = """
+╔═══════════════════════════════════════════════════════════════╗
+║ MYTHOS LOCAL                                                 ║
+║ High-Quality Local Language Model                            ║
+╚═══════════════════════════════════════════════════════════════╝
+            """
+            self.console.print(header, style="bold cyan")
+            self.console.print(f"Model: [green]{self.engine.model_path.name}[/green]")
+            self.console.print(f"Context: [green]{self.engine.context_length:,}[/green] tokens")
         self.console.print(f"Mode: [bold magenta]{emoji} {mode_name}[/bold magenta]")
         self.console.print(f"System Prompt: [yellow]{self.prompt_manager.get_prompt()[:70]}...[/yellow]")
         self.console.print("\nType [bold]/help[/bold] for commands, [bold]/quit[/bold] to exit\n")
-
     def _fix_progress(self, message: str) -> None:
         """Show live status during scan / rewrite (users see this while waiting)."""
         if message.startswith(" •"):
@@ -281,7 +312,7 @@ class TerminalUI:
         table.add_column("Value", style="green")
         
         
-        table.add_row("Model", str(self.engine.model_path.name))
+        table.add_row("Model", str(self.engine.model_path.name) if hasattr(self.engine, "model_path") else self.engine.model_name)
         table.add_row("Temperature", str(self.engine.config.get('generation', {}).get('temperature', 0.7)))
         table.add_row("Max Tokens", str(self.engine.config.get('generation', {}).get('max_tokens', 2048)))
         table.add_row("Top-p", str(self.engine.config.get('generation', {}).get('top_p', 0.9)))
@@ -483,7 +514,7 @@ class TerminalUI:
                     bitacora = bitacora_cm.__enter__()
                     on_progress = bitacora.as_progress_callback()
                     on_stream = (
-                        bitacora.stream_callback()
+                        bitacora_cm.stream_callback()
                         if _fix_cfg(self.engine.config).get("stream_rewrite", False)
                         else (lambda _c: None)
                     )
@@ -753,7 +784,7 @@ class TerminalUI:
         elif cmd == "/version":
             from mythos_cli import __version__
             self.console.print(f"[cyan]Mythos[/cyan] [bold]{__version__}[/bold]")
-            self.console.print(f"[dim]Model: {self.engine.model_path.name}[/dim]")
+            self.console.print(f"[dim]Model: {self.engine.model_path.name if hasattr(self.engine, 'model_path') else self.engine.model_name}[/dim]")
 
         elif cmd == "/tokens":
             gen_cfg = self.engine.config.get('generation', {})
@@ -1076,6 +1107,9 @@ class TerminalUI:
 
         elif cmd == "/models":
             # List available GGUF models and switch
+            if self.cloud_mode:
+                self.console.print("[yellow]Model switching not available in cloud mode. Use 'mythos cloud set-key --model <name>' to change model.[/yellow]")
+                return
             model_dir = self.engine.model_path.parent if hasattr(self.engine, "model_path") else Path("models")
             gguf_files = sorted(model_dir.glob("**/*.gguf")) if model_dir.exists() else []
             fallbacks = self.engine.config.get("model", {}).get("fallbacks", [])
@@ -1084,12 +1118,12 @@ class TerminalUI:
                 fb_path = Path(fb.get("path", ""))
                 if fb_path.exists():
                     fb_paths.append(fb_path)
-            all_models = list(dict.fromkeys([self.engine.model_path] + gguf_files + fb_paths))
+            all_models = list(dict.fromkeys(([self.engine.model_path] if hasattr(self.engine, "model_path") else []) + gguf_files + fb_paths)) if hasattr(self.engine, 'model_path') else []
             all_models = [p for p in all_models if p.suffix == ".gguf"]
             if not all_models:
                 self.console.print("[yellow]No GGUF models found[/yellow]")
                 return True
-            current = self.engine.model_path
+            current = self.engine.model_path if hasattr(self.engine, "model_path") else None if hasattr(self.engine, 'model_path') else None
             table = Table(title="Available Models")
             table.add_column("#", style="dim", width=4)
             table.add_column("Model", style="cyan")
@@ -1358,7 +1392,7 @@ class TerminalUI:
             bitacora = bitacora_cm.__enter__()
             on_progress = bitacora.as_progress_callback()
             on_stream = (
-                bitacora.stream_callback()
+                bitacora_cm.stream_callback()
                 if _fix_cfg(self.engine.config).get("stream_rewrite", False)
                 else (lambda _c: None)
             )

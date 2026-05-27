@@ -158,3 +158,25 @@ logging:
   level: "INFO"            # DEBUG, INFO, WARNING, ERROR
   file: "mythos.log"
   console: true
+
+# ── Cloud Mode ──────────────────────────────────────────────────────
+# Optional: Use an OpenAI-compatible API instead of local inference.
+# Enable with: mythos cloud
+# Set API key with: mythos cloud set-key <your-key>
+# Local AI is recommended for privacy and zero cost.
+cloud:
+  # api_key: ""           # Your API key (set via: mythos cloud set-key)
+  base_url: "https://api.openai.com/v1"  # OpenAI-compatible endpoint
+  model: "gpt-4o-mini"   # Model name at the endpoint
+  context_length: 128000
+
+# ── Cloud API Configuration ─────────────────────────────────────────
+# Use 'mythos cloud' to chat via an OpenAI-compatible API endpoint.
+# Set your API key with: mythos cloud set-key <your-key>
+# RECOMMENDED: Use local AI (mythos chat) for privacy and zero cost.
+cloud:
+  # api_key: ""           # Your API key (set via: mythos cloud set-key)
+  # provider: "nvidia"    # Provider preset: openai, nvidia, together, groq
+  base_url: "https://api.openai.com/v1"
+  model: "gpt-4o-mini"
+  context_length: 128000
