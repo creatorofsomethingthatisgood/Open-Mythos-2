@@ -1,74 +1,24 @@
-# --- Git ---
-.git
-.gitignore
-.gitattributes
-.github/
+# ─────────────────────── SECURITY ───────────────────────
+# --- SSH keys ---
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+id_ecdsa
+id_ecdsa.*
+id_dsa
+id_dsa.*
+*.ppk
+*.pub
+known_hosts
+authorized_keys
 
-# --- Python build / cache ---
-__pycache__
-**/__pycache__
-*.pyc
-*.pyo
-*.pyd
-*.egg
-*.egg-info
-.eggs/
-dist/
-build/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.tox/
-.coverage
-.coverage.*
-htmlcov/
-*.cover
+# --- GPG / PGP ---
+*.gpg
+*.asc
+secring.*
 
-# --- Virtual environments (every name we've ever seen) ---
-venv/
-.venv/
-env/
-ENV/
-.mythos-venv/
-.test-venv/
-*-venv/
-.*-venv/
-venv-*/
-
-# --- Node / frontend (not used by the Python container) ---
-node_modules/
-src/
-api/
-package.json
-package-lock.json
-pnpm-lock.yaml
-pnpm-workspace.yaml
-vite.config.ts
-tsconfig.json
-index.html
-*.code-workspace
-.vercel/
-.vercelignore
-
-# --- IDE / editor / AI tool state ---
-.vscode/
-.idea/
-.cursor/
-.windsurf/
-.claude/
-.aider*
-.continue/
-.zed/
-.history/
-*.swp
-*.swo
-*~
-
-# --- Secrets, keys, credentials — NEVER ship these in an image ---
-.env
-.env.*
-!.env.example
-*.pem
+# --- Key / certificate material ---
 *.key
 *.crt
 *.cer
@@ -77,8 +27,14 @@ index.html
 *.jks
 *.keystore
 *.kdbx
-*.gpg
-*.asc
+*.p7b
+*.p7c
+*.der
+*.csr
+*.p8
+*.pkcs12
+
+# --- Cloud / platform credentials ---
 .aws/
 .gcloud/
 .gcp/
@@ -86,36 +42,98 @@ index.html
 .kube/
 kubeconfig
 kubeconfig.*
-.docker/
+.config/gcloud/
+service-account*.json
+*-service-account.json
+gcloud-service-key.json
+.oci/
+.ibmcloud/
+
+# --- Auth / token files ---
+.env
+.env.*
+!.env.example
 .netrc
 .pypirc
+.npmrc.local
+.yarnrc.yml
 .git-credentials
 .gitconfig.local
 .hf_token
 huggingface_token*
 .openai_key
 .anthropic_key
+.npm_auth_token
+.dockercfg
+
+# --- Generic secret patterns ---
 *secret*.json
 *secrets*.yaml
 *secrets*.yml
+*.secrets
 *credentials*.json
 *credentials*.yaml
+*credentials*.yml
+*-credentials.*
 token.txt
 tokens.txt
 auth.json
+*.auth
+*.token
+*.apikey
+*.api-key
+*password*
+*.passwd
+*.htpasswd
+.shadow
 
-# --- User runtime data (mount as volumes, don't bake in) ---
-conversations/
-chroma_db/
-rag_docs/
-sessions/
-session_summaries/
-rml_preferences.json
-bitacora/
-mythos_home/
-.mythos/
+# --- Database dumps ---
+*.dump
+*.sql.dump
+*.sql.gz
+*.pcap
+*.har
 
-# --- Local models (~4.5 GB — mount instead) ---
+# ─────────────────────── BUILDS & CACHES ───────────────────────
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+ENV/
+*-venv/
+.*-venv/
+venv-*/
+.mythos-venv/
+.test-venv/
+
+# --- Node ---
+node_modules/
+.npm
+.eslintcache
+
+# --- Git ---
+.git/
+.gitignore
+.gitattributes
+
+# --- Local LLM models (mount instead) ---
 models/*.gguf
 models/*.bin
 models/*.safetensors
@@ -123,62 +141,44 @@ models/.cache/
 .cache/
 offline-bundle/
 
-# --- Benchmarks and LoRA outputs (user data) ---
-benchmarks/*
-!benchmarks/.gitkeep
-lora/*
-!lora/.gitkeep
-
-# --- Logs and personal scratch ---
-*.log
+# --- Runtime data ---
+conversations/
+chroma_db/
+rag_docs/
+sessions/
+session_summaries/
+rml_preferences.json
+bitacora/
+.mythos/
+mythos_home/
 mythos.log
-scratch/
-tmp/
-_tmp/
-.tmp/
-TODO.local
-TODO.local.*
-NOTES.local
-NOTES.local.*
-*.local.md
-*.local.txt
-*.scratch
-*.bak
-*.orig
-*.rej
-*.dump
-*.sql.dump
-*.pcap
-*.har
+*.log
 
-# --- OS files ---
+# --- Benchmarks / LoRA ---
+benchmarks/
+lora/
+
+# --- IDE / AI state ---
+.vscode/
+.idea/
+.cursor/
+.claude/
+.windsurf/
+.aider*
+.continue/
+.history/
+.zed/
+
+# --- OS ---
 .DS_Store
 .AppleDouble
-.LSOverride
 Thumbs.db
 
-# --- Documentation (README is included via re-add below) ---
-*.md
-!README.md
-LICENSE
-CONTRIBUTING.md
-
-# --- Root-level marketing / scratch docs (not needed in image) ---
-FINAL_INSTRUCTIONS.txt
-FINAL_SUMMARY.md
-FIXED_README.txt
-START_HERE.txt
-RUN_THIS.txt
-CHECKLIST.txt
-CODING_ACTIVATED.txt
-CODING_GUIDE.md
-ELITE_CODING_MODE.txt
-README_SIMPLE.md
-
-# --- Scripts / setup files not needed at runtime ---
+# --- Scripts / setup (not needed at runtime) ---
 scripts/
 setup-windows.ps1
 setup-macos.sh
+setup_for_linux.sh
 test_coding.sh
 verify_setup.sh
 verify_coding_mode.sh
@@ -192,9 +192,40 @@ run_web.sh
 # --- Tests ---
 tests/
 
-# --- Docker build artifacts (avoid recursive copy if BuildKit cache lives in tree) ---
+# --- Docker artifacts ---
 Dockerfile
 .dockerignore
 docker-compose*.yml
+
+# --- Audit / debug tools ---
 mythos_audit.py
 mythos_bughunt.py
+
+# --- Scratch / temp ---
+scratch/
+tmp/
+_tmp/
+*.tmp
+*.bak
+*.orig
+*.patch
+*.local
+*.local.md
+*.local.txt
+*.scratch
+
+# --- Coverage / profiling ---
+coverage/
+.nyc_output/
+*.prof
+*.profraw
+
+# --- Terraform / IaC (may contain state with secrets) ---
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
+.terraform/
+
+# --- Vault ---
+.vault-token
+.vault_pass

@@ -25,6 +25,11 @@ venv/
 .venv/
 env/
 ENV/
+*-venv/
+.*-venv/
+venv-*/
+.venv-*/
+**/.test-venv/
 
 # --- Local LLM artifacts (download via setup scripts) ---
 models/*.gguf
@@ -32,68 +37,225 @@ models/*.bin
 models/*.safetensors
 models/.cache/
 !models/.gitkeep
-
-# Hugging Face / sentence-transformers cache (see config.yaml hf_cache_dir)
 .cache/
 
-# RAG vector store (rebuilt with rag-index)
+# --- RAG vector store (rebuilt with rag-index) ---
 chroma_db/
 
-# Portable copy of models/cache (see scripts/mythos-export-data.sh)
+# --- Portable copy of models/cache ---
 offline-bundle/
 
 # --- Runtime data ---
 mythos.log
 *.log
-
-# Saved chats (keep directory placeholder)
 conversations/*.json
 !conversations/.gitkeep
-
-# Benchmark outputs
 benchmarks/*
 !benchmarks/.gitkeep
-
-# LoRA training outputs
 lora/*
 !lora/.gitkeep
-
-# User-provided RAG documents (optional)
 rag_docs/*
 !rag_docs/.gitkeep
 
-# --- Secrets & keys (never commit) ---
+# ─────────────────────── SECURITY ───────────────────────
+# --- SSH keys (NEVER commit) ---
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+id_ecdsa
+id_ecdsa.*
+id_dsa
+id_dsa.*
+*.ppk
+*.pub
+ssh_config
+ssh_config.*
+known_hosts
+known_hosts.*
+authorized_keys
+authorized_keys.*
+
+# --- GPG / PGP ---
+*.gpg
+*.asc
+secring.*
+pubring.*
+trustdb.gpg
+*.gpg~
+
+# --- Key / certificate material ---
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.kdbx
+*.p7b
+*.p7c
+*.der
+*.csr
+*.spc
+*.p8
+*.pkcs12
+
+# --- Cloud / platform credentials ---
+.aws/
+.gcloud/
+.gcp/
+.azure/
+.kube/
+kubeconfig
+kubeconfig.*
+.docker/config.json
+.config/gcloud/
+gcloud-service-key.json
+service-account*.json
+*-service-account.json
+oci_config
+.oci/
+.ibmcloud/
+.alicloud/
+.tencentcloud/
+
+# --- Auth / config files that often carry tokens ---
 .env
 .env.*
 !.env.example
-*.pem
-**/flow_keys/
-**/private_key*.pem
-*.key
-*.p12
-*.pfx
-id_rsa*
-id_ed25519*
-*.keystore
-credentials.json
-service-account*.json
-.aws/
+.netrc
+.pypirc
+.npmrc.local
+.yarnrc.yml
+.git-credentials
+.gitconfig.local
+.hf_token
+huggingface_token*
+*.hf_token
+.openai_key
+.anthropic_key
+.npm_auth_token
+.pip-auth
+.dockercfg
+.docker/
 
-# Local Mythos CLI test config
+# --- Generic secret patterns ---
+*secret*.json
+*secrets*.yaml
+*secrets*.yml
+*.secrets
+*credentials*.json
+*credentials*.yaml
+*credentials*.yml
+*-credentials.*
+token.txt
+tokens.txt
+auth.json
+*.auth
+*.token
+*.apikey
+*.api-key
+*password*
+*.passwd
+*.htpasswd
+.shadow
+*.shadow
+
+# --- Database dumps (may contain user data) ---
+*.dump
+*.sql.dump
+*.sql.gz
+*.sql.bz2
+*.pcap
+*.har
+*.pcapng
+
+# --- Coverage / profiling artifacts ---
+coverage.xml
+.coverage
+.coverage.*
+*.prof
+*.profraw
+coverage/
+.nyc_output/
+
+# --- Private / local-only files ---
+*.private
+*.private.*
+private/
+PRIVATE/
+*.local
+.test-venv/
 .mythos-test/
+mythos_audit.py
+mythos_bughunt.py
 
-# --- OS & editors ---
+# --- Local Mythos runtime state ---
+sessions/
+session_summaries/
+rml_preferences.json
+bitacora/
+.mythos/
+.mythos-venv/
+mythos_home/
+mythos.yaml
+config.local.yaml
+config.*.local.yaml
+
+# --- AI / IDE / editor local state ---
+.claude/
+.cursor/
+.copilot/
+.windsurf/
+.augment/
+.aider*
+.continue/
+.history/
+.zed/
+.helix/
+.nvim.lua
+.vscode/
+.idea/
+*.code-workspace
+.envrc.local
+
+# --- Scratch / temp files ---
+scratch/
+tmp/
+_tmp/
+.tmp/
+TODO.local
+TODO.local.*
+NOTES.local
+NOTES.local.*
+*.local.md
+*.local.txt
+*.scratch
+*.tmp
+*.bak
+*.orig
+*.rej
+*.patch
+*.patch.local
+
+# --- Shell / OS history (may contain secrets in commands) ---
+.bash_history
+.zsh_history
+.python_history
+.lesshst
+.viminfo
+
+# --- OS files ---
 .DS_Store
 .AppleDouble
 .LSOverride
 Thumbs.db
 *.swp
 *~
-.idea/
-.vscode/
 *.sublime-*
 
-# Common build/install artifacts (when indexing external repos via RAG)
+# --- Node / frontend (not used by the Python container) ---
 **/node_modules/
 **/.next/
 **/dist/
@@ -106,164 +268,15 @@ Thumbs.db
 .vercel
 .npmrc
 
-# ─── Contributor safeguards ──────────────────────────────────────────────
-# Goal: keep host data, credentials, and other-project files out of commits.
-# Mythos reads local paths (chat refs, RAG, scans) and runs as a venv-wrapped
-# Python app, so any of the following could plausibly end up in the worktree.
-
-# --- Extra venv name variants (covers .test-venv, ml-venv, py3.12-venv, etc.)
-*-venv/
-.*-venv/
-venv-*/
-.venv-*/
-**/.test-venv/
-
-# --- In-tree Mythos runtime state (normally lives in ~/.config/mythos, but
-# can end up here if someone sets MYTHOS_HOME=. or copies state for debugging)
-sessions/
-session_summaries/
-rml_preferences.json
-bitacora/
-.mythos/
-.mythos-venv/
-mythos_home/
-mythos.yaml
-# Per-user resolved config copied into the tree
-config.local.yaml
-config.*.local.yaml
-
-# --- Credentials, keys, tokens (defense in depth — never commit these) ---
-# SSH / GPG
-id_rsa
-id_rsa.*
-id_ed25519
-id_ed25519.*
-id_ecdsa
-id_ecdsa.*
-*.ppk
-*.gpg
-*.asc
-secring.*
-# Generic key / certificate material
-*.key
-*.crt
-*.cer
-*.pfx
-*.p12
-*.jks
-*.keystore
-*.kdbx
-# Cloud / platform credentials
-.aws/
-.gcloud/
-.gcp/
-.azure/
-.kube/
-kubeconfig
-kubeconfig.*
-.docker/config.json
-gcloud-service-key.json
-service-account*.json
-*-service-account.json
-# Auth / config files that often carry tokens
-.netrc
-.pypirc
-.npmrc.local
-.yarnrc.yml
-.git-credentials
-.gitconfig.local
-.hf_token
-huggingface_token*
-*.hf_token
-.openai_key
-.anthropic_key
-# Generic patterns
-*secret*.json
-*secrets*.yaml
-*secrets*.yml
-*.secrets
-*credentials*.json
-*credentials*.yaml
-*credentials*.yml
-*-credentials.*
-token.txt
-tokens.txt
-auth.json
-
-# --- AI / IDE / editor local state (may contain prompts, transcripts, paths)
-.claude/
-.cursor/
-.windsurf/
-.aider*
-# --- Contributor safeguards ---
-# AI / IDE state
-.claude/
-.cursor/
-.copilot/
-.windsurf/
-.augment/
-# Scratch / temp files
-*.tmp
-*.bak
-*.orig
-*.patch
-# Shell history (may contain secrets in commands)
-.bash_history
-.zsh_history
-.python_history
-# Coverage artifacts
-coverage/
-.nyc_output/
-# Private / local-only files
-*.local
-private/
-.continue/
-.history/
-*.code-workspace
-.zed/
-.helix/
-.nvim.lua
-.envrc.local
-
-# --- Personal scratch / notes / dumps (avoid leaking WIP or host info) ---
-scratch/
-tmp/
-_tmp/
-.tmp/
-TODO.local
-TODO.local.*
-NOTES.local
-NOTES.local.*
-*.local.md
-*.local.txt
-*.scratch
-# Patch / backup artifacts that often appear during merges or edits
-*.bak
-*.orig
-*.rej
-*.patch.local
-# Database / capture dumps
-*.dump
-*.sql.dump
-*.pcap
-*.har
-
-# --- Shell / OS history that sometimes lands in repos by accident ---
-.bash_history
-.zsh_history
-.python_history
-.lesshst
-.viminfo
-
-# --- Coverage / profiling artifacts ---
-coverage.xml
-.coverage.*
-*.prof
-*.profraw
-*.private
-*.private.*
-private/
-PRIVATE/
-.test-venv/
-mythos_audit.py
-mythos_bughunt.py
+# --- Additional security-sensitive files ---
+.vault-token
+.vault-token.*
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
+*.tfvars.json
+.terraform/
+.terraform.lock.hcl
+ansible_vault_password
+.vault_pass
+.vault-password

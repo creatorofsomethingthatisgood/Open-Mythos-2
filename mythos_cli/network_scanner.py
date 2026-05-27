@@ -65,7 +65,6 @@ class ScanResult:
 # ── OUI vendor lookup (small built-in table) ───────────────────────────
 
 _OUI_DB: Dict[str, str] = {
-    "aa:bb:cc": "Example Vendor",
     # Common vendors
     "00:50:56": "VMware",
     "00:0c:29": "VMware",

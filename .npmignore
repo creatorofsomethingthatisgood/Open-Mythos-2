@@ -1,29 +1,217 @@
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-.eggs/
-venv/
-.venv/
-node_modules/
-.git/
-.cache/
-*.log
+# ─────────────────────── SECURITY ───────────────────────
+# --- SSH keys ---
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+id_ecdsa
+id_ecdsa.*
+id_dsa
+id_dsa.*
+*.ppk
+*.pub
+known_hosts
+authorized_keys
+
+# --- GPG / PGP ---
+*.gpg
+*.asc
+secring.*
+
+# --- Key / certificate material ---
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.kdbx
+*.p7b
+*.p7c
+*.der
+*.csr
+*.p8
+*.pkcs12
+
+# --- Cloud / platform credentials ---
+.aws/
+.gcloud/
+.gcp/
+.azure/
+.kube/
+kubeconfig
+kubeconfig.*
+.config/gcloud/
+service-account*.json
+*-service-account.json
+gcloud-service-key.json
+.oci/
+
+# --- Auth / token files ---
 .env
 .env.*
-.DS_Store
-benchmarks/
-lora/
-conversations/
-chroma_db/
-offline-bundle/
-models/*.gguf
-models/*.bin
-models/*.safetensors
+!.env.example
+.netrc
+.pypirc
+.npmrc.local
+.yarnrc.yml
+.git-credentials
+.gitconfig.local
+.hf_token
+huggingface_token*
+.openai_key
+.anthropic_key
+.npm_auth_token
+
+# --- Generic secret patterns ---
+*secret*.json
+*secrets*.yaml
+*secrets*.yml
+*.secrets
+*credentials*.json
+*credentials*.yaml
+*credentials*.yml
+*-credentials.*
+token.txt
+tokens.txt
+auth.json
+*.auth
+*.token
+*.apikey
+*.api-key
+*password*
+*.passwd
+*.htpasswd
+
+# --- Database dumps ---
+*.dump
+*.sql.dump
+*.sql.gz
+*.pcap
+*.har
+
+# ─────────────────────── BUILDS & CACHES ───────────────────────
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+*.cover
+.hypothesis/
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+ENV/
+*-venv/
+.*-venv/
+venv-*/
+.test-venv/
+
+# --- Node ---
+node_modules/
+.npm
+.eslintcache
+
+# --- Git ---
+.git/
+
+# --- Local LLM models ---
+models/*.gguf
+models/*.bin
+models/*.safetensors
+models/.cache/
+.cache/
+offline-bundle/
+
+# --- Runtime data ---
+conversations/
+chroma_db/
+rag_docs/
+sessions/
+session_summaries/
+rml_preferences.json
+bitacora/
+.mythos/
+mythos_home/
+mythos.log
+*.log
+
+# --- Benchmarks / LoRA ---
+benchmarks/
+!benchmarks/.gitkeep
+lora/
+!lora/.gitkeep
+
+# --- IDE / AI state ---
 .vscode/
 .idea/
+.cursor/
+.claude/
+.windsurf/
+.aider*
+.continue/
+.history/
+.zed/
+
+# --- OS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+*.swp
+*~
+
+# --- Scratch / temp ---
+scratch/
+tmp/
+_tmp/
+*.tmp
+*.bak
+*.orig
+*.patch
+*.local
+*.local.md
+*.local.txt
+*.scratch
+
+# --- Coverage / profiling ---
+coverage/
+.nyc_output/
+*.prof
+*.profraw
+coverage.xml
+
+# --- Private files ---
+*.private
+private/
+PRIVATE/
+
+# --- Audit tools ---
 mythos_audit.py
 mythos_bughunt.py
+
+# --- Terraform / IaC ---
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
+.terraform/
+
+# --- Vault ---
+.vault-token
+.vault_pass
