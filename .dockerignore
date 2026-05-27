@@ -196,4 +196,5 @@ tests/
 Dockerfile
 .dockerignore
 docker-compose*.yml
-
+mythos_audit.py
+mythos_bughunt.py

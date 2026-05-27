@@ -91,7 +91,7 @@ class WebUI:
         self.rag_enabled = False
         try:
             self.rag = RAGPipeline(config_path)
-        except:
+        except Exception:
             print("RAG not available (optional)")
         
         # Current settings

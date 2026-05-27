@@ -25,3 +25,5 @@ models/*.safetensors
 .ruff_cache/
 .vscode/
 .idea/
+mythos_audit.py
+mythos_bughunt.py

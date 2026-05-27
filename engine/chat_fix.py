@@ -302,7 +302,7 @@ def handle_chat_fix(
         (context, status_notices, targets_touched, rewrite_approved, rewrite_file_paths)
     """
     cfg = merge_chat_defaults(config or {}).get("chat", {}).get("fix", {})
-    if cfg.get("enabled", True) is False:
+    if not cfg.get("enabled", True):
         return "", [], [], False, []
 
     if not cfg.get("allow_edit", True):

@@ -173,7 +173,6 @@ _OUI_DB: Dict[str, str] = {
     "0c:f2:57": "Apple",
     "10:41:7f": "Apple",
     "90:e6:ba": "Apple",
-    "00:26:b0": "Apple",
     "00:11:24": "Apple",
     "f4:5c:89": "Apple",
     "e4:8b:7f": "Apple",
@@ -188,7 +187,6 @@ _OUI_DB: Dict[str, str] = {
     "1c:36:bb": "Apple",
     "90:b0:ed": "Apple",
     "ac:5f:3e": "Apple",
-    "dc:a6:32": "Apple",
     "f8:a9:d0": "Apple",
     "a0:8e:04": "Apple",
     "e0:4f:43": "Apple",
@@ -271,7 +269,6 @@ _OUI_DB: Dict[str, str] = {
     "f0:99:b6": "Apple",
     "00:24:36": "Apple",
     "58:40:4f": "Apple",
-    "b4:8c:5e": "Apple",
     "a4:d1:8c": "Apple",
     "84:89:24": "Apple",
     "4c:74:bf": "Apple",
@@ -286,9 +283,7 @@ _OUI_DB: Dict[str, str] = {
     "d0:ff:50": "Apple",
     "c0:7c:59": "Apple",
     "60:f1:89": "Apple",
-    "5c:95:ae": "Apple",
     "a8:d0:e5": "Apple",
-    "04:54:53": "Apple",
     "00:1a:22": "Apple",
     "d8:a2:5c": "Apple",
     "f4:d1:08": "Apple",
@@ -302,7 +297,6 @@ _OUI_DB: Dict[str, str] = {
     "44:61:0c": "Apple",
     "00:1d:4f": "Apple",
     "00:21:e9": "Apple",
-    "c4:2c:03": "Apple",
     "e0:9d:fa": "Apple",
     "3c:07:54": "Apple",
     "48:ca:f2": "Apple",
@@ -338,10 +332,7 @@ _OUI_DB: Dict[str, str] = {
     "c4:3d:a7": "Apple",
     "6c:40:1a": "Apple",
     "7c:7a:91": "Apple",
-    "a8:d0:e5": "Apple",
     "5c:f9:38": "Apple",
-    "7c:ed:8d": "Microsoft",
-    "00:15:5d": "Microsoft",
     "00:24:8c": "Intel",
     "00:1e:64": "Intel",
     "00:1e:0b": "Intel",
@@ -349,14 +340,6 @@ _OUI_DB: Dict[str, str] = {
     "70:5a:0f": "Intel",
     "78:0c:b8": "Intel",
     "a0:36:9f": "Intel",
-    "b4:2e:99": "Amazon",
-    "00:50:56": "VMware",
-    "00:0c:29": "VMware",
-    "00:05:69": "VMware",
-    "52:54:00": "QEMU",
-    "00:1c:42": "Parallels",
-    "00:16:3e": "Xen",
-    "fa:16:3e": "OpenStack",
     "b8:27:eb": "Raspberry Pi",
     "dc:a6:32": "Raspberry Pi",
     "e4:5f:01": "Raspberry Pi",
@@ -371,7 +354,6 @@ _OUI_DB: Dict[str, str] = {
     "a4:6b:e8": "Netgear",
     "00:26:f2": "Netgear",
     "9c:3d:cf": "Netgear",
-    "60:38:e0": "Netgear",
     "c0:56:e3": "TP-Link",
     "50:c7:bf": "TP-Link",
     "60:32:b1": "TP-Link",
@@ -393,7 +375,6 @@ _OUI_DB: Dict[str, str] = {
     "f4:92:bf": "Ubiquiti",
     "18:e8:29": "Ubiquiti",
     "40:d3:ae": "Ubiquiti",
-    "24:a4:2c": "Ubiquiti",
     "70:a7:41": "Ubiquiti",
     "00:c0:9f": "Ubiquiti",
     "74:83:ef": "Ubiquiti",
@@ -462,7 +443,6 @@ _OUI_DB: Dict[str, str] = {
     "00:26:55": "Cisco",
     "00:26:96": "Cisco",
     "00:26:c3": "Cisco",
-    "00:50:56": "Cisco",
     "00:55:56": "Cisco",
     "00:5d:73": "Cisco",
     "00:60:08": "Cisco",
@@ -617,7 +597,6 @@ _OUI_DB: Dict[str, str] = {
     "00:fd:26": "Cisco",
     "00:fe:e7": "Cisco",
     "00:ff:a8": "Cisco",
-    "8c:16:45": "Apple",
 }
 
 
@@ -1253,12 +1232,11 @@ def _resolve_hostname(ip: str) -> str:
 def get_local_ip() -> str:
     """Get the primary local IP address."""
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(2)
-        # Doesn't actually send data — just lets the OS pick the route
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(2)
+            # Doesn't actually send data — just lets the OS pick the route
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
         return ip
     except Exception:
         return "127.0.0.1"

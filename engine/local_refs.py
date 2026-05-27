@@ -283,7 +283,7 @@ def build_local_file_context(
         (context_block, status_notices)
     """
     cfg = merge_chat_defaults(config or {}).get("chat", {}).get("local_files", {})
-    if cfg.get("enabled", True) is False:
+    if not cfg.get("enabled", True):
         return "", []
 
     max_file_bytes = int(cfg.get("max_file_bytes", 2 * 1024 * 1024))

@@ -368,7 +368,7 @@ class TerminalUI:
                     self.console.print(f"[green]Loaded conversation[/green]")
                 else:
                     self.console.print("[red]Invalid selection[/red]")
-            except:
+            except (ValueError, IndexError):
                 self.console.print("[red]Invalid input[/red]")
         
         elif cmd == "/system":
@@ -401,7 +401,7 @@ class TerminalUI:
                     self.console.print(f"[green]Temperature set to {temp}[/green]")
                 else:
                     self.console.print("[red]Temperature must be between 0.0 and 2.0[/red]")
-            except:
+            except ValueError:
                 self.console.print("[red]Invalid temperature value[/red]")
         
         elif cmd == "/reflect":
