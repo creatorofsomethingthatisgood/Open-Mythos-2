@@ -262,16 +262,32 @@ class WhisperTranscriber:
 class VoiceSpeaker:
     """Speak text aloud — Piper (neural, human-sounding) as primary, espeak-ng as fallback."""
 
+    # Voice presets: gender → (piper_model, espeak_voice)
+    VOICE_PRESETS = {
+        "female": ("en_US-lessac-medium", "en-us"),
+        "male": ("en_US-joe-medium", "en-us+m3"),
+    }
+
     def __init__(self, config: dict):
         voice_cfg = config.get("voice", {})
         self.enabled: bool = voice_cfg.get("tts", True)
         self.rate: int = voice_cfg.get("tts_rate", 160)
-        self.piper_model: str = voice_cfg.get("tts_voice", "en_US-lessac-medium")
-        self.espeak_voice: str = voice_cfg.get("tts_espeak_voice", "en-us")
+        self.gender: str = voice_cfg.get("tts_gender", "female")
+        self.piper_model: str = voice_cfg.get("tts_voice", self.VOICE_PRESETS.get(self.gender, self.VOICE_PRESETS["female"])[0])
+        self.espeak_voice: str = voice_cfg.get("tts_espeak_voice", self.VOICE_PRESETS.get(self.gender, self.VOICE_PRESETS["female"])[1])
         self._backend: Optional[str] = None
         self._piper_process: Optional[Any] = None
         self._process: Optional[subprocess.Popen] = None
         self._detect_backend()
+
+    def set_gender(self, gender: str) -> bool:
+        """Switch voice gender. Returns True if preset exists."""
+        gender = gender.lower()
+        if gender not in self.VOICE_PRESETS:
+            return False
+        self.gender = gender
+        self.piper_model, self.espeak_voice = self.VOICE_PRESETS[gender]
+        return True
 
     def _detect_backend(self) -> None:
         """Pick Piper (neural TTS) first, fall back to espeak-ng."""
@@ -360,9 +376,29 @@ class VoiceSpeaker:
 
     @staticmethod
     def _clean_text(text: str) -> str:
-        """Strip markdown / code for cleaner speech."""
+        """Strip markdown, code, and /thinking blocks for cleaner speech."""
         import re
-        out = re.sub(r"```[\s\S]*?```", "", text)
+        # Strip /thinking blocks
+        lines = text.split('\n')
+        out_lines = []
+        skip = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith('/thinking'):
+                # If there's content after /thinking on same line, just skip this line
+                # Otherwise skip until blank line
+                rest = stripped[len('/thinking'):].strip()
+                if rest:
+                    continue  # inline /thinking with text — just drop this line
+                skip = True
+                continue
+            if skip:
+                if stripped == '':
+                    skip = False
+                continue
+            out_lines.append(line)
+        out = '\n'.join(out_lines)
+        out = re.sub(r"```[\s\S]*?```", "", out)
         out = re.sub(r"`[^`]+`", "", out)
         out = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", out)
         out = re.sub(r"[*_#>|~\-]{2,}", "", out)

@@ -352,9 +352,17 @@ class TerminalUI:
             self.show_help()
         
         elif cmd == "/voice":
-            # /voice on|off|status — toggle or check whisper.cpp voice input
+            # /voice on|off|male|female|status — toggle voice I/O + TTS gender
             sub = args.strip().lower()
-            if sub in ("on", "enable", "true"):
+            if sub in ("male", "female"):
+                if self.voice.speaker.set_gender(sub):
+                    self.engine.config.setdefault("voice", {})["tts_gender"] = sub
+                    self.voice.speaker.piper_model, self.voice.speaker.espeak_voice = (
+                        self.voice.speaker.VOICE_PRESETS[sub])
+                    self.console.print(f"[green]Voice set to {sub}[/green]")
+                else:
+                    self.console.print("[red]Unknown gender — use male or female[/red]")
+            elif sub in ("on", "enable", "true"):
                 if not self.voice.is_available():
                     self.console.print("[red]whisper-cli not found — run: scripts/install_whisper.sh[/red]")
                 else:
@@ -380,7 +388,8 @@ class TerminalUI:
                     f"input={'[green]yes[/green]' if avail else '[red]no[/red]'}, "
                     f"enabled={'[green]on[/green]' if en else '[dim]off[/dim]'}, "
                     f"recording={'[bold red]YES[/bold red]' if rec else 'no'}, "
-                    f"TTS={'[green]on[/green]' if self.voice.speaker.is_available() else '[dim]off[/dim]'}"
+                    f"TTS={'[green]on[/green]' if self.voice.speaker.is_available() else '[dim]off[/dim]'}, "
+                    f"voice={self.voice.speaker.gender}"
                 )
                 if avail and not en:
                     self.console.print("[dim]  Use /voice on to enable[/dim]")
