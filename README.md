@@ -462,6 +462,58 @@ Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
 
 ---
 
+## Voice Input (Whisper + AMD GPU)
+
+Speak to Mythos instead of typing. Uses [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with the **Vulkan backend** for GPU-accelerated transcription on AMD GPUs (RDNA and newer).
+
+### Setup
+
+```bash
+# 1. Install whisper.cpp with Vulkan support (one-time, ~5 min)
+./scripts/install_whisper.sh          # base.en model (fast, 142 MB)
+./scripts/install_whisper.sh small    # small.en (better accuracy, 466 MB)
+```
+
+### Usage
+
+```bash
+# Enable voice mode
+/voice on
+
+# Quick record (works even with voice off)
+/rec
+
+# Press 'v' at an empty prompt to start recording, Enter to stop
+v
+(speak, then press Enter)
+
+# Check status
+/voice
+
+# Disable
+/voice off
+```
+
+### Config (`config.yaml`)
+
+```yaml
+voice:
+  enabled: false
+  whisper_bin: "whisper-cli"          # or full path
+  model: "models/ggml-base.en.bin"   # GGML model file
+  language: "en"                      # "en" or "auto"
+  push_to_talk: true
+  max_duration: 30                    # seconds
+```
+
+### AMD GPU Notes
+
+- **Vulkan backend** (recommended): works on all AMD GPUs with Vulkan 1.2+ (RX 6000/7000/9000 series)
+- **HIP/ROCm backend**: for supported cards only — build with `cmake -DGGML_HIP=1 -DAMDGPU_TARGETS=gfx1100`
+- Consumer GPUs (RX series) should use Vulkan — ROCm is mainly for MI-series datacenter GPUs
+
+---
+
 ## Roadmap
 
 - [ ] Multi-model support (swap between GGUF models in-chat)
@@ -469,7 +521,8 @@ Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
 - [ ] LoRA fine-tuning from within the CLI
 - [ ] RAG over local documents
 - [ ] Plugin system for community extensions
-- [ ] Voice input/output via Whisper + Coqui TTS
+- [x] Voice input via Whisper (whisper.cpp, AMD Vulkan GPU support)
+- [ ] Voice output via Coqui TTS
 
 ---
 

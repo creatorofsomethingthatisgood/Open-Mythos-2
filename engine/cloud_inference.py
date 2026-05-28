@@ -89,7 +89,7 @@ class CloudInferenceEngine:
             },
             timeout=httpx.Timeout(120.0, connect=10.0),
         )
-        logger.info(f"Cloud engine ready: {self.base_url} / {self.model_name}")
+        logger.info("Cloud engine ready")
 
     # ── config ──────────────────────────────────────────────────────────
 

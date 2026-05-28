@@ -24,9 +24,7 @@
 #   - This image is CPU-only. GPU support needs a CUDA base image
 #     (e.g. nvidia/cuda:12.4.1-devel-ubuntu22.04) and rebuilding
 #     llama-cpp-python with -DGGML_CUDA=on — out of scope here.
-#   - No HEALTHCHECK is defined: the default entrypoint is interactive
-#     and serves no HTTP endpoint. Add one in your compose /
-#     orchestration layer if you run --mode web in production.
+# - HEALTHCHECK probes /api/health every 30s (active in --mode web)
 # ─────────────────────────────────────────────────────────────────────
 
 ARG PYTHON_VERSION=3.11.9
@@ -80,7 +78,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/mythos-venv/bin:${PATH}" \
     MYTHOS_HOME=/home/mythos/.config/mythos \
-    MYTHOS_HOST=0.0.0.0
+    MYTHOS_HOST=127.0.0.1
 
 # libgomp1 is needed at runtime by llama-cpp-python (OpenMP threading).
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -111,6 +109,9 @@ RUN mkdir -p \
 USER mythos
 
 EXPOSE 7860
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/api/health')" || exit 1
 
 # Default: terminal chat. Override on `docker run`, for example:
 #   docker run -it --rm -p 7860:7860 mythos --mode web

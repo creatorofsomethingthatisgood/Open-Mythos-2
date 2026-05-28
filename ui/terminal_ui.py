@@ -56,6 +56,7 @@ from engine.chat_fix import (
     user_wants_rewrite,
 )
 from engine.progress import ProgressCallback, StreamCallback
+from engine.voice import VoiceEngine
 from ui.terminal_bitacora import TerminalBitacoraSession
 
 logger = logging.getLogger(__name__)
@@ -161,7 +162,13 @@ class TerminalUI:
         self._pending_rewrite_paths: List[str] = []
         self._last_response_text: str = ""  # for RML explicit feedback
         self._last_ctrl_c_time: float = 0.0  # for double Ctrl+C exit
-    
+
+        # Voice input (whisper.cpp on AMD Vulkan)
+        self.voice = VoiceEngine(self.engine.config)
+        if self.voice.is_available():
+            self.console.print("[green]  Voice input ready — /voice to enable, then hold [bold]v[/bold] to speak[/green]")
+        elif self.engine.config.get("voice", {}).get("enabled"):
+            self.console.print("[yellow]  Voice enabled but whisper-cli not found — run: scripts/install_whisper.sh[/yellow]")    
     def show_header(self):
         """Display welcome header"""
         # Detect which prompt mode is active
@@ -230,6 +237,8 @@ class TerminalUI:
 [bold cyan]Available Commands:[/bold cyan]
 
 [yellow]/help[/yellow] - Show this help message
+[yellow]/voice on|off|status[/yellow] - Voice I/O: talk to AI & hear responses (needs whisper + espeak-ng)
+[yellow]/rec[/yellow] - Quick voice recording (no toggle needed)
 [yellow]/clear[/yellow] - Clear conversation history
 [yellow]/save[/yellow] - Save current conversation
 [yellow]/load[/yellow] - Load a saved conversation
@@ -342,6 +351,60 @@ class TerminalUI:
         if cmd == "/help":
             self.show_help()
         
+        elif cmd == "/voice":
+            # /voice on|off|status — toggle or check whisper.cpp voice input
+            sub = args.strip().lower()
+            if sub in ("on", "enable", "true"):
+                if not self.voice.is_available():
+                    self.console.print("[red]whisper-cli not found — run: scripts/install_whisper.sh[/red]")
+                else:
+                    self.voice.enabled = True
+                    self.engine.config.setdefault("voice", {})["enabled"] = True
+                    mode = "push-to-talk (hold v)" if self.voice.push_to_talk else "toggle (press v)"
+                    tts = "ON" if self.voice.speaker.is_available() else "unavailable (install espeak-ng)"
+                    self.console.print(f"[green]Voice ON — {mode}[/green]  [dim]TTS: {tts}[/dim]")
+            elif sub in ("off", "disable", "false"):
+                self.voice.enabled = False
+                self.engine.config.setdefault("voice", {})["enabled"] = False
+                if self.voice.is_recording:
+                    self.voice.cancel_recording()
+                    self.voice.stop_speaking()
+                self.console.print("[yellow]Voice OFF[/yellow]")
+            else:
+                # status or no arg
+                avail = self.voice.is_available()
+                en = self.voice.enabled
+                rec = self.voice.is_recording
+                self.console.print(
+                    f"[cyan]Voice status:[/cyan] "
+                    f"input={'[green]yes[/green]' if avail else '[red]no[/red]'}, "
+                    f"enabled={'[green]on[/green]' if en else '[dim]off[/dim]'}, "
+                    f"recording={'[bold red]YES[/bold red]' if rec else 'no'}, "
+                    f"TTS={'[green]on[/green]' if self.voice.speaker.is_available() else '[dim]off[/dim]'}"
+                )
+                if avail and not en:
+                    self.console.print("[dim]  Use /voice on to enable[/dim]")
+                if not avail:
+                    self.console.print("[dim]  Install: scripts/install_whisper.sh[/dim]")
+
+        elif cmd == "/rec":
+            # Quick voice record — no toggle needed, just record and transcribe
+            if not self.voice.is_available():
+                self.console.print("[red]whisper-cli not found — run: scripts/install_whisper.sh[/red]")
+                return True
+            try:
+                self.voice.start_recording()
+                self.console.print("[bold red][REC][/bold red] Recording... press Enter to stop")
+                Prompt.ask("")
+                transcript = self.voice.stop_and_transcribe()
+                if transcript:
+                    self.console.print(f"[green]> {transcript}[/green]")
+                    self.generate_response(transcript)
+                else:
+                    self.console.print("[yellow]No speech detected[/yellow]")
+            except RuntimeError as e:
+                self.console.print(f"[red]Voice error: {e}[/red]")
+
         elif cmd == "/clear":
             self.memory.clear()
             self.console.print("[green]Conversation cleared[/green]")
@@ -1757,6 +1820,10 @@ class TerminalUI:
             if bitacora_cm is not None:
                 bitacora_cm.__exit__(None, None, None)
 
+        # TTS: speak the response aloud when voice is enabled
+        if self.voice.enabled and response_text:
+            self.voice.speak(response_text)
+
         self.memory.add_message("assistant", response_text)
         
         # RML: track the last response for explicit feedback (/rml good|bad)
@@ -1771,16 +1838,46 @@ class TerminalUI:
         while self.running:
             try:
                 # Get user input
-                user_input = Prompt.ask("\n[bold blue]You[/bold blue]").strip()
-                
+                prompt_str = "\n[bold blue]You[/bold blue]"
+                if self.voice.enabled and self.voice.is_recording:
+                    prompt_str = "\n[bold red][REC][/bold red] [bold blue]You[/bold blue] (press Enter to stop)"
+
+                user_input = Prompt.ask(prompt_str).strip()
+
                 if not user_input:
+                    # Empty input: if voice is recording, stop and transcribe
+                    if self.voice.enabled and self.voice.is_recording:
+                        self.console.print("[dim]Transcribing...[/dim]")
+                        transcript = self.voice.stop_and_transcribe()
+                        if transcript:
+                            self.console.print(f"[green]> {transcript}[/green]")
+                            self.generate_response(transcript)
+                        else:
+                            self.console.print("[yellow]No speech detected[/yellow]")
                     continue
-                
+
                 # Handle commands
                 if user_input.startswith("/"):
                     self.running = self.handle_command(user_input)
                     continue
-                
+
+                # Voice shortcut: "v" on empty-ish line triggers recording
+                if self.voice.enabled and user_input.lower() == "v" and self.voice.is_available():
+                    try:
+                        self.voice.start_recording()
+                        self.console.print("[bold red][REC][/bold red] Recording... press Enter to stop")
+                        # Wait for Enter to stop recording
+                        Prompt.ask("")
+                        transcript = self.voice.stop_and_transcribe()
+                        if transcript:
+                            self.console.print(f"[green]> {transcript}[/green]")
+                            self.generate_response(transcript)
+                        else:
+                            self.console.print("[yellow]No speech detected[/yellow]")
+                    except RuntimeError as e:
+                        self.console.print(f"[red]Voice error: {e}[/red]")
+                    continue
+
                 # Generate response
                 self.generate_response(user_input)
             

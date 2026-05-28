@@ -39,7 +39,7 @@ class TestHeuristicExtraction:
         summary = ss.generate_summary(messages, session_start_time=1000.0, model_name="qwen2.5")
         assert summary is not None
         assert "one_line" in summary
-        assert summary["code_written"] is True
+        assert summary["code_written"]
         assert len(summary["files_modified"]) >= 1
         assert summary["turn_count"] == 4
         assert summary["model"] == "qwen2.5"
@@ -100,7 +100,7 @@ class TestPersistence:
         messages = _basic_messages()
         summary = ss.generate_summary(messages)
         sid = ss.save_summary(summary)
-        assert ss.delete_summary(sid) is True
+        assert ss.delete_summary(sid)
         assert ss.load_summary(sid) is None
 
     def test_clear_all(self, ss):
@@ -116,7 +116,7 @@ class TestPersistence:
         assert ss.load_summary("s_nonexistent") is None
 
     def test_delete_nonexistent(self, ss):
-        assert ss.delete_summary("s_nonexistent") is False
+        assert not ss.delete_summary("s_nonexistent")
 
 
 class TestFormatting:
@@ -143,15 +143,15 @@ class TestFormatting:
 class TestConfig:
     def test_enabled_by_default(self):
         ss = SessionSummaries({})
-        assert ss.enabled is True
+        assert ss.enabled
 
     def test_bool_config(self):
         ss = SessionSummaries({"session_summaries": False})
-        assert ss.enabled is False
+        assert not ss.enabled
 
     def test_disabled_config(self):
         ss = SessionSummaries({"session_summaries": {"enabled": False}})
-        assert ss.enabled is False
+        assert not ss.enabled
 
     def test_max_summaries(self):
         ss = SessionSummaries({"session_summaries": {"max_summaries": 10}})

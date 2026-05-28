@@ -145,6 +145,19 @@ memory:
     decay_days: 30 # Facts with no reinforcement fade after this many days
     max_context_chars: 2000 # Cap for the injected memory block in the system prompt
   
+
+voice:
+  # Voice I/O: talk to the AI and hear responses aloud
+ # Enable with: /voice on in chat
+  # Input: whisper.cpp (scripts/install_whisper.sh) or pip install openai-whisper
+  # Output: espeak-ng (sudo apt install espeak-ng) for text-to-speech
+ enabled: true
+ whisper_bin: "whisper-cli" # path to whisper-cli binary (or full path)
+ model: "models/ggml-base.en.bin" # GGML model file
+ language: "en" # "en" for English, "auto" for auto-detect
+ push_to_talk: true # true = hold key to record, false = toggle
+ silence_threshold: 2.0 # seconds of silence before auto-stop
+ max_duration: 30 # max recording length in seconds
 ui:
   # User interface settings
   mode: "terminal"         # "terminal" or "web"

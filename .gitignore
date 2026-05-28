@@ -1,64 +1,5 @@
-# --- Python ---
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg
-*.egg-info/
-.eggs/
-dist/
-build/
-pip-wheel-metadata/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
-*.cover
-.hypothesis/
-
-# --- Virtual environments ---
-venv/
-.venv/
-env/
-ENV/
-*-venv/
-.*-venv/
-venv-*/
-.venv-*/
-**/.test-venv/
-
-# --- Local LLM artifacts (download via setup scripts) ---
-models/*.gguf
-models/*.bin
-models/*.safetensors
-models/.cache/
-!models/.gitkeep
-.cache/
-
-# --- RAG vector store (rebuilt with rag-index) ---
-chroma_db/
-
-# --- Portable copy of models/cache ---
-offline-bundle/
-
-# --- Runtime data ---
-mythos.log
-*.log
-conversations/*.json
-!conversations/.gitkeep
-benchmarks/*
-!benchmarks/.gitkeep
-lora/*
-!lora/.gitkeep
-rag_docs/*
-!rag_docs/.gitkeep
-
 # ─────────────────────── SECURITY ───────────────────────
-# --- SSH keys (NEVER commit) ---
+# --- SSH keys ---
 id_rsa
 id_rsa.*
 id_ed25519
@@ -69,20 +10,13 @@ id_dsa
 id_dsa.*
 *.ppk
 *.pub
-ssh_config
-ssh_config.*
 known_hosts
-known_hosts.*
 authorized_keys
-authorized_keys.*
 
 # --- GPG / PGP ---
 *.gpg
 *.asc
 secring.*
-pubring.*
-trustdb.gpg
-*.gpg~
 
 # --- Key / certificate material ---
 *.key
@@ -97,7 +31,6 @@ trustdb.gpg
 *.p7c
 *.der
 *.csr
-*.spc
 *.p8
 *.pkcs12
 
@@ -109,23 +42,21 @@ trustdb.gpg
 .kube/
 kubeconfig
 kubeconfig.*
-.docker/config.json
 .config/gcloud/
-gcloud-service-key.json
 service-account*.json
 *-service-account.json
-oci_config
+gcloud-service-key.json
 .oci/
 .ibmcloud/
-.alicloud/
-.tencentcloud/
+.docker/config.json
 
-# --- Auth / config files that often carry tokens ---
+# --- Auth / token files ---
 .env
 .env.*
 !.env.example
 .netrc
 .pypirc
+.npmrc
 .npmrc.local
 .yarnrc.yml
 .git-credentials
@@ -136,9 +67,7 @@ huggingface_token*
 .openai_key
 .anthropic_key
 .npm_auth_token
-.pip-auth
 .dockercfg
-.docker/
 
 # --- Generic secret patterns ---
 *secret*.json
@@ -160,38 +89,103 @@ auth.json
 *.passwd
 *.htpasswd
 .shadow
-*.shadow
 
-# --- Database dumps (may contain user data) ---
+# --- Database dumps ---
 *.dump
 *.sql.dump
 *.sql.gz
-*.sql.bz2
 *.pcap
 *.har
-*.pcapng
 
-# --- Coverage / profiling artifacts ---
-coverage.xml
+# ─────────────────────── BUILDS & CACHES ───────────────────────
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
 .coverage.*
-*.prof
-*.profraw
+htmlcov/
 coverage/
-.nyc_output/
+coverage.xml
+.tox/
+.nox/
+*.cover
+.hypothesis/
 
-# --- Private / local-only files ---
-*.private
-*.private.*
-private/
-PRIVATE/
-*.local
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+ENV/
+*-venv/
+.*-venv/
+venv-*/
+.venv-*/
+.mythos-venv/
 .test-venv/
-.mythos-test/
-mythos_audit.py
-mythos_bughunt.py
+**/.test-venv/
 
-# --- Local Mythos runtime state ---
+# --- Node ---
+node_modules/
+.npm
+.eslintcache
+package-lock.json
+pnpm-lock.yaml
+
+# --- Git ---
+.git/
+.gitignore
+.gitattributes
+
+# --- Local LLM artifacts (download via setup scripts) ---
+models/*.gguf
+models/*.bin
+models/*.safetensors
+models/.cache/
+!models/.gitkeep
+
+# Hugging Face / sentence-transformers cache
+.cache/
+
+# RAG vector store (rebuilt with rag-index)
+chroma_db/
+
+# Portable copy of models/cache
+offline-bundle/
+
+# ─────────────────────── RUNTIME DATA ───────────────────────
+mythos.log
+*.log
+
+# Saved chats
+conversations/*.json
+!conversations/.gitkeep
+
+# Benchmark outputs
+benchmarks/*
+!benchmarks/.gitkeep
+
+# LoRA training outputs
+lora/*
+!lora/.gitkeep
+
+# User-provided RAG documents
+rag_docs/*
+!rag_docs/.gitkeep
+
+# ─────────────────────── MYTHOS LOCAL STATE ───────────────────────
+# In-tree Mythos runtime state (normally in ~/.config/mythos, but
+# can end up here if someone sets MYTHOS_HOME=. or copies state for debugging)
 sessions/
 session_summaries/
 rml_preferences.json
@@ -202,8 +196,11 @@ mythos_home/
 mythos.yaml
 config.local.yaml
 config.*.local.yaml
+.mythos-test/
 
-# --- AI / IDE / editor local state ---
+# ─────────────────────── AI / IDE / EDITOR STATE ───────────────────────
+# These may contain prompts, transcripts, paths, or API keys
+.openclaude/
 .claude/
 .cursor/
 .copilot/
@@ -215,12 +212,37 @@ config.*.local.yaml
 .zed/
 .helix/
 .nvim.lua
-.vscode/
-.idea/
 *.code-workspace
-.envrc.local
 
-# --- Scratch / temp files ---
+# ─────────────────────── SCRATCH / TEMP / LOCAL FILES ───────────────────────
+# Dev/scratch files from AI coding sessions
+CODING_ACTIVATED.txt
+CODING_GUIDE.md
+ELITE_CODING_MODE.txt
+FINAL_INSTRUCTIONS.txt
+FINAL_SUMMARY.md
+FIXED_README.txt
+RUN_THIS.txt
+CHECKLIST.txt
+debug_config.py
+test_download.py
+show_download_url.py
+*.tmp
+*.bak
+*.orig
+*.rej
+*.patch
+*.patch.local
+*.local
+*.local.md
+*.local.txt
+*.scratch
+*.prof
+*.profraw
+*.private
+*.private.*
+private/
+PRIVATE/
 scratch/
 tmp/
 _tmp/
@@ -229,33 +251,31 @@ TODO.local
 TODO.local.*
 NOTES.local
 NOTES.local.*
-*.local.md
-*.local.txt
-*.scratch
-*.tmp
-*.bak
-*.orig
-*.rej
-*.patch
-*.patch.local
 
-# --- Shell / OS history (may contain secrets in commands) ---
+# ─────────────────────── SHELL / OS HISTORY ───────────────────────
 .bash_history
 .zsh_history
 .python_history
 .lesshst
 .viminfo
-
-# --- OS files ---
 .DS_Store
 .AppleDouble
 .LSOverride
 Thumbs.db
 *.swp
 *~
+.idea/
+.vscode/
 *.sublime-*
+.envrc.local
 
-# --- Node / frontend (not used by the Python container) ---
+# ─────────────────────── AUDIT / SECURITY TOOLS ───────────────────────
+# Local-only security audit scripts (not for distribution)
+mythos_audit.py
+mythos_bughunt.py
+
+# ─────────────────────── HOST BUILD ARTIFACTS ───────────────────────
+# Common build/install artifacts (when indexing external repos via RAG)
 **/node_modules/
 **/.next/
 **/dist/
@@ -266,17 +286,7 @@ Thumbs.db
 **/.venv/
 **/.ruff_cache/
 .vercel
-.npmrc
+.nyc_output/
 
-# --- Additional security-sensitive files ---
-.vault-token
-.vault-token.*
-terraform.tfstate
-terraform.tfstate.*
-*.tfvars
-*.tfvars.json
-.terraform/
-.terraform.lock.hcl
-ansible_vault_password
-.vault_pass
-.vault-password
+# ─────────────────────── VERCEL / DEPLOY ───────────────────────
+.vercelignore

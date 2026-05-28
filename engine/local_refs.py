@@ -14,16 +14,6 @@ from engine.chat_config import file_limit, merge_chat_defaults
 
 logger = logging.getLogger(__name__)
 
-# Rule IDs whose findings expose a literal secret on the matched line.
-SECRET_RULES: Set[str] = {
-    "SEC001",  # Private key / PEM block
-    "SEC002",  # AWS access key
-    "SEC003",  # Hardcoded password
-    "SEC004",  # API key / token
-    "SEC005",  # JWT secret / signing key
-    "SEC014",  # Generic secret assignment
-}
-
 
 def _truncate_text(text: str, max_chars: int) -> str:
     suffix = "\n\n[... truncated for context limit ...]"
@@ -72,33 +62,6 @@ SECRET_RULES = frozenset({"SEC001", "SEC002", "SEC003", "SEC004", "SEC005", "SEC
 
 _REDACTED_LINE = "<redacted: secret flagged by static scan>"
 _REDACTED_SNIPPET = "<redacted>"
-
-
-def _redact_secret_lines(
-    text: str,
-    findings: List[Any],
-    line_offset: int = 0,
-) -> str:
-    """Replace lines flagged by SECRET_RULES with a redaction marker.
-
-    line_offset: lines of header prepended to `text` before the file body
-    (finding.line is 1-based against the body, so body-line N maps to
-    text-line N + line_offset).
-    """
-    secret_lines = {
-        f.line + line_offset for f in findings
-        if getattr(f, "rule_id", "") in SECRET_RULES and getattr(f, "line", 0) > 0
-    }
-    if not secret_lines:
-        return text
-    out: List[str] = []
-    for idx, line in enumerate(text.splitlines(keepends=True), start=1):
-        if idx in secret_lines:
-            ending = "\n" if line.endswith(("\n", "\r")) else ""
-            out.append(f"{_REDACTED_LINE}{ending}")
-        else:
-            out.append(line)
-    return "".join(out)
 
 
 def _strip_ref(raw: str) -> str:

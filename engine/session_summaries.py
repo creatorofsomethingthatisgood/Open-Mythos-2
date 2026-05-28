@@ -21,7 +21,6 @@ import json
 import logging
 import os
 import re
-import itertools
 import time
 from datetime import datetime, timezone
 from pathlib import Path

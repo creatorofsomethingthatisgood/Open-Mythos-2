@@ -111,21 +111,21 @@ class TestDeduplication:
 class TestRemoveFact:
     def test_remove_by_id(self, mem):
         fid = mem.add_fact("User prefers Python")
-        assert mem.remove_fact(fid) is True
+        assert mem.remove_fact(fid)
         assert len(mem.list_facts()) == 0
 
     def test_remove_by_text(self, mem):
         mem.add_fact("User prefers Python")
-        assert mem.remove_fact("prefers Python") is True
+        assert mem.remove_fact("prefers Python")
         assert len(mem.list_facts()) == 0
 
     def test_remove_nonexistent_returns_false(self, mem):
-        assert mem.remove_fact("nonexistent_id") is False
+        assert not mem.remove_fact("nonexistent_id")
 
     def test_remove_case_insensitive(self, mem):
         mem.add_fact("User prefers Python")
-        assert mem.remove_fact("USER PREFERENCES PYTHON") is False  # Not a substring
-        assert mem.remove_fact("prefers python") is True  # Substring match, case-insensitive
+        assert not mem.remove_fact("USER PREFERENCES PYTHON")  # Not a substring
+        assert mem.remove_fact("prefers python")  # Substring match, case-insensitive
 
 
 # ── clear ─────────────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ class TestClear:
         store_path = memory_dir / "cross_session_memory.json"
         with open(store_path) as f:
             data = json.load(f)
-        assert len(data["facts"]) == 0
+        assert not data["facts"]
 
 
 # ── list_facts ────────────────────────────────────────────────────────────
@@ -241,7 +241,7 @@ class TestHeuristicExtraction:
         """Extracting the same fact twice should reinforce, not add a new one."""
         messages = [{"role": "user", "content": "my name is Alice"}]
         n1 = mem.extract_facts_from_messages(messages, engine=None)
-        n2 = mem.extract_facts_from_messages(messages, engine=None)
+        _n2 = mem.extract_facts_from_messages(messages, engine=None)
         assert n1 >= 1
         # Second extraction should reinforce, not add new
         facts = mem.list_facts()
@@ -343,15 +343,15 @@ class TestConfigHandling:
     def test_enabled_by_default(self, memory_dir):
         m = CrossSessionMemory()  # No config
         m.clear()
-        assert m.enabled is True
+        assert m.enabled
 
     def test_bool_config_toggle(self, memory_dir):
         m = CrossSessionMemory({"memory": {"cross_session": True}})
-        assert m.enabled is True
+        assert m.enabled
 
     def test_disabled_via_config(self, memory_dir):
         m = CrossSessionMemory({"memory": {"cross_session": {"enabled": False}}})
-        assert m.enabled is False
+        assert not m.enabled
 
     def test_custom_settings(self, memory_dir):
         m = CrossSessionMemory(

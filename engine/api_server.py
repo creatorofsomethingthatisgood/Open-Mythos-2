@@ -14,10 +14,10 @@ import re
 from pathlib import Path
 from typing import Any, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from engine.inference import InferenceEngine
 from engine.prompt_manager import PromptManager
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 class ChatRequest(BaseModel):
     message: str
-    history: List[dict[str, Any]] = []
+    history: List[dict[str, Any]] = Field(default_factory=list)
     system_prompt: str = ""
     temperature: float = 0.7
     top_p: float = 0.9
@@ -47,11 +47,11 @@ class ChatRequest(BaseModel):
 
 
 class ExportRequest(BaseModel):
-    history: List[dict[str, Any]] = []
+    history: List[dict[str, Any]] = Field(default_factory=list)
 
 
 class SaveRequest(BaseModel):
-    history: List[dict[str, Any]] = []
+    history: List[dict[str, Any]] = Field(default_factory=list)
 
 
 # --- App ---
@@ -60,20 +60,23 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
     app = FastAPI(title="Mythos Local API", version="2.0.5")
 
     cors_origins = os.getenv("MYTHOS_CORS_ORIGINS", "").split(",")
-    cors_origins = [o.strip() for o in cors_origins if o.strip()] or ["http://localhost:7860", "http://127.0.0.1:7860"]
+    cors_origins = [o.strip() for o in cors_origins if o.strip()] or [
+        "http://localhost:7860",
+        "http://127.0.0.1:7860",
+    ]
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
     )
 
     # Initialize components on startup
     state: dict[str, Any] = {}
 
-    @app.on_event("startup")
+    @app.on_event("startup")  # deprecated: switch to lifespan handler when dropping Pydantic v1 compat
     async def startup():
         logger.info("Initializing Mythos Local API...")
         state["engine"] = InferenceEngine(config_path)
@@ -206,7 +209,7 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
 
         except Exception as e:
             logger.error(f"Chat error: {e}", exc_info=True)
-            raise HTTPException(500, str(e)) from e
+            raise HTTPException(500, "Internal server error") from e
 
     @app.post("/api/clear")
     async def clear():
@@ -262,14 +265,41 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
             "rag": state.get("rag") is not None,
         }
 
+    @app.post("/api/rag-upload")
+    async def rag_upload(file: UploadFile):
+        """Upload a document to the RAG pipeline."""
+        rag: Optional[RAGPipeline] = state.get("rag")
+        if rag is None:
+            raise HTTPException(400, "RAG pipeline is not enabled")
+
+        # Validate filename
+        filename = file.filename or "upload.txt"
+        if "/" in filename or "\\" in filename:
+            raise HTTPException(400, "Invalid filename")
+
+        # Read content with size limit (10 MB)
+        content = await file.read(10 * 1024 * 1024 + 1)
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(400, "File too large (max 10 MB)")
+
+        # Save to docs directory and index
+        dest = rag.docs_dir / filename
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with open(dest, "wb") as f:
+            f.write(content)
+
+        rag.index_document(dest)
+        return f"Indexed {filename}"
+
     return app
 
 
 def run_api_server(config_path: str = "config.yaml", port: int = 7860):
     """Run the API server (also compatible with the Vercel frontend)."""
     import uvicorn
+    host = os.getenv("MYTHOS_API_HOST", "127.0.0.1")
     app = create_app(config_path)
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":

@@ -695,6 +695,12 @@ def _cmd_config_show(_args: argparse.Namespace) -> int:
 
     rows = _flatten(cfg)
     for section, key, value in rows:
+        # Mask sensitive values (API keys, tokens, passwords)
+        if any(s in key.lower() for s in ("api_key", "apikey", "token", "password", "secret")):
+            if len(value) > 8:
+                value = value[:4] + "****" + value[-4:]
+            elif value:
+                value = "****"
         table.add_row(section, key, value[:80])
 
     console.print(table)
