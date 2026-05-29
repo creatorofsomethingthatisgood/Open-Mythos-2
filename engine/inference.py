@@ -150,6 +150,26 @@ class InferenceEngine:
             else:
                 raise
     
+    def load_model(self, model_path: str) -> None:
+        """
+        Switch to a different GGUF model at runtime.
+
+        Args:
+            model_path: Path to the new GGUF model file
+        """
+        new_path = Path(model_path)
+        if not new_path.exists():
+            raise FileNotFoundError(f"Model file not found: {new_path}")
+        if "-of-" in new_path.name:
+            raise ValueError(
+                f"'{new_path.name}' is a multi-part split file — "
+                "all parts must be merged first. "
+                "Use: llama-gguf-split --merge <input> <output.gguf>"
+            )
+        self.model_path = new_path
+        logger.info(f"Switching model to: {new_path}")
+        self.model = self._load_model()
+
     @property
     def context_length(self) -> int:
         """Configured context window size (tokens)."""

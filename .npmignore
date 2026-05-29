@@ -277,3 +277,8 @@ mythos_bughunt.py
 
 # ─────────────────────── VERCEL / DEPLOY ───────────────────────
 .vercelignore
+CLAUDE.md
+.vercelignore
+.gitignore 
+.dockerignore
+.npmignore

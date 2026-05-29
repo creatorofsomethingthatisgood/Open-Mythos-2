@@ -4,6 +4,7 @@
 model:
   # Primary model configuration
   name: "qwen2.5-7b-instruct"
+  huggingface_id: "Qwen/Qwen2.5-7B-Instruct"  # Full HF model ID for fine-tuning
   path: "models/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
   repo_id: "bartowski/Qwen2.5-7B-Instruct-GGUF"
   filename: "Qwen2.5-7B-Instruct-Q4_K_M.gguf"

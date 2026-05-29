@@ -190,29 +190,34 @@ class TerminalUI:
         }
         emoji = mode_emoji.get(mode_name, '🚀')
 
+        banner = """
+ █████■ █████■ ██████▓ ███■   ██■
+ ██▔░░░██■██▔░░██■▔░░░░░ ████■  ██■
+ ██■   ██■██████▔░█████■   ██▔██■ ██■
+ ██■   ██■██▔░░░░ ██▔░░░   ██■▚██■██■
+ ▚██████▔░██■     ██████▓ ██■ ▚████■
+  ▚░░░░░ ▚░░ ░    ▚░░░░░░▚░░  ▚░░░
+███■   ███■██■   ██■████████■██■  ██■██████▓██████■
+████■ ████■▚██■ ██▔░▚░░██▔░░██■  ██■██▔░░░░▚░░░░██■
+██▔███▔██■ ▚████▔░░   ██■   ████████■█████■   █████▔░░
+██■▚██▔░██■  ▚██▔░░   ██■   ██▔░░░██■██▔░░░  ██▔░░░■
+██■ ▚░░ ██■   ██■      ██■   ██■  ██■██████▓██████▓
+▚░░     ▚░░   ▚░░      ▚░░   ▚░░  ▚░░▚░░░░░░░▚░░░░░░░
+"""
+        self.console.print(banner, style="bold cyan")
+
         if self.cloud_mode:
-            header = """
-╔═══════════════════════════════════════════════════════════════╗
-║ MYTHOS CLOUD                                                 ║
-║ Cloud-Powered AI via OpenAI-Compatible API                   ║
-╚═══════════════════════════════════════════════════════════════╝
-            """
-            self.console.print(header, style="bold cyan")
-            self.console.print(f"Model: [green]{self.engine.model_name}[/green]")
-            self.console.print(f"Context: [green]{self.engine.context_length:,}[/green] tokens")
-            self.console.print(f"Endpoint: [dim]{self.engine.base_url}[/dim]")
+            self.console.print("[bold cyan]\u2500\u2500 Cloud Mode \u2500\u2500[/bold cyan]")
+            self.console.print(f"  Model: [green]{self.engine.model_name}[/green]")
+            self.console.print(f"  Context: [green]{self.engine.context_length:,}[/green] tokens")
+            self.console.print(f"  Endpoint: [dim]{self.engine.base_url}[/dim]")
         else:
-            header = """
-╔═══════════════════════════════════════════════════════════════╗
-║ MYTHOS LOCAL                                                 ║
-║ High-Quality Local Language Model                            ║
-╚═══════════════════════════════════════════════════════════════╝
-            """
-            self.console.print(header, style="bold cyan")
-            self.console.print(f"Model: [green]{self.engine.model_path.name}[/green]")
-            self.console.print(f"Context: [green]{self.engine.context_length:,}[/green] tokens")
-        self.console.print(f"Mode: [bold magenta]{emoji} {mode_name}[/bold magenta]")
-        self.console.print(f"System Prompt: [yellow]{self.prompt_manager.get_prompt()[:70]}...[/yellow]")
+            self.console.print("[bold cyan]\u2500\u2500 Local Mode \u2500\u2500[/bold cyan]")
+            self.console.print(f"  Model: [green]{self.engine.model_path.name}[/green]")
+            self.console.print(f"  Context: [green]{self.engine.context_length:,}[/green] tokens")
+
+        self.console.print(f"  Mode: [bold magenta]{emoji} {mode_name}[/bold magenta]")
+        self.console.print(f"  System Prompt: [yellow]{self.prompt_manager.get_prompt()[:70]}...[/yellow]")
         self.console.print("\nType [bold]/help[/bold] for commands, [bold]/quit[/bold] to exit\n")
     def _fix_progress(self, message: str) -> None:
         """Show live status during scan / rewrite (users see this while waiting)."""
@@ -1191,7 +1196,7 @@ class TerminalUI:
                 if fb_path.exists():
                     fb_paths.append(fb_path)
             all_models = list(dict.fromkeys(([self.engine.model_path] if hasattr(self.engine, "model_path") else []) + gguf_files + fb_paths)) if hasattr(self.engine, 'model_path') else []
-            all_models = [p for p in all_models if p.suffix == ".gguf"]
+            all_models = [p for p in all_models if p.suffix == ".gguf" and "-of-" not in p.name]
             if not all_models:
                 self.console.print("[yellow]No GGUF models found[/yellow]")
                 return True

@@ -294,3 +294,8 @@ pnpm-lock.yaml
 Dockerfile
 docker-compose*.yml
 .dockerignore
+.vercelignore
+CLAUDE.md
+.gitignore 
+.dockerignore
+.npmignore

@@ -17,3 +17,7 @@ prompts/
 main.py
 run_web.sh
 mythos.log
+vercelignore
+.gitignore 
+.dockerignore
+.npmignore
