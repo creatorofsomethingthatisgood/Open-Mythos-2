@@ -135,6 +135,22 @@ venv-*/
 .test-venv/
 **/.test-venv/
 
+# --- Aider ---
+.aider*
+.aider.tags.cache.v4/
+
+# --- OpenCode ---
+.opencode/
+opencode.jsonc
+
+# --- Python packages ---
+*.egg-info/
+
+# --- SQLite caches ---
+*.db
+*.db-shm
+*.db-wal
+
 # --- Node ---
 node_modules/
 .npm
@@ -289,6 +305,7 @@ FINAL_SUMMARY.md
 FIXED_README.txt
 RUN_THIS.txt
 CHECKLIST.txt
+START_HERE.txt
 pnpm-lock.yaml
 .vercelignore
 Dockerfile

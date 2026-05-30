@@ -135,6 +135,22 @@ venv-*/
 .test-venv/
 **/.test-venv/
 
+# --- Aider ---
+.aider*
+.aider.tags.cache.v4/
+
+# --- OpenCode ---
+.opencode/
+opencode.jsonc
+
+# --- Python packages ---
+*.egg-info/
+
+# --- SQLite caches ---
+*.db
+*.db-shm
+*.db-wal
+
 # --- Node ---
 node_modules/
 .npm

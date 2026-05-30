@@ -223,7 +223,7 @@ def apply_fixes_to_tree(
     for rel, file_findings in by_file.items():
         full = (root / rel).resolve()
         # C-3 fix: prevent path traversal — file must be under scan root
-        if not str(full).startswith(str(resolved_root) + os.sep) and full != resolved_root:
+        if not full.is_relative_to(resolved_root):
             all_results.append(
                 FixResult(
                     rule_id="",

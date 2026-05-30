@@ -1,23 +1,63 @@
+# ─────────────────────── MODELS & CACHES ───────────────────────
 models/
-venv/
 .cache/
-chroma_db/
 *.gguf
 *.bin
 *.safetensors
 *.pth
+*.db
+*.db-shm
+*.db-wal
+
+# ─────────────────────── PYTHON ───────────────────────
+venv/
+.venv/
 __pycache__/
 *.pyc
-.git/
-requirements.txt
+*.egg-info/
+*.egg
+
+# ─────────────────────── ENGINE & RUNTIME ───────────────────────
 engine/
 ui/
 training/
-prompts/
 main.py
-run_web.sh
 mythos.log
-vercelignore
-.gitignore 
+chroma_db/
+sessions/
+session_summaries/
+rml_preferences.json
+
+# ─────────────────────── AI / IDE STATE ───────────────────────
+.git/
+.aider*
+.opencode/
+opencode.jsonc
+.claude/
+.openclaude/
+.cursor/
+.copilot/
+
+# ─────────────────────── DEV / SCRATCH FILES ───────────────────────
+debug_config.py
+CODING_ACTIVATED.txt
+CODING_GUIDE.md
+ELITE_CODING_MODE.txt
+FINAL_INSTRUCTIONS.txt
+FINAL_SUMMARY.md
+FIXED_README.txt
+RUN_THIS.txt
+CHECKLIST.txt
+START_HERE.txt
+test_coding.sh
+verify_coding_mode.sh
+verify_setup.sh
+run_web.sh
+
+# ─────────────────────── OTHER IGNORES ───────────────────────
 .dockerignore
+.gitignore
 .npmignore
+.vercelignore
+CLAUDE.md
+install-pip/

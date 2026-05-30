@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MYTHOS -- Fully Local, Offline AI</title>
+    <meta name="description" content="Open-Mythos-2: A fully local, offline AI chat assistant and security scanner. Zero cloud. Zero API keys. Zero limits.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0a;
+            --bg-card: #111111;
+            --bg-card-hover: #1a1a1a;
+            --gold: #FFD700;
+            --gold-dim: #b8960f;
+            --gold-glow: rgba(255, 215, 0, 0.08);
+            --text: #e0e0e0;
+            --text-dim: #888888;
+            --text-muted: #555555;
+            --border: #222222;
+            --border-gold: rgba(255, 215, 0, 0.3);
+            --font: 'Fira Code', monospace;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        /* ── Grid background ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,215,0,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,215,0,0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Navbar ── */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+            background: rgba(10,10,10,0.85);
+            border-bottom: 1px solid var(--border);
+            padding: 0 2rem;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        nav .brand {
+            color: var(--gold);
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+            text-decoration: none;
+        }
+
+        nav .links {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        nav .links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: color 0.2s;
+        }
+
+        nav .links a:hover { color: var(--gold); }
+
+        nav .gh-btn {
+            background: var(--gold);
+            color: var(--bg);
+            padding: 0.4rem 1rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+
+        nav .gh-btn:hover { background: #ffe44d; }
+
+        /* ── Sections ── */
+        section {
+            position: relative;
+            z-index: 1;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 6rem 2rem;
+        }
+
+        /* ── Hero ── */
+        #hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding-top: 80px;
+        }
+
+        #hero .glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,215,0,0.07) 0%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .ascii-art {
+            color: var(--gold);
+            font-size: 0.55rem;
+            line-height: 1.2;
+            letter-spacing: 0;
+            white-space: pre;
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.8s ease both;
+        }
+
+        .tagline {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            font-weight: 300;
+            letter-spacing: 1px;
+            margin-bottom: 1.5rem;
+            animation: fadeInUp 0.8s 0.2s ease both;
+        }
+
+        .tagline .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 1.1em;
+            background: var(--gold);
+            margin-left: 4px;
+            vertical-align: text-bottom;
+            animation: blink 1s step-end infinite;
+        }
+
+        .headline {
+            font-size: 2.4rem;
+            font-weight: 700;
+            line-height: 1.3;
+            margin-bottom: 1rem;
+            animation: fadeInUp 0.8s 0.4s ease both;
+        }
+
+        .headline .gold { color: var(--gold); }
+
+        .sub-headline {
+            color: var(--text-dim);
+            font-size: 1rem;
+            font-weight: 300;
+            max-width: 640px;
+            margin: 0 auto 2.5rem;
+            animation: fadeInUp 0.8s 0.5s ease both;
+        }
+
+        .cta-row {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 3rem;
+            animation: fadeInUp 0.8s 0.6s ease both;
+        }
+
+        .cta-primary {
+            background: var(--gold);
+            color: var(--bg);
+            padding: 0.8rem 2rem;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            text-decoration: none;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .cta-primary:hover { background: #ffe44d; transform: translateY(-1px); }
+
+        .cta-secondary {
+            border: 1px solid var(--border-gold);
+            color: var(--gold);
+            padding: 0.8rem 2rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            text-decoration: none;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .cta-secondary:hover { background: var(--gold-glow); transform: translateY(-1px); }
+
+        .terminal-preview {
+            background: #0d0d0d;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem 2rem;
+            text-align: left;
+            max-width: 560px;
+            width: 100%;
+            margin-bottom: 3rem;
+            animation: fadeInUp 0.8s 0.7s ease both;
+        }
+
+        .terminal-preview .prompt {
+            color: var(--gold);
+            margin-right: 0.5rem;
+        }
+
+        .terminal-preview .cmd {
+            color: var(--text);
+        }
+
+        .terminal-preview .output {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            margin-top: 0.3rem;
+            padding-left: 1.5rem;
+        }
+
+        .terminal-preview .line { margin-bottom: 0.8rem; }
+
+        .badges {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            animation: fadeInUp 0.8s 0.8s ease both;
+        }
+
+        .badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-dim);
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .badge .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--gold);
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            animation: fadeInUp 0.8s 1s ease both;
+        }
+
+        .scroll-indicator .line {
+            width: 1px;
+            height: 40px;
+            background: linear-gradient(to bottom, var(--gold), transparent);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .scroll-indicator span {
+            color: var(--text-muted);
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* ── Why Mythos ── */
+        #why {
+            border-top: 1px solid var(--border);
+        }
+
+        #why h2 {
+            color: var(--gold);
+            font-size: 1.6rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 2px;
+        }
+
+        #why .subtitle {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-bottom: 3rem;
+        }
+
+        .comparison {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .comparison th {
+            text-align: left;
+            padding: 1rem 1.5rem;
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .comparison th:first-child { color: var(--text-muted); }
+        .comparison th:nth-child(2) { color: var(--gold); }
+        .comparison th:nth-child(3) { color: var(--text-dim); }
+
+        .comparison td {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+
+        .comparison td:first-child { color: var(--text-dim); }
+        .comparison td:nth-child(2) { color: var(--text); }
+        .comparison td:nth-child(3) { color: var(--text-muted); }
+
+        .comparison .yes { color: var(--gold); }
+        .comparison .no { color: #cc3333; }
+
+        /* ── Features ── */
+        #features {
+            border-top: 1px solid var(--border);
+        }
+
+        #features h2 {
+            color: var(--gold);
+            font-size: 1.6rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 2px;
+        }
+
+        #features .subtitle {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-bottom: 3rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.8rem;
+            transition: border-color 0.3s, background 0.3s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--border-gold);
+            background: var(--bg-card-hover);
+        }
+
+        .feature-card .icon {
+            color: var(--gold);
+            font-size: 1.4rem;
+            margin-bottom: 0.8rem;
+            font-weight: 700;
+        }
+
+        .feature-card h3 {
+            font-size: 0.95rem;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+            letter-spacing: 1px;
+        }
+
+        .feature-card p {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            line-height: 1.6;
+        }
+
+        /* ── RML ── */
+        #rml {
+            border-top: 1px solid var(--border);
+        }
+
+        #rml h2 {
+            color: var(--gold);
+            font-size: 1.6rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 2px;
+        }
+
+        #rml .subtitle {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-bottom: 2rem;
+        }
+
+        .rml-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            max-width: 600px;
+        }
+
+        .rml-step {
+            display: flex;
+            gap: 1.2rem;
+            align-items: flex-start;
+        }
+
+        .rml-step .num {
+            color: var(--gold);
+            font-size: 1.4rem;
+            font-weight: 700;
+            min-width: 2rem;
+        }
+
+        .rml-step h3 {
+            font-size: 0.9rem;
+            color: var(--text);
+            margin-bottom: 0.3rem;
+        }
+
+        .rml-step p {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+        }
+
+        /* ── Security ── */
+        #security {
+            border-top: 1px solid var(--border);
+        }
+
+        #security h2 {
+            color: var(--gold);
+            font-size: 1.6rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 2px;
+        }
+
+        #security .subtitle {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .security-flow {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 2.5rem;
+        }
+
+        .security-flow .step {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem 1.5rem;
+            text-align: center;
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .security-flow .step h4 {
+            color: var(--gold);
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 0.3rem;
+        }
+
+        .security-flow .step p {
+            color: var(--text-dim);
+            font-size: 0.75rem;
+        }
+
+        .security-flow .arrow {
+            color: var(--gold-dim);
+            font-size: 1.2rem;
+        }
+
+        .scan-demo {
+            background: #0d0d0d;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            font-size: 0.78rem;
+            line-height: 1.6;
+        }
+
+        .scan-demo .prompt { color: var(--gold); }
+        .scan-demo .flag { color: #cc3333; }
+        .scan-demo .fix { color: #33cc33; }
+        .scan-demo .dim { color: var(--text-muted); }
+
+        /* ── Install ── */
+        #install {
+            border-top: 1px solid var(--border);
+        }
+
+        #install h2 {
+            color: var(--gold);
+            font-size: 1.6rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 2px;
+        }
+
+        #install .subtitle {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .install-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .install-step {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        .install-step .num {
+            color: var(--gold);
+            font-size: 2rem;
+            font-weight: 700;
+            min-width: 2.5rem;
+        }
+
+        .install-step .content h3 {
+            font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .install-step code {
+            display: block;
+            background: #0d0d0d;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0.8rem 1.2rem;
+            font-size: 0.8rem;
+            color: var(--text);
+            margin-top: 0.5rem;
+            overflow-x: auto;
+        }
+
+        .install-step code .comment { color: var(--text-muted); }
+        .install-step code .cmd-text { color: var(--gold); }
+
+        /* ── Commands ── */
+        #commands {
+            border-top: 1px solid var(--border);
+        }
+
+        #commands h2 {
+            color: var(--gold);
+            font-size: 1.6rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 2px;
+        }
+
+        #commands .subtitle {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .cmd-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .cmd-table th {
+            text-align: left;
+            padding: 0.8rem 1rem;
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .cmd-table td {
+            padding: 0.8rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.82rem;
+        }
+
+        .cmd-table td:first-child { color: var(--gold); white-space: nowrap; }
+        .cmd-table td:last-child { color: var(--text-dim); }
+
+        /* ── Community ── */
+        #community {
+            border-top: 1px solid var(--border);
+            text-align: center;
+        }
+
+        #community h2 {
+            color: var(--gold);
+            font-size: 1.6rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 2px;
+        }
+
+        #community .subtitle {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-bottom: 3rem;
+        }
+
+        .community-stats {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-bottom: 3rem;
+            flex-wrap: wrap;
+        }
+
+        .community-stats .stat {
+            text-align: center;
+        }
+
+        .community-stats .stat .value {
+            color: var(--gold);
+            font-size: 2.2rem;
+            font-weight: 700;
+        }
+
+        .community-stats .stat .label {
+            color: var(--text-dim);
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-top: 0.3rem;
+        }
+
+        .license-badge {
+            display: inline-block;
+            border: 1px solid var(--border-gold);
+            border-radius: 4px;
+            padding: 0.6rem 1.5rem;
+            color: var(--gold);
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+            margin-bottom: 2rem;
+        }
+
+        /* ── Footer ── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        footer p {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+        }
+
+        footer a { color: var(--gold-dim); text-decoration: none; }
+        footer a:hover { color: var(--gold); }
+
+        /* ── Animations ── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            nav .links { display: none; }
+            .headline { font-size: 1.6rem; }
+            .ascii-art { font-size: 0.35rem; }
+            .comparison { font-size: 0.75rem; }
+            .comparison th, .comparison td { padding: 0.7rem 0.8rem; }
+            .security-flow .arrow { display: none; }
+            .community-stats { gap: 2rem; }
+        }
+
+        @media (max-width: 480px) {
+            .headline { font-size: 1.3rem; }
+            .ascii-art { display: none; }
+            .cta-row { flex-direction: column; align-items: center; }
+            .badges { flex-direction: column; align-items: center; }
+            section { padding: 4rem 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Navigation ── -->
+    <nav>
+        <a href="#hero" class="brand">MYTHOS-2</a>
+        <div class="links">
+            <a href="#why">Why Mythos</a>
+            <a href="#features">Features</a>
+            <a href="#install">Install</a>
+            <a href="#security">Security</a>
+            <a href="#community">Community</a>
+            <a href="https://github.com/creatorofsomethingthatisgood/Open-Mythos-2" class="gh-btn" target="_blank" rel="noopener">GitHub</a>
+        </div>
+    </nav>
+
+    <!-- ── Hero ── -->
+    <section id="hero">
+        <div class="glow"></div>
+        <pre class="ascii-art">
+  __   __  ___  __       __  ___   __
+ / /  / / /  / / /      / / /  /  / /
+/ /__/ / /  / / /___   / / /  /  / /
+/ ___  / /  / / ___  / / / /  /  / /
+/ /  / / /  / / /  / / / / /  /  / /
+/_/  /_/ /__/ /_/  /_/ /_/ /__/ /__/
+        </pre>
+        <p class="tagline">From the void of computation, a new oracle speaks -- no gods, no cloud, only the terminal.<span class="cursor"></span></p>
+        <h1 class="headline"><span class="gold">Fully local</span>, <span class="gold">offline AI</span> in your terminal.<br>Zero API keys. Zero cloud. Zero limits.</h1>
+        <p class="sub-headline">Open-Mythos-2 runs GGUF models on your hardware via llama-cpp-python. Metal on macOS, Vulkan on Linux AMD, CUDA on NVIDIA. No data leaves your machine.</p>
+        <div class="cta-row">
+            <a href="https://github.com/creatorofsomethingthatisgood/Open-Mythos-2" class="cta-primary" target="_blank" rel="noopener">Get Started</a>
+            <a href="#install" class="cta-secondary">View Install Options</a>
+        </div>
+        <div class="terminal-preview">
+            <div class="line"><span class="prompt">$</span> <span class="cmd">mythos model download</span></div>
+            <div class="output">Downloading Mythos 4.8 (Gemma 3 12B fine-tune)...</div>
+            <div class="line" style="margin-top:1rem"><span class="prompt">$</span> <span class="cmd">mythos</span></div>
+            <div class="output">Oracle ready. Type your question.<span class="cursor"></span></div>
+        </div>
+        <div class="badges">
+            <div class="badge"><span class="dot"></span> Fully Offline</div>
+            <div class="badge"><span class="dot"></span> Unlicense</div>
+            <div class="badge"><span class="dot"></span> Python 3.10+</div>
+            <div class="badge"><span class="dot"></span> Vulkan / Metal / CUDA</div>
+        </div>
+        <div class="scroll-indicator">
+            <div class="line"></div>
+            <span>Scroll</span>
+        </div>
+    </section>
+
+    <!-- ── Why Mythos ── -->
+    <section id="why">
+        <h2>Why Mythos</h2>
+        <p class="subtitle">Cloud AI services trade your privacy for convenience. Mythos gives you both.</p>
+        <table class="comparison">
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Mythos</th>
+                    <th>Cloud AI</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Data privacy</td>
+                    <td><span class="yes">100% local</span> -- nothing leaves your machine</td>
+                    <td><span class="no">Data sent to remote servers</span></td>
+                </tr>
+                <tr>
+                    <td>API keys required</td>
+                    <td><span class="yes">None</span></td>
+                    <td><span class="no">Required, metered</span></td>
+                </tr>
+                <tr>
+                    <td>Offline use</td>
+                    <td><span class="yes">Fully offline</span></td>
+                    <td><span class="no">Requires internet</span></td>
+                </tr>
+                <tr>
+                    <td>Cost</td>
+                    <td><span class="yes">Free forever</span></td>
+                    <td><span class="no">Per-token billing</span></td>
+                </tr>
+                <tr>
+                    <td>Security scanning</td>
+                    <td><span class="yes">Built-in SAST + AI audit</span></td>
+                    <td><span class="no">Not included</span></td>
+                </tr>
+                <tr>
+                    <td>Self-improvement</td>
+                    <td><span class="yes">RML feedback engine</span></td>
+                    <td><span class="no">Static behavior</span></td>
+                </tr>
+                <tr>
+                    <td>License</td>
+                    <td><span class="yes">Unlicense (public domain)</span></td>
+                    <td><span class="no">Proprietary</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ── Features ── -->
+    <section id="features">
+        <h2>Features</h2>
+        <p class="subtitle">Everything you need for local AI, in one package.</p>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon">&gt;_</div>
+                <h3>Terminal Chat</h3>
+                <p>Rich terminal UI with syntax highlighting, streaming responses, slash commands, and full conversation management. Your AI lives in the terminal where you do.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">/</div>
+                <h3>Slash Commands</h3>
+                <p>Built-in commands for everything: /config, /export, /summary, /voice, /rag, /fix, /rml, /persona, and more. Full control without leaving the chat.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">[*]</div>
+                <h3>RML Feedback Engine</h3>
+                <p>Reinforcement Meta-Learning: Mythos learns from your feedback. Explicit signals (/rml good/bad) and implicit cues adjust temperature, top_p, and system prompts over time.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">{}</div>
+                <h3>Security Scanner</h3>
+                <p>Static SAST scanner for quick findings, AI-powered deep scanner for nuanced audits. Auto-fix with --apply or inline /fix in chat. No external tools needed.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">[R]</div>
+                <h3>RAG Pipeline</h3>
+                <p>ChromaDB + sentence-transformers. Index local documents, query them in chat. Perfect for codebases, docs, or research papers -- all local, all offline.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">~~</div>
+                <h3>Voice I/O</h3>
+                <p>Whisper-based speech-to-text input. espeak-ng or Piper text-to-speech output. Press V to talk, let Mythos talk back. Hands-free local AI.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">G</div>
+                <h3>Gradio Web UI</h3>
+                <p>Not a terminal person? Launch the web interface with --mode web. Same engine, same model, browser-based interaction on port 7860.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">^</div>
+                <h3>LoRA Fine-Tuning</h3>
+                <p>Train custom LoRA adapters on your own data. Merge into the base model, convert to GGUF, and run your fine-tuned model locally. Full pipeline included.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">::</div>
+                <h3>Cross-Session Memory</h3>
+                <p>Key facts persist across sessions. Session summaries give structured digests. Your AI remembers context without sending anything anywhere.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── RML ── -->
+    <section id="rml">
+        <h2>RML: Reinforcement Meta-Learning</h2>
+        <p class="subtitle">The only local AI that improves the more you use it.</p>
+        <div class="rml-flow">
+            <div class="rml-step">
+                <div class="num">01</div>
+                <div>
+                    <h3>You chat and give feedback</h3>
+                    <p>Use /rml good or /rml bad to explicitly rate responses. Mythos also picks up implicit signals: edits, interruptions, and keyword cues.</p>
+                </div>
+            </div>
+            <div class="rml-step">
+                <div class="num">02</div>
+                <div>
+                    <h3>Scores accumulate per category</h3>
+                    <p>Feedback is categorized (reasoning, creativity, instruction-following, etc.) and scored. When a category crosses the negative threshold, an adjustment triggers.</p>
+                </div>
+            </div>
+            <div class="rml-step">
+                <div class="num">03</div>
+                <div>
+                    <h3>Generation params are nudged</h3>
+                    <p>Temperature, top_p, and other sampling parameters are automatically adjusted. A learned hint is injected into the system prompt to steer future responses.</p>
+                </div>
+            </div>
+            <div class="rml-step">
+                <div class="num">04</div>
+                <div>
+                    <h3>Preferences persist</h3>
+                    <p>RML state is saved to ~/.config/mythos/rml_preferences.json. Your AI gets better across sessions, not just within one conversation.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── Security ── -->
+    <section id="security">
+        <h2>Security Scanner</h2>
+        <p class="subtitle">Built-in SAST and AI-powered security auditing. No external tools.</p>
+        <div class="security-flow">
+            <div class="step">
+                <h4>Static Scan</h4>
+                <p>Regex-based SAST<br>No model needed</p>
+            </div>
+            <div class="arrow">--&gt;</div>
+            <div class="step">
+                <h4>Deep Scan</h4>
+                <p>AI-powered audit<br>Context-aware</p>
+            </div>
+            <div class="arrow">--&gt;</div>
+            <div class="step">
+                <h4>Auto-Fix</h4>
+                <p>Dry-run or apply<br>MYTHOS_PATCH rewrite</p>
+            </div>
+            <div class="arrow">--&gt;</div>
+            <div class="step">
+                <h4>Verify</h4>
+                <p>Re-scan after fix<br>Confirm resolution</p>
+            </div>
+        </div>
+        <div class="scan-demo">
+            <div><span class="prompt">$</span> mythos scan ./my-project --deep</div>
+            <br>
+            <div><span class="dim">[SCAN]</span> Scanning 47 files...</div>
+            <div><span class="flag">[HIGH]</span> SQL injection in auth.py:42 -- raw string interpolation in query</div>
+            <div><span class="flag">[MED]</span> Path traversal in upload.py:18 -- unsanitized filename in open()</div>
+            <div><span class="flag">[LOW]</span> Hardcoded debug flag in config.py:5</div>
+            <br>
+            <div><span class="prompt">$</span> mythos fix --path ./my-project --apply</div>
+            <br>
+            <div><span class="fix">[FIXED]</span> auth.py:42 -- parameterized query</div>
+            <div><span class="fix">[FIXED]</span> upload.py:18 -- path validation with Path.is_relative_to()</div>
+            <div><span class="dim">[SKIP]</span> config.py:5 -- requires manual review</div>
+        </div>
+    </section>
+
+    <!-- ── Install ── -->
+    <section id="install">
+        <h2>Get Started</h2>
+        <p class="subtitle">Up and running in three commands.</p>
+        <div class="install-steps">
+            <div class="install-step">
+                <div class="num">1</div>
+                <div class="content">
+                    <h3>Install Mythos</h3>
+                    <code><span class="comment"># Install from PyPI</span><br><span class="cmd-text">pip install mythos-sentinel</span></code>
+                </div>
+            </div>
+            <div class="install-step">
+                <div class="num">2</div>
+                <div class="content">
+                    <h3>Download a model</h3>
+                    <code><span class="comment"># Downloads Mythos 4.8 (Gemma 3 12B fine-tune, Q4_K_M)</span><br><span class="cmd-text">mythos model download</span></code>
+                </div>
+            </div>
+            <div class="install-step">
+                <div class="num">3</div>
+                <div class="content">
+                    <h3>Start chatting</h3>
+                    <code><span class="cmd-text">mythos</span></code>
+                </div>
+            </div>
+            <div class="install-step">
+                <div class="num">*</div>
+                <div class="content">
+                    <h3>Or run from source</h3>
+                    <code><span class="cmd-text">git clone https://github.com/creatorofsomethingthatisgood/Open-Mythos-2.git</span><br><span class="cmd-text">cd Open-Mythos-2</span><br><span class="cmd-text">python main.py --mode chat</span></code>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── Commands ── -->
+    <section id="commands">
+        <h2>Command Reference</h2>
+        <p class="subtitle">The mythos CLI at a glance.</p>
+        <table class="cmd-table">
+            <thead>
+                <tr>
+                    <th>Command</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>mythos</td><td>Launch terminal chat (default mode)</td></tr>
+                <tr><td>mythos cloud</td><td>Cloud API mode (OpenAI-compatible)</td></tr>
+                <tr><td>mythos scan &lt;path&gt;</td><td>Static security scan</td></tr>
+                <tr><td>mythos scan &lt;path&gt; --deep</td><td>AI-powered deep security audit</td></tr>
+                <tr><td>mythos fix --path &lt;path&gt;</td><td>Dry-run auto-fix for findings</td></tr>
+                <tr><td>mythos fix --path &lt;path&gt; --apply</td><td>Apply auto-fixes to disk</td></tr>
+                <tr><td>mythos model download</td><td>Download default GGUF model</td></tr>
+                <tr><td>mythos doctor</td><td>Diagnose setup issues</td></tr>
+                <tr><td>mythos config</td><td>View or edit configuration</td></tr>
+                <tr><td>mythos history</td><td>List past conversation sessions</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ── Community ── -->
+    <section id="community">
+        <h2>Open Source</h2>
+        <p class="subtitle">Public domain. No restrictions. Build anything.</p>
+        <div class="community-stats">
+            <div class="stat">
+                <div class="value">0</div>
+                <div class="label">API Keys Required</div>
+            </div>
+            <div class="stat">
+                <div class="value">100%</div>
+                <div class="label">Local</div>
+            </div>
+            <div class="stat">
+                <div class="value">0</div>
+                <div class="label">Data Sent to Cloud</div>
+            </div>
+        </div>
+        <div class="license-badge">Unlicense -- Public Domain</div>
+        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 2rem;">
+            Mythos is released under the Unlicense, placing it firmly in the public domain.<br>
+            Use it, fork it, sell it, embed it -- no restrictions, no attribution required.
+        </p>
+        <div class="cta-row">
+            <a href="https://github.com/creatorofsomethingthatisgood/Open-Mythos-2" class="cta-primary" target="_blank" rel="noopener">Star on GitHub</a>
+            <a href="https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issues" class="cta-secondary" target="_blank" rel="noopener">Report an Issue</a>
+        </div>
+    </section>
+
+    <!-- ── Footer ── -->
+    <footer>
+        <p>Open-Mythos-2 -- <a href="https://github.com/creatorofsomethingthatisgood/Open-Mythos-2">GitHub</a> -- Unlicense</p>
+    </footer>
+
+</body>
+</html>

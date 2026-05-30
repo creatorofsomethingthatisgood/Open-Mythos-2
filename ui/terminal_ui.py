@@ -785,9 +785,15 @@ class TerminalUI:
             text = self.memory.export_text()
             filename = Prompt.ask("Save as", default="conversation_export.txt")
             
-            with open(filename, 'w') as f:
+            target = Path(filename).expanduser().resolve()
+            cwd = Path.cwd().resolve()
+            if not target.is_relative_to(cwd):
+                self.console.print(f"[red]Export path must be inside current directory: {cwd}[/red]")
+                return True
+
+            with open(target, 'w') as f:
                 f.write(text)
-            self.console.print(f"[green]Exported to: {filename}[/green]")
+            self.console.print(f"[green]Exported to: {target}[/green]")
         
         elif cmd == "/summary":
             if not self.session_summaries.enabled:
@@ -1029,6 +1035,11 @@ class TerminalUI:
                 target_path = Path(args.strip()).expanduser().resolve()
             else:
                 target_path = Path("mythos_dump.txt")
+            cwd = Path.cwd().resolve()
+            if not target_path.is_relative_to(cwd):
+                self.console.print(f"[red]Dump path must be inside current directory: {cwd}[/red]")
+                return True
+
             try:
                 text = self.memory.export_text()
                 with open(target_path, 'w') as f:
@@ -1115,7 +1126,12 @@ class TerminalUI:
                 target_path = Path(args.strip()).expanduser().resolve()
             else:
                 target_path = Path("conversation_export.md")
-            try:
+                        cwd = Path.cwd().resolve()
+            if not target_path.is_relative_to(cwd):
+                self.console.print(f"[red]Markdown export path must be inside current directory: {cwd}[/red]")
+                return True
+
+try:
                 with open(target_path, "w") as f_md:
                     f_md.write(md_text)
                 self.console.print(f"[green]Markdown exported to: {target_path}[/green]")
