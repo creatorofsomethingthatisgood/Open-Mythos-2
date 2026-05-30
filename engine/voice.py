@@ -345,8 +345,8 @@ class VoiceSpeaker:
         try:
             voice = PiperVoice.load(model_path)
             tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-        wav_path = tmp.name
-        tmp.close()
+            wav_path = tmp.name
+            tmp.close()
             raw = b"".join(c.audio_int16_bytes for c in voice.synthesize(text))
             import wave
             with wave.open(wav_path, "wb") as wf:

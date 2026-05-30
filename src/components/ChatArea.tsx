@@ -73,23 +73,65 @@ function parseMessageContent(content: string): ParsedBlock[] {
 }
 
 function formatInlineMarkdown(text: string): string {
-  let html = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+  // Split text into segments: ASCII art blocks vs regular text.
+  // ASCII art blocks are multi-line runs that contain visual structure
+  // (box-drawing chars, pipe tables, repeated spacing for alignment).
+  const ASCII_PATTERN =
+    /((?:[│┃┆┇┊┋╎╏┏┐┓└┕┘┙┚┛├┝┞┟┠┡┢┣┤┥┦┧┨┩┪┫┬┭┮┯┰┱┲┳┴┵┶┷┸┹┺┻┼╁╂╃╄╅╆╇╈╉╊╍╌─━┄┅┈┉╴╵╶╷╸╹╺╻╼╽╾╿═║╔╗╚╝╠╣╦╩╬┌┐└┘├┤┬┴┼▄▀█▓▒░┏┓┗┛┣┫┳┻╋]+|(?:\|.{1,60}\|[\s]*\n?){2,}|(?:[^\S\n]{2,}\S.*\n?){2,}))/g;
 
-  html = html.replace(
-    /`([^`]+)`/g,
-    '<code class="mythos-inline-code">$1</code>'
-  );
-  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>");
-  html = html.replace(/~~(.+?)~~/g, "<del>$1</del>");
-  html = html.replace(/\n/g, "<br/>");
+  // Process regular text segments through inline markdown
+  const processText = (t: string): string => {
+    let html = t
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
 
-  return html;
+    html = html.replace(
+      /`([^`]+)`/g,
+      '<code class="mythos-inline-code">$1</code>'
+    );
+    html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>");
+    html = html.replace(/~~(.+?)~~/g, "<del>$1</del>");
+    html = html.replace(/\n/g, "<br/>");
+    return html;
+  };
+
+  // Process ASCII art blocks: escape HTML, preserve whitespace with <pre>
+  const processAscii = (raw: string): string => {
+    const escaped = raw
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+    return `<pre class="mythos-ascii-block">${escaped}</pre>`;
+  };
+
+  let result = "";
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+
+  // Reset regex state
+  const regex = new RegExp(ASCII_PATTERN.source, ASCII_PATTERN.flags);
+
+  while ((match = regex.exec(text)) !== null) {
+    // Text before this match
+    if (match.index > lastIdx) {
+      result += processText(text.slice(lastIdx, match.index));
+    }
+    result += processAscii(match[1]);
+    lastIdx = match.index + match[0].length;
+  }
+
+  // Remaining text after last match
+  if (lastIdx < text.length) {
+    result += processText(text.slice(lastIdx));
+  }
+
+  return result || processText(text);
 }
 
 function ChatMessage({

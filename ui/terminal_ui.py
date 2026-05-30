@@ -1126,12 +1126,11 @@ class TerminalUI:
                 target_path = Path(args.strip()).expanduser().resolve()
             else:
                 target_path = Path("conversation_export.md")
-                        cwd = Path.cwd().resolve()
+            cwd = Path.cwd().resolve()
             if not target_path.is_relative_to(cwd):
                 self.console.print(f"[red]Markdown export path must be inside current directory: {cwd}[/red]")
                 return True
-
-try:
+            try:
                 with open(target_path, "w") as f_md:
                     f_md.write(md_text)
                 self.console.print(f"[green]Markdown exported to: {target_path}[/green]")
