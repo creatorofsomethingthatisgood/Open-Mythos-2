@@ -786,7 +786,7 @@ def _cmd_sessions(args: argparse.Namespace) -> int:
 
     ensure_initialized()
     home = mythos_home()
-    sessions_dir = home / "sessions"
+    sessions_dir = home / "session_summaries"
     if not sessions_dir.exists() or not any(sessions_dir.iterdir()):
         console.print(f"[{STYLE_WARN}]No saved sessions found.[/{STYLE_WARN}]")
         console.print(f"[dim]Sessions are saved automatically when you use /summary in chat.[/dim]")
