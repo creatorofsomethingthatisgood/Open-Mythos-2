@@ -36,7 +36,7 @@ class LoRAFineTuner:
 
     def __init__(
         self,
-        base_model: str = "Qwen/Qwen2.5-7B-Instruct",
+        base_model: str = "google/gemma-3-12b-it",
         output_dir: str = "lora",
         lora_r: int = 16,
         lora_alpha: int = 32,
@@ -56,7 +56,7 @@ class LoRAFineTuner:
         self.lora_r = lora_r
         self.lora_alpha = lora_alpha
         self.lora_dropout = lora_dropout
-        self.target_modules = target_modules or ["q_proj", "k_proj", "v_proj", "o_proj"]
+        self.target_modules = target_modules or ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
         self.max_seq_length = max_seq_length
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -252,7 +252,7 @@ class LoRAFineTuner:
 
 def run_finetuning(
     dataset_path: Optional[Path] = None,
-    base_model: str = "Qwen/Qwen2.5-7B-Instruct",
+    base_model: str = "google/gemma-3-12b-it",
     output_dir: str = "lora",
     num_epochs: int = 1,
     max_steps: int = -1,
