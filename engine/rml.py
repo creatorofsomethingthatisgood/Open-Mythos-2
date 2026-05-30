@@ -26,6 +26,7 @@ import json
 import logging
 import math
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -43,22 +44,22 @@ SIGNAL_IMPLICIT_NEGATIVE = -1.0
 SIGNAL_EDIT_PENALTY = -1.0
 SIGNAL_INTERRUPT_PENALTY = -0.5
 
-IMPLICIT_POSITIVE_RE = __import__("re").compile(
+IMPLICIT_POSITIVE_RE = re.compile(
     r"^(thanks|thank you|perfect|great|exactly|spot on|works|awesome|helpful|that works|that helped|you got it|spot on)\s*[!.?]*\s*$",
-    __import__("re").IGNORECASE,
+    re.IGNORECASE,
 )
-IMPLICIT_NEGATIVE_RE = __import__("re").compile(
+IMPLICIT_NEGATIVE_RE = re.compile(
     r"^(no|wrong|bad|incorrect|try again|not right|not what|mistake|useless|terrible|that.s wrong|that.s not right|that.s incorrect)\s*[!.?]*\s*$",
-    __import__("re").IGNORECASE,
+    re.IGNORECASE,
 )
 # Mid-sentence patterns — only match if clearly about the previous response
-IMPLICIT_POSITIVE_MID = __import__("re").compile(
+IMPLICIT_POSITIVE_MID = re.compile(
     r"\b(that.s (correct|right|perfect|great|exactly (right|what))|you.re (right|correct)|good answer|nice answer)\b",
-    __import__("re").IGNORECASE,
+    re.IGNORECASE,
 )
-IMPLICIT_NEGATIVE_MID = __import__("re").compile(
+IMPLICIT_NEGATIVE_MID = re.compile(
     r"\b(that.s (wrong|incorrect|not right)|you're (wrong|incorrect)|bad answer|wrong answer)\b",
-    __import__("re").IGNORECASE,
+    re.IGNORECASE,
 )
 
 # ── preference store ───────────────────────────────────────────────────

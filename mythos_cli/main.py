@@ -17,6 +17,7 @@ Mythos — your local AI assistant and security scanner.
 from __future__ import annotations
 
 import argparse
+import importlib
 import logging
 import shutil
 import sys
@@ -737,7 +738,7 @@ def _cmd_doctor(_args: argparse.Namespace) -> int:
     deps = ["yaml", "rich", "llama_cpp"]
     for dep in deps:
         try:
-            __import__(dep)
+            importlib.import_module(dep)
             checks.append((f"Package: {dep}", "installed", "ok"))
         except ImportError:
             checks.append((f"Package: {dep}", "missing", f"pip install {dep}"))

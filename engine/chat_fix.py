@@ -546,6 +546,7 @@ def apply_patches_from_response(
     if not patches:
         return []
 
+    _cwd = Path.cwd().resolve()
     notices: List[str] = []
     for path, content in patches:
         if is_placeholder_patch_path(path):
@@ -553,6 +554,11 @@ def apply_patches_from_response(
             continue
         if not path.is_absolute():
             notices.append(f"Skipped relative path (use absolute): {path}")
+            continue
+        try:
+            path.resolve().relative_to(_cwd)
+        except ValueError:
+            notices.append(f"Skipped (path outside project): {path}")
             continue
         if not path.parent.exists():
             notices.append(f"Skipped (path not found): {path}")
