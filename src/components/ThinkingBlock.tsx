@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface ThinkingBlockProps {
   content: string;
@@ -38,7 +38,7 @@ export function ThinkingBlock({ content }: ThinkingBlockProps) {
         onClick={() => setOpen(!open)}
       >
         <span
-          className="mythos-thinking-arrow"
+          className="mythos-arrow"
           style={{
             transform: open ? "rotate(90deg)" : "rotate(0)",
             transition: "transform 0.15s",
@@ -46,7 +46,7 @@ export function ThinkingBlock({ content }: ThinkingBlockProps) {
         >
           ▶
         </span>
-        <span className="mythos-thinking-icon">🧠</span>
+        <span className="mythos-thinking-icon">{GLYPHS[glyphIdx]}</span>
         <span className="mythos-thinking-label">Thinking</span>
         <span className="mythos-thinking-words">
           {wordCount} words

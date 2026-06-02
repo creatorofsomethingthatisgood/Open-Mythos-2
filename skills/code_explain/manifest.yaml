@@ -1,0 +1,15 @@
+name: code_explain
+version: "1.0.0"
+description: "Explain code snippets in plain language, break down logic step by step"
+author: mythos
+tags: [code, explain, programming]
+commands:
+  - name: run
+    description: "Explain the provided code snippet"
+    handler: run
+  - name: steps
+    description: "Break down code execution step by step"
+    handler: steps
+  - name: simplify
+    description: "Simplify and rephrase the code in plain English"
+    handler: simplify

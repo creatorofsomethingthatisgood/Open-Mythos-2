@@ -1,0 +1,18 @@
+name: quick_ref
+version: "1.0.0"
+description: "Quick reference lookups for common programming patterns, formulas, and commands"
+author: mythos
+tags: [reference, lookup, programming, cheat-sheet]
+commands:
+  - name: run
+    description: "Look up a quick reference topic"
+    handler: run
+  - name: python
+    description: "Python quick reference"
+    handler: python_ref
+  - name: git
+    description: "Git command quick reference"
+    handler: git_ref
+  - name: regex
+    description: "Regular expression quick reference"
+    handler: regex_ref

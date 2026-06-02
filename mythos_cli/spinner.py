@@ -1,117 +1,97 @@
-"""
-Progress spinner utility for long-running Mythos operations.
+"""Animated thinking spinner with cycling unicode glyphs, like Claude Code.
 
-Usage::
-
-    with spinner("Scanning files..."):
-        time.sleep(2)  # your long operation
-
-    with spinner("Downloading model...") as spin:
-        for chunk in download():
-            spin.update(f"Downloading... {chunk.percent}%")
+Used by the mythos CLI to show a live-updating spinner while the model
+is generating a response. Cycles through decorative unicode star/symbol
+characters with the red-orange #EA580C theme.
 """
 
-from __future__ import annotations
+import threading
+import sys
 
-import contextlib
-from typing import Iterator, Optional
+try:
+    from rich.live import Live
+    _RICH_AVAILABLE = True
+except ImportError:
+    _RICH_AVAILABLE = False
 
-from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    BarColumn,
-    TaskID,
-)
+# Unicode star/symbol glyphs that rotate during thinking
+GLYPHS = [
+    "\u2736",  # ✶
+    "\u2737",  # ✷
+    "\u2738",  # ✸
+    "\u2739",  # ✹
+    "\u273A",  # ✺
+    "\u274B",  # ❋
+    "\u274A",  # ❊
+    "\u2747",  # ❇
+    "\u2748",  # ❈
+    "\u2749",  # ❉
+    "\u2726",  # ✦
+    "\u2727",  # ✧
+    "\u22C6",  # ⋆
+    "\u2042",  # ⁂
+    "\u2734",  # ✴
+    "\u2735",  # ✵
+    "\u2731",  # ✱
+    "\u2732",  # ✲
+    "\u2733",  # ✳
+    "\u2743",  # ❃
+    "\u2744",  # ❄
+    "\u2745",  # ❅
+    "\u2746",  # ❆
+    "\u2605",  # ★
+]
 
-
-@contextlib.contextmanager
-def spinner(
-    description: str = "Working...",
-    transient: bool = True,
-) -> Iterator["_SpinnerHandle"]:
-    """
-    Context manager that shows an animated spinner with a message.
-
-    Args:
-        description: Initial message shown next to the spinner.
-        transient: Remove the spinner line when done (like ``tqdm``).
-
-    Yields:
-        A handle whose ``.update(msg)`` changes the live message.
-    """
-    progress = Progress(
-        SpinnerColumn(spinner_name="dots", style="cyan"),
-        TextColumn("[progress.description]{task.description}"),
-        TimeElapsedColumn(),
-        transient=transient,
-    )
-    handle = _SpinnerHandle(progress)
-    with progress:
-        task_id = progress.add_task(description, total=None)
-        handle._task_id = task_id
-        try:
-            yield handle
-        finally:
-            progress.update(task_id, visible=False)
+COLORS = ["#EA580C", "#F97316", "#FB923C", "#EF4444", "#F97316", "#EA580C"]
 
 
-@contextlib.contextmanager
-def progress_bar(
-    description: str = "Working...",
-    total: int = 100,
-    transient: bool = True,
-) -> Iterator["_ProgressHandle"]:
-    """
-    Context manager that shows a determinate progress bar.
+class ThinkingSpinner:
+    """Animated spinner cycling through unicode star glyphs."""
 
-    Args:
-        description: Label shown above the bar.
-        total: Number of steps to completion.
-        transient: Remove the bar when done.
+    def __init__(self) -> None:
+        self._idx = 0
+        self._stop = threading.Event()
+        self._thread = None
+        self._live = None
+        self._label = "Thinking"
+        self._console = None
 
-    Yields:
-        A handle whose ``.advance(steps=1)`` moves the bar and
-        ``.update(msg)`` changes the live description.
-    """
-    progress = Progress(
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(bar_width=None),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeElapsedColumn(),
-        transient=transient,
-    )
-    handle = _ProgressHandle(progress)
-    with progress:
-        task_id = progress.add_task(description, total=total)
-        handle._task_id = task_id
-        yield handle
+    def start(self, console=None, label: str = "Thinking") -> None:
+        self._label = label
+        self._console = console
+        self._stop.clear()
+        if _RICH_AVAILABLE and console is not None:
+            self._live = Live("", console=console, transient=True, refresh_per_second=8)
+            self._live.__enter__()
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._thread.start()
 
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=0.5)
+        if self._live:
+            self._live.__exit__(None, None, None)
+            self._live = None
+        elif self._console:
+            self._console.print("\r", end="")
 
-class _SpinnerHandle:
-    """Handle returned by :func:`spinner`."""
+    def _frame_text(self) -> str:
+        glyph = GLYPHS[self._idx % len(GLYPHS)]
+        color = COLORS[self._idx % len(COLORS)]
+        return f"[{color}]{glyph}[/{color}] [dim]{self._label}...[/dim]"
 
-    def __init__(self, progress: Progress) -> None:
-        self._progress = progress
-        self._task_id: TaskID | None = None
-
-    def update(self, description: str) -> None:
-        if self._task_id is not None:
-            self._progress.update(self._task_id, description=description)
-
-
-class _ProgressHandle:
-    """Handle returned by :func:`progress_bar`."""
-
-    def __init__(self, progress: Progress) -> None:
-        self._progress = progress
-        self._task_id: TaskID | None = None
-
-    def advance(self, steps: int = 1) -> None:
-        if self._task_id is not None:
-            self._progress.advance(self._task_id, advance=steps)
-
-    def update(self, description: str) -> None:
-        if self._task_id is not None:
-            self._progress.update(self._task_id, description=description)
+    def _spin(self) -> None:
+        while not self._stop.is_set():
+            if self._live:
+                self._live.update(self._frame_text())
+            elif self._console:
+                frame = self._frame_text()
+                self._console.print(f"\r{frame}", end="", highlight=False)
+            else:
+                # Fallback: plain terminal
+                glyph = GLYPHS[self._idx % len(GLYPHS)]
+                sys.stdout.write(f"\r{glyph} {self._label}...")
+                sys.stdout.flush()
+            self._idx += 1
+            self._stop.wait(0.12)

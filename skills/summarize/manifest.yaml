@@ -1,0 +1,15 @@
+name: summarize
+version: "1.0.0"
+description: "Summarize text, conversations, or loaded files into concise bullet points"
+author: mythos
+tags: [summary, text, conversation]
+commands:
+  - name: run
+    description: "Summarize the given text or conversation context"
+    handler: run
+  - name: bullets
+    description: "Produce a bullet-point summary"
+    handler: bullets
+  - name: tldr
+    description: "One-line TLDR summary"
+    handler: tldr

@@ -11,11 +11,13 @@
   --mythos-text: #e6edf3;
   --mythos-text2: #8b949e;
   --mythos-text3: #6e7681;
-  --mythos-accent: #7c5cfc;
-  --mythos-accent2: #9b7cff;
-  --mythos-accent-dim: rgba(124, 92, 252, 0.15);
-  --mythos-user: #1c1535;
-  --mythos-user-border: #3a2a7c;
+  --mythos-accent: #EA580C;
+  --mythos-accent2: #F97316;
+ --mythos-accent-dark: #C2410C;
+ --mythos-accent-light: #FB923C;
+  --mythos-accent-dim: rgba(234, 88, 12, 0.15);
+  --mythos-user: #1c1008;
+  --mythos-user-border: #7c3a0a;
   --mythos-assistant: #0d1117;
   --mythos-success: #3fb950;
   --mythos-success-dim: rgba(63, 185, 80, 0.15);
@@ -88,7 +90,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 textarea:focus, input:focus, select:focus {
   outline: none;
   border-color: var(--mythos-accent) !important;
-  box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.25);
+  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.25);
 }
 
 /* Checkbox */
@@ -200,7 +202,7 @@ input[type="checkbox"] {
   border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 0.9em;
-  border: 1px solid rgba(124, 92, 252, 0.2);
+  border: 1px solid rgba(234, 88, 12, 0.2);
 }
 
 /* Diff styling in code blocks */
@@ -261,6 +263,11 @@ input[type="checkbox"] {
 .mythos-typing-dot:nth-child(1) { animation-delay: -0.32s; }
 .mythos-typing-dot:nth-child(2) { animation-delay: -0.16s; }
 
+@keyframes mythos-thinking-pulse {
+ 0%, 100% { color: var(--mythos-accent); }
+ 33% { color: var(--mythos-accent2); }
+ 66% { color: var(--mythos-accent-light); }
+}
 @keyframes mythos-pulse {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
   40% { transform: scale(1); opacity: 1; }
@@ -283,6 +290,14 @@ input[type="checkbox"] {
   font-size: 12px;
   color: var(--mythos-text2);
   user-select: none;
+}
+.mythos-thinking-icon {
+ animation: mythos-thinking-pulse 2s ease-in-out infinite;
+ color: var(--mythos-accent2);
+ font-weight: 700;
+}
+.mythos-thinking-toggle .mythos-arrow {
+ color: var(--mythos-accent2);
 }
 .mythos-thinking-toggle:hover {
   background: var(--mythos-surface2);

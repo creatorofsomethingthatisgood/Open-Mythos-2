@@ -1,0 +1,64 @@
+[
+  {
+    "name": "summarize",
+    "version": "1.0.0",
+    "description": "Summarize text, conversations, or loaded files into concise bullet points",
+    "author": "mythos",
+    "tags": ["summary", "text", "conversation"],
+    "commands": [
+      {"name": "run", "description": "Summarize the given text or conversation context"},
+      {"name": "bullets", "description": "Produce a bullet-point summary"},
+      {"name": "tldr", "description": "One-line TLDR summary"}
+    ]
+  },
+  {
+    "name": "code_explain",
+    "version": "1.0.0",
+    "description": "Explain code snippets in plain language, break down logic step by step",
+    "author": "mythos",
+    "tags": ["code", "explain", "programming"],
+    "commands": [
+      {"name": "run", "description": "Explain the provided code snippet"},
+      {"name": "steps", "description": "Break down code execution step by step"},
+      {"name": "simplify", "description": "Simplify and rephrase the code in plain English"}
+    ]
+  },
+  {
+    "name": "translate",
+    "version": "1.0.0",
+    "description": "Translate text between languages using the AI model",
+    "author": "mythos",
+    "tags": ["translate", "language", "i18n"],
+    "commands": [
+      {"name": "run", "description": "Translate text (auto-detect source)"},
+      {"name": "to", "description": "Translate to a specific language"},
+      {"name": "detect", "description": "Detect the language of text"}
+    ]
+  },
+  {
+    "name": "brainstorm",
+    "version": "1.0.0",
+    "description": "Generate creative ideas and brainstorm solutions for any topic",
+    "author": "mythos",
+    "tags": ["creative", "brainstorm", "ideas", "problem-solving"],
+    "commands": [
+      {"name": "run", "description": "Brainstorm ideas on the given topic"},
+      {"name": "ideas", "description": "Generate 10 creative ideas"},
+      {"name": "pros_cons", "description": "List pros and cons for a decision or idea"},
+      {"name": "alternatives", "description": "Suggest alternative approaches"}
+    ]
+  },
+  {
+    "name": "quick_ref",
+    "version": "1.0.0",
+    "description": "Quick reference lookups for common programming patterns, formulas, and commands",
+    "author": "mythos",
+    "tags": ["reference", "lookup", "programming", "cheat-sheet"],
+    "commands": [
+      {"name": "run", "description": "Look up a quick reference topic"},
+      {"name": "python", "description": "Python quick reference"},
+      {"name": "git", "description": "Git command quick reference"},
+      {"name": "regex", "description": "Regular expression quick reference"}
+    ]
+  }
+]

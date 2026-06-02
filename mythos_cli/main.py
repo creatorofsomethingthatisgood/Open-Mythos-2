@@ -873,6 +873,182 @@ def _cmd_history(args: argparse.Namespace) -> int:
 
 # ── argument parser ─────────────────────────────────────────────────────
 
+
+def _cmd_skill(args: argparse.Namespace) -> int:
+    """Manage Mythos skills: list, install, run, create."""
+    from engine.skills import SkillManager
+    try:
+        from engine.marketplace import MarketplaceClient
+        marketplace_available = True
+    except ImportError:
+        marketplace_available = False
+
+    import yaml
+    config_path = Path(getattr(args, "config", "config.yaml"))
+    config = {}
+    if config_path.exists():
+        try:
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f) or {}
+        except Exception:
+            pass
+    # Merge with user config
+    try:
+        from mythos_cli.config_store import load_user_config
+        user_cfg = load_user_config()
+        if isinstance(user_cfg, dict):
+            for k, v in user_cfg.items():
+                if k not in config:
+                    config[k] = v
+    except Exception:
+        pass
+    mgr = SkillManager(config)
+    mgr.discover()
+
+    subcmd = getattr(args, "skill_cmd", "list") or "list"
+    skill_args = getattr(args, "skill_args", []) or []
+
+    if subcmd in ("list", "ls"):
+        skills = mgr.list_skills()
+        if not skills:
+            print("No skills installed.")
+            return 0
+        print(f"{'Name':<20} {'Version':<10} {'Source':<12} Description")
+        print("-" * 70)
+        for s in skills:
+            src = {"preinstalled": "built-in", "marketplace": "store", "custom": "ai-made"}.get(s.source, s.source)
+            print(f"{s.name:<20} {s.version:<10} {src:<12} {s.description[:40]}")
+        return 0
+
+    if subcmd == "info":
+        name = skill_args[0] if skill_args else None
+        if not name:
+            print("Usage: mythos skill info <skill_name>")
+            return 1
+        skill = mgr.get_skill(name)
+        if not skill:
+            print(f"Skill '{name}' not found.")
+            return 1
+        print(f"  Name:        {skill.name}")
+        print(f"  Version:     {skill.version}")
+        print(f"  Description: {skill.description}")
+        print(f"  Author:      {skill.author}")
+        print(f"  Source:      {skill.source}")
+        if skill.tags:
+            print(f"  Tags:        {', '.join(skill.tags)}")
+        print("  Commands:")
+        for c in skill.commands:
+            print(f"    {c.name}: {c.description}")
+        return 0
+
+    if subcmd == "run":
+        if len(skill_args) < 1:
+            print("Usage: mythos skill run <skill_name> [command] [args...]")
+            return 1
+        skill_name = skill_args[0]
+        command_name = skill_args[1] if len(skill_args) > 1 else "run"
+        cmd_args = " ".join(skill_args[2:]) if len(skill_args) > 2 else ""
+        try:
+            result = mgr.run_skill(skill_name, command_name, cmd_args)
+            print(f"[Skill: {skill_name}] {result}")
+            return 0
+        except Exception as e:
+            print(f"Skill error: {e}")
+            return 1
+
+    if subcmd in ("install", "add"):
+        name = skill_args[0] if skill_args else None
+        if not name:
+            print("Usage: mythos skill install <skill_name>")
+            return 1
+        if not marketplace_available:
+            print("Marketplace not available (missing httpx).")
+            return 1
+        mp = MarketplaceClient(config)
+        print(f"Installing skill '{name}' from marketplace...")
+        result = mp.install(name, mgr)
+        if result:
+            print(f"Skill '{result}' installed!")
+            return 0
+        print(f"Failed to install '{name}'.")
+        return 1
+
+    if subcmd in ("uninstall", "remove", "rm"):
+        name = skill_args[0] if skill_args else None
+        if not name:
+            print("Usage: mythos skill uninstall <skill_name>")
+            return 1
+        try:
+            if mgr.uninstall_skill(name):
+                print(f"Skill '{name}' uninstalled.")
+                return 0
+            print(f"Skill '{name}' not found.")
+            return 1
+        except ValueError as e:
+            print(f"Error: {e}")
+            return 1
+
+    if subcmd in ("marketplace", "store", "browse"):
+        if not marketplace_available:
+            print("Marketplace not available.")
+            return 1
+        mp = MarketplaceClient(config)
+        listings = mp.list_available(mgr)
+        if not listings:
+            listings = mgr.load_marketplace_cache()
+        if not listings:
+            print("No marketplace skills found. Check internet connection.")
+            return 1
+        print(f"{'Name':<20} {'Version':<10} Description")
+        print("-" * 60)
+        for s in listings[:30]:
+            name = s.get("name", "?")
+            ver = s.get("version", "?")
+            desc = s.get("description", "")[:40]
+            installed = " [installed]" if s.get("installed") else ""
+            print(f"{name:<20} {ver:<10} {desc}{installed}")
+        print("\nInstall with: mythos skill install <name>")
+        return 0
+
+    if subcmd in ("search", "find"):
+        query = " ".join(skill_args)
+        if not query:
+            print("Usage: mythos skill search <query>")
+            return 1
+        if not marketplace_available:
+            print("Marketplace not available.")
+            return 1
+        mp = MarketplaceClient(config)
+        results = mp.search(query)
+        if not results:
+            print(f"No skills matching '{query}'.")
+            return 0
+        for s in results[:10]:
+            name = s.get("name", "?")
+            desc = s.get("description", "")
+            print(f"  {name} - {desc}")
+        print("\nInstall with: mythos skill install <name>")
+        return 0
+
+    if subcmd == "create":
+        description = " ".join(skill_args)
+        if not description:
+            print("Usage: mythos skill create <description of what the skill should do>")
+            print("Example: mythos skill create a skill that generates random passwords")
+            return 1
+        print(f"Creating skill from description: {description}")
+        print("Note: AI skill creation requires a running chat session. Use /skill create in chat instead.")
+        # For CLI, generate the skill template
+        prompt = SkillManager.build_create_prompt(description)
+        print("\nSkill creation prompt generated. Use this in a chat session:")
+        print(f"  /skill create {description}")
+        return 0
+
+    print(f"Unknown skill subcommand: {subcmd}")
+    print("Available: list, info, run, install, uninstall, marketplace, search, create")
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mythos",
@@ -1051,6 +1227,15 @@ Examples:
  # ── update ──────────────────────────────────────────────────────────
     up = sub.add_parser("update", help="Pull latest Mythos from GitHub (preserves settings)")
     up.set_defaults(func=_cmd_update)
+
+
+    # ── skill ─────────────────────────────────────────────────────────
+    sk = sub.add_parser("skill", help="Manage skills (list, install, run, create)")
+    sk.add_argument("skill_cmd", nargs="?", default="list",
+                    help="Subcommand: list, info, run, install, uninstall, create, marketplace, search")
+    sk.add_argument("skill_args", nargs="*", help="Arguments for the skill subcommand")
+    sk.add_argument("--config", default="config.yaml", help="Config file path")
+    sk.set_defaults(func=_cmd_skill)
 
     return parser
 

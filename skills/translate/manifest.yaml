@@ -1,0 +1,15 @@
+name: translate
+version: "1.0.0"
+description: "Translate text between languages using the AI model"
+author: mythos
+tags: [translate, language, i18n]
+commands:
+  - name: run
+    description: "Translate text (auto-detect source, use args as target language)"
+    handler: run
+  - name: to
+    description: "Translate to a specific language: /skill translate to <lang> <text>"
+    handler: to_lang
+  - name: detect
+    description: "Detect the language of the provided text"
+    handler: detect

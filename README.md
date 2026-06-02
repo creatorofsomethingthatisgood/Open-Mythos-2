@@ -324,6 +324,7 @@ docker run -it --rm -p 7860:7860 \
 
 | Method | Platforms | GPU | Best for |
 |--------|-----------|-----|----------|
+| **curl** | Linux, macOS | Vulkan / Metal / CUDA | Fastest setup, one command |
 | **Git Clone** | Linux, macOS, Windows | Vulkan / Metal / CUDA | Full control, offline setups |
 | **npm / pnpm** | Linux, macOS, Windows | Auto-detect | JS devs, quick install |
 | **pipx** | Linux, macOS, Windows | Manual CMAKE_ARGS | Python users |
@@ -431,6 +432,14 @@ Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
 | `mythos path remove <target>` | Remove a registered path |
 | `mythos model download` | Download default GGUF model |
 | `mythos update` | Pull latest from GitHub |
+| `mythos skill list` | List installed skills |
+| `mythos skill info <name>` | Show skill details |
+| `mythos skill run <name> [cmd] [args]` | Run a skill |
+| `mythos skill install <name>` | Install from marketplace |
+| `mythos skill uninstall <name>` | Remove a skill |
+| `mythos skill marketplace` | Browse the marketplace |
+| `mythos skill search <query>` | Search marketplace skills |
+| `mythos skill create <desc>` | AI-generate a new skill |
 
 ### In-Chat Slash Commands
 
@@ -458,6 +467,15 @@ Preferences persist in `~/.config/mythos/rml_preferences.json` across sessions.
 | `/rml good\|bad` | Mark last response |
 | `/rml stats` | Show RML learning stats |
 | `/rml reset` | Reset RML preferences |
+| `/skill list` | Show all installed skills |
+| `/skill info <name>` | Show skill details and commands |
+| `/skill run <name> [cmd] [args]` | Run a skill command |
+| `/skill install <name>` | Install a skill from the marketplace |
+| `/skill uninstall <name>` | Remove an installed or custom skill |
+| `/skill marketplace` | Browse the community skill marketplace |
+| `/skill search <query>` | Search marketplace skills |
+| `/skill create <description>` | AI generates a new private skill |
+| `/marketplace` | Shortcut for `/skill marketplace` |
 | `/quit` | Exit the chat |
 
 ---
@@ -514,13 +532,133 @@ voice:
 
 ---
 
+## Skill Marketplace
+
+Mythos has a built-in skill system with three tiers: **pre-installed**, **community marketplace**, and **AI-created**.
+
+### Pre-installed Skills
+
+These ship with Mythos and are ready to use out of the box:
+
+| Skill | Description | Commands |
+|-------|-------------|----------|
+| `summarize` | Summarize text and conversations | `run`, `bullets`, `tldr` |
+| `code_explain` | Explain code in plain language | `run`, `steps`, `simplify` |
+| `translate` | Translate text between languages | `run`, `to`, `detect` |
+| `brainstorm` | Generate creative ideas and solutions | `run`, `ideas`, `pros_cons`, `alternatives` |
+| `quick_ref` | Quick reference for Python, Git, Regex | `run`, `python`, `git`, `regex` |
+
+### Using Skills
+
+```bash
+# In chat
+/skill list                        # See all available skills
+/skill run summarize bullets       # Run a skill command
+/skill run quick_ref python        # Get a Python cheat sheet
+/skill run translate to spanish Hello world  # Translate text
+
+# From the CLI
+mythos skill list
+mythos skill run quick_ref git
+mythos skill info summarize
+```
+
+### Browsing the Marketplace
+
+```bash
+/skill marketplace          # Browse all community skills
+/skill search security      # Find skills by keyword
+/skill install password_gen # Install a skill from the marketplace
+```
+
+Skills are fetched from the [community index](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/tree/main/skills/marketplace) hosted in this repo. Once installed, they live in `~/.config/mythos/skills/`.
+
+### AI-Created Skills
+
+Mythos can generate new skills on the fly:
+
+```bash
+/skill create a skill that generates random passwords
+/skill create a skill that converts units of measurement
+```
+
+The AI writes a `manifest.yaml` and `skill.py`, saves it to `~/.config/mythos/skills/custom/`, and it is immediately usable. **AI-created skills are private** -- they are never shared with the marketplace.
+
+### Submit a Skill to the Marketplace
+
+Anyone can add a skill. Here is how:
+
+1. **Create your skill directory** under `skills/`:
+
+```
+skills/your_skill_name/
+  manifest.yaml
+  skill.py
+```
+
+2. **Write `manifest.yaml`**:
+
+```yaml
+name: your_skill_name
+version: "1.0.0"
+description: "One-line description of what your skill does"
+author: your-github-username
+tags: [relevant, tags, here]
+commands:
+  - name: run
+    description: "What the run command does"
+    handler: run
+  - name: search
+    description: "What the search command does"
+    handler: search
+```
+
+3. **Write `skill.py`**:
+
+```python
+def run(args: str, context: dict) -> str:
+    """Main command handler. args is the user's text after the command.
+    context contains: messages (recent chat), config (dict)."""
+    return f"Result: {args}"
+
+def search(args: str, context: dict) -> str:
+    return f"Searched for: {args}"
+```
+
+4. **Register in the marketplace index** by adding an entry to `skills/marketplace/index.json`:
+
+```json
+{
+  "name": "your_skill_name",
+  "version": "1.0.0",
+  "description": "One-line description of what your skill does",
+  "author": "your-github-username",
+  "tags": ["relevant", "tags"],
+  "commands": [
+    {"name": "run", "description": "What the run command does"},
+    {"name": "search", "description": "What the search command does"}
+  ]
+}
+```
+
+5. **Open a Pull Request** to this repo with your skill added.
+
+**Skill rules:**
+- Each handler must accept `(args: str, context: dict)` and return `str`
+- No `subprocess`, `os.system`, `eval`, or `exec` -- keep it safe
+- No filesystem writes outside of reading context data
+- Pure Python stdlib only (no extra pip dependencies)
+- One skill per PR, clean and focused
+
+Once merged, your skill appears in `/skill marketplace` for everyone.
+
 ## Roadmap
 
 - [ ] Multi-model support (swap between GGUF models in-chat)
 - [ ] MCP (Model Context Protocol) server integration
 - [ ] LoRA fine-tuning from within the CLI
 - [ ] RAG over local documents
-- [ ] Plugin system for community extensions
+- [x] Skill system with community marketplace
 - [x] Voice input via Whisper (whisper.cpp, AMD Vulkan GPU support)
 - [ ] Voice output via Coqui TTS
 

@@ -45,7 +45,7 @@ def _print_plain(
 ) -> int:
     from mythos_cli.console import STYLE_ERR, STYLE_OK, STYLE_DIM
 
-    console.print("\n[bold cyan]╔══ Mythos Security Scan ══╗[/bold cyan]")
+    console.print("\n[bold #EA580C]╔══ Mythos Security Scan ══╗[/bold #EA580C]")
     console.print()
     for root in roots:
         console.print(f"  [dim]Scanned:[/dim] {root}")
@@ -68,7 +68,7 @@ def _print_plain(
         console.print(f"  → {f.recommendation}\n")
 
     if deep_report:
-        console.print("\n[bold magenta]── AI Deep Audit ──[/bold magenta]\n")
+        console.print("\n[bold #F97316]── AI Deep Audit ──[/bold #F97316]\n")
         console.print(deep_report)
 
     if counts.get("critical") or counts.get("high"):
@@ -86,8 +86,8 @@ def _print_rich(
     console.print()
     console.print(
         Panel.fit(
-            "[bold cyan]Mythos Sentinel[/bold cyan] — security scan results",
-            border_style="cyan",
+            "[bold #EA580C]Mythos Sentinel[/bold #EA580C] — security scan results",
+            border_style="#EA580C",
         )
     )
     for root in roots:
@@ -126,7 +126,7 @@ def _print_rich(
 
     if deep_report:
         console.print()
-        console.print(Panel(deep_report, title="AI Deep Audit", border_style="magenta"))
+        console.print(Panel(deep_report, title="AI Deep Audit", border_style="#F97316"))
 
     if counts.get("critical") or counts.get("high"):
         console.print("\n[bold red]Failed:[/bold red] critical or high severity findings present.")

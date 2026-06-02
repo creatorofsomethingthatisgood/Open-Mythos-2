@@ -1,0 +1,18 @@
+name: brainstorm
+version: "1.0.0"
+description: "Generate creative ideas and brainstorm solutions for any topic"
+author: mythos
+tags: [creative, brainstorm, ideas, problem-solving]
+commands:
+  - name: run
+    description: "Brainstorm ideas on the given topic"
+    handler: run
+  - name: ideas
+    description: "Generate 10 creative ideas on the topic"
+    handler: ideas
+  - name: pros_cons
+    description: "List pros and cons for a decision or idea"
+    handler: pros_cons
+  - name: alternatives
+    description: "Suggest alternative approaches to the given idea"
+    handler: alternatives

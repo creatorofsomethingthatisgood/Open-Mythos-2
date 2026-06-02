@@ -38,11 +38,14 @@ class LoRAFineTuner:
         self,
         base_model: str = "google/gemma-3-12b-it",
         output_dir: str = "lora",
-        lora_r: int = 16,
-        lora_alpha: int = 32,
+        lora_r: int = 64,
+        lora_alpha: int = 128,
         lora_dropout: float = 0.05,
         target_modules: Optional[list] = None,
-        max_seq_length: int = 2048,
+        max_seq_length: int = 8192,
+        use_rslora: bool = True,
+        use_unsloth: bool = False,
+        lr_scheduler_type: str = "cosine",
     ):
         if not TORCH_AVAILABLE or not TRAINING_DEPS_AVAILABLE:
             raise RuntimeError(
@@ -58,6 +61,9 @@ class LoRAFineTuner:
         self.lora_dropout = lora_dropout
         self.target_modules = target_modules or ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
         self.max_seq_length = max_seq_length
+        self.use_rslora = use_rslora
+        self.use_unsloth = use_unsloth
+        self.lr_scheduler_type = lr_scheduler_type
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if self.device == "cpu":
@@ -66,6 +72,30 @@ class LoRAFineTuner:
     def prepare_model(self):
         """Load base model, apply LoRA, return (model, tokenizer)."""
         logger.info(f"Loading base model: {self.base_model}")
+
+        if self.use_unsloth:
+            try:
+                from unsloth import FastLanguageModel
+                model, tokenizer = FastLanguageModel.from_pretrained(
+                    self.base_model,
+                    max_seq_length=self.max_seq_length,
+                    load_in_4bit=True,
+                    dtype=None,
+                )
+                model = FastLanguageModel.get_peft_model(
+                    model,
+                    r=self.lora_r,
+                    lora_alpha=self.lora_alpha,
+                    lora_dropout=self.lora_dropout,
+                    target_modules=self.target_modules,
+                    use_rslora=self.use_rslora,
+                    bias="none",
+                )
+                FastLanguageModel.for_training(model)
+                model.print_trainable_parameters()
+                return model, tokenizer
+            except ImportError:
+                logger.warning("unsloth not installed, falling back to standard loading")
 
         tokenizer = AutoTokenizer.from_pretrained(self.base_model, trust_remote_code=True)
         if tokenizer.pad_token is None:
@@ -88,6 +118,7 @@ class LoRAFineTuner:
             lora_dropout=self.lora_dropout,
             target_modules=self.target_modules,
             bias="none",
+            use_rslora=self.use_rslora,
         )
 
         model = get_peft_model(model, lora_config)
@@ -207,6 +238,7 @@ class LoRAFineTuner:
             per_device_train_batch_size=batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,
             learning_rate=learning_rate,
+            lr_scheduler_type=self.lr_scheduler_type,
             warmup_steps=warmup_steps,
             logging_steps=logging_steps,
             save_steps=save_steps,
@@ -254,13 +286,16 @@ def run_finetuning(
     dataset_path: Optional[Path] = None,
     base_model: str = "google/gemma-3-12b-it",
     output_dir: str = "lora",
-    num_epochs: int = 1,
+    num_epochs: int = 2,
     max_steps: int = -1,
-    batch_size: int = 1,
+    batch_size: int = 2,
     learning_rate: float = 2e-4,
-    lora_r: int = 16,
-    lora_alpha: int = 32,
-    gradient_accumulation_steps: int = 8,
+    lora_r: int = 64,
+    lora_alpha: int = 128,
+    gradient_accumulation_steps: int = 16,
+    use_rslora: bool = True,
+    use_unsloth: bool = False,
+    max_seq_length: int = 8192,
 ):
     """Main fine-tuning entry point."""
     if dataset_path is None:
@@ -275,6 +310,9 @@ def run_finetuning(
         output_dir=output_dir,
         lora_r=lora_r,
         lora_alpha=lora_alpha,
+        use_rslora=use_rslora,
+        use_unsloth=use_unsloth,
+        max_seq_length=max_seq_length,
     )
     return trainer.train(
         dataset_path=dataset_path,

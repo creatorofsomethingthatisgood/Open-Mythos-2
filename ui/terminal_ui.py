@@ -5,6 +5,7 @@ Terminal UI - Beautiful terminal interface using Rich library
 import logging
 import os
 import signal
+import threading
 import time
 from typing import List, Optional
 from pathlib import Path
@@ -57,24 +58,99 @@ from engine.chat_fix import (
 )
 from engine.progress import ProgressCallback, StreamCallback
 from engine.voice import VoiceEngine
+from engine.skills import SkillManager
+try:
+    from engine.marketplace import MarketplaceClient
+    MARKETPLACE_AVAILABLE = True
+except ImportError:
+    MARKETPLACE_AVAILABLE = False
 from ui.terminal_bitacora import TerminalBitacoraSession
 
 logger = logging.getLogger(__name__)
 
 
+class ThinkingSpinner:
+    """Animated spinner cycling through unicode star glyphs, like Claude Code."""
+
+    # Unicode star/symbol glyphs that rotate during thinking
+    GLYPHS = [
+        "\u2736", "\u2737", "\u2738", "\u2739", "\u273A",
+        "\u274B", "\u274A", "\u2747", "\u2748", "\u2749",
+        "\u2726", "\u2727", "\u22C6", "\u2042", "\u2734",
+        "\u2735", "\u2731", "\u2732", "\u2733", "\u2743",
+        "\u2744", "\u2745", "\u2746", "\u2605",
+    ]
+
+    COLORS = ["#EA580C", "#F97316", "#FB923C", "#EF4444", "#F97316", "#EA580C"]
+
+    def __init__(self) -> None:
+        self._idx = 0
+        self._stop = threading.Event()
+        self._thread = None
+        self._live = None
+        self._label = "Thinking"
+
+    def start(self, console, label: str = "Thinking") -> None:
+        self._label = label
+        self._stop.clear()
+        self._live = Live("", console=console, transient=True, refresh_per_second=8)
+        self._live.__enter__()
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=0.5)
+        if self._live:
+            self._live.__exit__(None, None, None)
+            self._live = None
+
+    def _frame_text(self) -> str:
+        glyph = self.GLYPHS[self._idx % len(self.GLYPHS)]
+        color = self.COLORS[self._idx % len(self.COLORS)]
+        return f"[{color}]{glyph}[/{color}] [dim]{self._label}...[/dim]"
+
+    def _spin(self) -> None:
+        while not self._stop.is_set():
+            if self._live:
+                self._live.update(self._frame_text())
+            self._idx += 1
+            self._stop.wait(0.12)
+
+
+
+def _render_code_blocks(text: str, console) -> None:
+    """Parse markdown fenced code blocks and render with Rich Syntax."""
+    import re as _re
+    parts = _re.split(r"(```[\w]*\n.*?```)", text, flags=_re.DOTALL)
+    for part in parts:
+        if part.startswith("```"):
+            lines = part.split("\n", 1)
+            lang = lines[0].strip().removeprefix("```") or "text"
+            code = lines[1].rstrip("`").rstrip("\n") if len(lines) > 1 else ""
+            try:
+                syntax = Syntax(code, lang, theme="monokai", line_numbers=True)
+                console.print(syntax)
+            except Exception:
+                console.print(code)
+        elif part.strip():
+            console.print(part)
+
+
 class TerminalUI:
     """Beautiful terminal chat interface"""
-    
+
     def __init__(self, config_path: str = "config.yaml"):
         """
         Initialize TerminalUI
-        
+
         Args:
             config_path: Path to configuration file
         """
         if not RICH_AVAILABLE:
             raise RuntimeError("Rich library required. Install with: pip install rich")
-        
+
         self.console = Console()
         self.config_path = config_path
 
@@ -94,9 +170,9 @@ class TerminalUI:
 
         # Initialize components
         if self.cloud_mode:
-            self.console.print("[bold cyan]Initializing Mythos Cloud...[/bold cyan]")
+            self.console.print("[bold #EA580C]Initializing Mythos Cloud...[/bold #EA580C]")
         else:
-            self.console.print("[bold cyan]Initializing Mythos Local...[/bold cyan]")
+            self.console.print("[bold #EA580C]Initializing Mythos Local...[/bold #EA580C]")
 
         try:
             if self.cloud_mode:
@@ -169,6 +245,17 @@ class TerminalUI:
             self.console.print("[green]  Voice input ready — /voice to enable, then hold [bold]v[/bold] to speak[/green]")
         elif self.engine.config.get("voice", {}).get("enabled"):
             self.console.print("[yellow]  Voice enabled but whisper-cli not found — run: scripts/install_whisper.sh[/yellow]")    
+
+        # Skill system
+        self.skill_manager = SkillManager(self.engine.config)
+        self.skill_manager.discover()
+        skill_count = len(self.skill_manager.list_skills())
+        if skill_count > 0:
+            self.console.print(f"[green]Skills loaded: {skill_count} available[/green] -- /skill list to see them")
+        if MARKETPLACE_AVAILABLE:
+            self.marketplace = MarketplaceClient(self.engine.config)
+        else:
+            self.marketplace = None
     def show_header(self):
         """Display welcome header"""
         # Detect which prompt mode is active
@@ -204,19 +291,19 @@ class TerminalUI:
 ██■ ▚░░ ██■   ██■      ██■   ██■  ██■██████▓██████▓
 ▚░░     ▚░░   ▚░░      ▚░░   ▚░░  ▚░░▚░░░░░░░▚░░░░░░░
 """
-        self.console.print(banner, style="bold cyan")
+        self.console.print(banner, style="bold #EA580C")
 
         if self.cloud_mode:
-            self.console.print("[bold cyan]\u2500\u2500 Cloud Mode \u2500\u2500[/bold cyan]")
+            self.console.print("[bold #EA580C]\u2500\u2500 Cloud Mode \u2500\u2500[/bold #EA580C]")
             self.console.print(f"  Model: [green]{self.engine.model_name}[/green]")
             self.console.print(f"  Context: [green]{self.engine.context_length:,}[/green] tokens")
             self.console.print(f"  Endpoint: [dim]{self.engine.base_url}[/dim]")
         else:
-            self.console.print("[bold cyan]\u2500\u2500 Local Mode \u2500\u2500[/bold cyan]")
+            self.console.print("[bold #EA580C]\u2500\u2500 Local Mode \u2500\u2500[/bold #EA580C]")
             self.console.print(f"  Model: [green]{self.engine.model_path.name}[/green]")
             self.console.print(f"  Context: [green]{self.engine.context_length:,}[/green] tokens")
 
-        self.console.print(f"  Mode: [bold magenta]{emoji} {mode_name}[/bold magenta]")
+        self.console.print(f"  Mode: [bold #F97316]{emoji} {mode_name}[/bold #F97316]")
         self.console.print(f"  System Prompt: [yellow]{self.prompt_manager.get_prompt()[:70]}...[/yellow]")
         self.console.print("\nType [bold]/help[/bold] for commands, [bold]/quit[/bold] to exit\n")
     def _fix_progress(self, message: str) -> None:
@@ -224,7 +311,7 @@ class TerminalUI:
         if message.startswith(" •"):
             self.console.print(f"[dim]{message}[/dim]")
         else:
-            self.console.print(f"[cyan]{message}[/cyan]")
+            self.console.print(f"[#EA580C]{message}[/#EA580C]")
 
     def _fix_stream(self, chunk: str) -> None:
         """Stream dedicated-rewrite model tokens (usually MYTHOS_PATCH body)."""
@@ -239,7 +326,7 @@ class TerminalUI:
     def show_help(self):
         """Display help information"""
         help_text = """
-[bold cyan]Available Commands:[/bold cyan]
+[bold #EA580C]Available Commands:[/bold #EA580C]
 
 [yellow]/help[/yellow] - Show this help message
 [yellow]/voice on|off|status[/yellow] - Voice I/O: talk to AI & hear responses (needs whisper + espeak-ng)
@@ -272,6 +359,7 @@ class TerminalUI:
 [yellow]/maxtokens <128-65536>[/yellow] - Set max generation tokens
 [yellow]/history[/yellow] - Browse conversation message history
 [yellow]/compact[/yellow] - Compress older messages into a summary
+[yellow]/context[/yellow] - Show context window usage bar
 [yellow]/copy[/yellow] - Copy last response to clipboard
 [yellow]/rename <name>[/yellow] - Rename this conversation
 [yellow]/dump [path][/yellow] - Dump conversation to a text file
@@ -286,22 +374,24 @@ class TerminalUI:
 [yellow]/edit[/yellow] - Edit and resubmit your last message
 [yellow]/auto-title[/yellow] - Auto-generate a conversation title from context
 [yellow]/sysinfo[/yellow] - Show system/hardware info for performance tuning
+[yellow]/skill list|info|run|install|uninstall|create[/yellow] - Manage skills (built-in, marketplace, AI-created)
+[yellow]/marketplace[/yellow] - Browse and install community skills
 [yellow]/quit[/yellow] - Exit the chat
 
-[bold cyan]🔥 Enhanced Coding Modes:[/bold cyan]
+[bold #EA580C]🔥 Enhanced Coding Modes:[/bold #EA580C]
 [yellow]/system coding[/yellow] - ELITE 5-pass code verification mode
 [yellow]/system code_review[/yellow] - Systematic code review mode
 [yellow]/system debugging[/yellow] - Methodical debugging mode
 [yellow]/system default[/yellow] - Return to general purpose mode
 
-[bold cyan]Other Modes:[/bold cyan]
+[bold #EA580C]Other Modes:[/bold #EA580C]
 [yellow]/system creative[/yellow] - Creative writing & storytelling
 [yellow]/system analytical[/yellow] - Deep analysis & reasoning
 [yellow]/system roleplay[/yellow] - Character roleplay mode
 [yellow]/system security_audit[/yellow] - Codebase security review mode
 [yellow]/system security_fix[/yellow] - Default — find + fix (MYTHOS_PATCH)
 
-[bold cyan]Local files & fixes in chat:[/bold cyan]
+[bold #EA580C]Local files & fixes in chat:[/bold #EA580C]
 - Paste a path: [dim]/Users/you/project/app.py[/dim]
 - Or: [dim]file:///Users/you/project/app.py[/dim]
 - [yellow]/file ~/my-repo[/yellow] then ask about vulnerabilities
@@ -311,21 +401,23 @@ class TerminalUI:
 - Default mode is [yellow]security_fix[/yellow] (writes via MYTHOS_PATCH). Use [yellow]/system security_audit[/yellow] for report-only.
 - Best with [yellow]/temp 0.3[/yellow] for fixes
 
-[bold cyan]Tips:[/bold cyan]
+[bold #EA580C]Tips:[/bold #EA580C]
 - Use Ctrl+C to interrupt generation
+- Type [yellow]|[/yellow] to start multiline paste mode
 - Coding mode verifies code 5 times for correctness
 - Self-reflection improves quality but takes longer
 - Combine /system coding + /reflect on for best code quality
+- Use [yellow]/context[/yellow] to check context window usage
         """
-        self.console.print(Panel(help_text, title="Help", border_style="cyan"))
-    
+        self.console.print(Panel(help_text, title="Help", border_style="#EA580C"))
+
     def show_config(self):
         """Display current configuration"""
         table = Table(title="Current Configuration")
-        table.add_column("Setting", style="cyan")
+        table.add_column("Setting", style="#EA580C")
         table.add_column("Value", style="green")
-        
-        
+
+
         table.add_row("Model", str(self.engine.model_path.name) if hasattr(self.engine, "model_path") else self.engine.model_name)
         table.add_row("Temperature", str(self.engine.config.get('generation', {}).get('temperature', 0.7)))
         table.add_row("Max Tokens", str(self.engine.config.get('generation', {}).get('max_tokens', 2048)))
@@ -338,24 +430,24 @@ class TerminalUI:
         table.add_row("RML", "On" if self.rml.enabled else "Off")
         table.add_row("Session Summaries", "On" if self.session_summaries.enabled else "Off")
         self.console.print(table)
-    
+
     def handle_command(self, command: str) -> bool:
         """
         Handle slash commands
-        
+
         Args:
             command: Command string
-        
+
         Returns:
             True if should continue, False if should exit
         """
         parts = command.strip().split(maxsplit=1)
         cmd = parts[0].lower()
         args = parts[1] if len(parts) > 1 else ""
-        
+
         if cmd == "/help":
             self.show_help()
-        
+
         elif cmd == "/voice":
             # /voice on|off|male|female|status — toggle voice I/O + TTS gender
             sub = args.strip().lower()
@@ -389,7 +481,7 @@ class TerminalUI:
                 en = self.voice.enabled
                 rec = self.voice.is_recording
                 self.console.print(
-                    f"[cyan]Voice status:[/cyan] "
+                    f"[#EA580C]Voice status:[/#EA580C] "
                     f"input={'[green]yes[/green]' if avail else '[red]no[/red]'}, "
                     f"enabled={'[green]on[/green]' if en else '[dim]off[/dim]'}, "
                     f"recording={'[bold red]YES[/bold red]' if rec else 'no'}, "
@@ -422,21 +514,21 @@ class TerminalUI:
         elif cmd == "/clear":
             self.memory.clear()
             self.console.print("[green]Conversation cleared[/green]")
-        
+
         elif cmd == "/save":
             filepath = self.memory.save()
             self.console.print(f"[green]Saved to: {filepath}[/green]")
-        
+
         elif cmd == "/load":
             conversations = self.memory.list_conversations()
             if not conversations:
                 self.console.print("[yellow]No saved conversations found[/yellow]")
                 return True
-            
-            self.console.print("[cyan]Saved conversations:[/cyan]")
+
+            self.console.print("[#EA580C]Saved conversations:[/#EA580C]")
             for i, conv in enumerate(conversations[:10], 1):
                 self.console.print(f" {i}. {conv.name}")
-            
+
             choice = Prompt.ask("Enter number to load", default="1")
             try:
                 idx = int(choice) - 1
@@ -447,7 +539,7 @@ class TerminalUI:
                     self.console.print("[red]Invalid selection[/red]")
             except (ValueError, IndexError):
                 self.console.print("[red]Invalid input[/red]")
-        
+
         elif cmd == "/system":
             if args:
                 templates = self.prompt_manager.list_templates()
@@ -460,7 +552,7 @@ class TerminalUI:
                     self.console.print("[green]Custom system prompt set[/green]")
             else:
                 templates = self.prompt_manager.list_templates()
-                self.console.print(f"[cyan]Available templates: {', '.join(templates)}[/cyan]")
+                self.console.print(f"[#EA580C]Available templates: {', '.join(templates)}[/#EA580C]")
                 template = Prompt.ask("Enter template name or custom prompt")
                 if template in templates:
                     prompt = self.prompt_manager.load_prompt(template)
@@ -469,7 +561,7 @@ class TerminalUI:
                 else:
                     self.prompt_manager.set_prompt(template)
                     self.console.print("[green]Custom prompt set[/green]")
-        
+
         elif cmd == "/temp":
             try:
                 temp = float(args)
@@ -480,7 +572,7 @@ class TerminalUI:
                     self.console.print("[red]Temperature must be between 0.0 and 2.0[/red]")
             except ValueError:
                 self.console.print("[red]Invalid temperature value[/red]")
-        
+
         elif cmd == "/reflect":
             if args.lower() == "on":
                 self.engine.config['system']['self_reflect'] = True
@@ -490,7 +582,7 @@ class TerminalUI:
                 self.console.print("[yellow]Self-reflection disabled[/yellow]")
             else:
                 self.console.print("[red]Use /reflect on or /reflect off[/red]")
-        
+
         elif cmd == "/file":
             if not args:
                 self.console.print(
@@ -532,7 +624,7 @@ class TerminalUI:
                 from mythos_cli.fix_runner import run_fix_on_path
                 from mythos_cli.fix_output import print_fix_results
 
-                self.console.print(f"[cyan]Scanning {target}...[/cyan]")
+                self.console.print(f"[#EA580C]Scanning {target}...[/#EA580C]")
                 findings, fixes = run_fix_on_path(target, dry_run=True)
                 print_fix_results(fixes, dry_run=True)
 
@@ -579,7 +671,7 @@ class TerminalUI:
                     self.console.print("[yellow]Rewrite cancelled.[/yellow]")
                     return True
                 self.console.print(
-                    f"[cyan]Rewriting {target} (full file write)...[/cyan]"
+                    f"[#EA580C]Rewriting {target} (full file write)...[/#EA580C]"
                 )
                 self.console.print("[dim]This may take a minute.[/dim]\n")
                 use_bitacora = self._bitacora_enabled("/rewrite", confirm_only=False)
@@ -615,7 +707,7 @@ class TerminalUI:
                     style = "green" if note.startswith("Wrote") else "yellow"
                     self.console.print(f"[{style}]{note}[/{style}]")
                 if response.strip():
-                    self.console.print("\n[bold green]Assistant:[/bold green]")
+                    self.console.print("\n[bold #EA580C]Assistant[/bold #EA580C]")
                     self.console.print(response)
                     self.memory.add_message("assistant", response)
             except Exception as exc:
@@ -626,16 +718,16 @@ class TerminalUI:
             if not self.rag:
                 self.console.print("[red]RAG not available[/red]")
                 return True
-            
+
             if args.lower() == "on":
                 self.rag_enabled = True
                 self.console.print("[green]RAG enabled[/green]")
-            
+
                 # Show stats
                 stats = self.rag.get_stats()
                 self.console.print(f" Indexed chunks: {stats['total_chunks']}")
                 self.console.print(f" Index path: {stats.get('persist_directory', 'chroma_db')}")
-            
+
                 if stats['total_chunks'] == 0:
                     self.console.print(
                         "[yellow] No documents indexed. Quit chat, run:[/yellow]"
@@ -651,7 +743,7 @@ class TerminalUI:
                 self.console.print("[yellow]RAG disabled[/yellow]")
             else:
                 self.console.print("[red]Use /rag on or /rag off[/red]")
-        
+
         elif cmd == "/rml":
             sub = args.lower().strip()
             if sub == "on":
@@ -766,25 +858,25 @@ class TerminalUI:
                 self.console.print("[dim] /memory extract -- scan session for facts now[/dim]")
 
         elif cmd == "/benchmark":
-            self.console.print("[cyan]Running benchmark suite...[/cyan]")
+            self.console.print("[#EA580C]Running benchmark suite...[/#EA580C]")
             self.console.print("[yellow]This will take several minutes...[/yellow]\n")
-            
+
             results = self.benchmark.run_full_benchmark(self.engine)
-            
+
             # Display results
             self.console.print("\n" + self.benchmark.format_results_table(results))
-            
+
             # Save results
             filepath = self.benchmark.save_results(results)
             self.console.print(f"\n[green]Results saved to: {filepath}[/green]")
-        
+
         elif cmd == "/config":
             self.show_config()
-        
+
         elif cmd == "/export":
             text = self.memory.export_text()
             filename = Prompt.ask("Save as", default="conversation_export.txt")
-            
+
             target = Path(filename).expanduser().resolve()
             cwd = Path.cwd().resolve()
             if not target.is_relative_to(cwd):
@@ -794,12 +886,12 @@ class TerminalUI:
             with open(target, 'w') as f:
                 f.write(text)
             self.console.print(f"[green]Exported to: {target}[/green]")
-        
+
         elif cmd == "/summary":
             if not self.session_summaries.enabled:
                 self.console.print("[yellow]Session Summaries not enabled. Set session_summaries.enabled: true in config.[/yellow]")
                 return True
-            self.console.print("[cyan]Generating session summary...[/cyan]")
+            self.console.print("[#EA580C]Generating session summary...[/#EA580C]")
             msg_list = self.memory.get_recent_context(max_turns=50)
             model_name = self.engine.config.get("model", {}).get("name", "")
             summary = self.session_summaries.generate_summary(
@@ -866,7 +958,7 @@ class TerminalUI:
 
         elif cmd == "/version":
             from mythos_cli import __version__
-            self.console.print(f"[cyan]Mythos[/cyan] [bold]{__version__}[/bold]")
+            self.console.print(f"[#EA580C]Mythos[/#EA580C] [bold]{__version__}[/bold]")
             self.console.print(f"[dim]Model: {self.engine.model_path.name if hasattr(self.engine, 'model_path') else self.engine.model_name}[/dim]")
 
         elif cmd == "/tokens":
@@ -878,7 +970,7 @@ class TerminalUI:
             top_k = gen_cfg.get('top_k', 40)
             rp = gen_cfg.get('repeat_penalty', 1.1)
             table = Table(title="Token & Generation Stats")
-            table.add_column("Setting", style="cyan")
+            table.add_column("Setting", style="#EA580C")
             table.add_column("Value", style="green")
             table.add_row("Context window", f"{ctx_len:,}")
             table.add_row("Max tokens", str(max_tok))
@@ -948,7 +1040,7 @@ class TerminalUI:
                 return True
             table = Table(title="Conversation History")
             table.add_column("#", style="dim", width=4)
-            table.add_column("Role", style="cyan", width=10)
+            table.add_column("Role", style="#EA580C", width=10)
             table.add_column("Preview", style="green", max_width=60)
             table.add_column("Time", style="dim", width=19)
             for i, msg in enumerate(non_system, 1):
@@ -965,7 +1057,7 @@ class TerminalUI:
             if len(non_system) < 6:
                 self.console.print("[yellow]Not enough history to compact (need at least 3 turns)[/yellow]")
                 return True
-            self.console.print("[cyan]Compacting conversation...[/cyan]")
+            self.console.print("[#EA580C]Compacting conversation...[/#EA580C]")
             # Keep the last 4 messages (2 turns), summarize the rest
             old_msgs = non_system[:-4]
             recent = non_system[-4:]
@@ -1057,7 +1149,7 @@ class TerminalUI:
             total_words = user_words + asst_words
             total_chars = sum(len(m.get('content', '')) for m in non_system)
             table = Table(title="Conversation Stats")
-            table.add_column("Metric", style="cyan")
+            table.add_column("Metric", style="#EA580C")
             table.add_column("Value", style="green")
             table.add_row("User messages", str(len(user_msgs)))
             table.add_row("Assistant messages", str(len(asst_msgs)))
@@ -1086,7 +1178,7 @@ class TerminalUI:
                     self.console.print(f"[green]Custom persona set: {args}[/green]")
             else:
                 templates = self.prompt_manager.list_templates()
-                self.console.print("[cyan]Available personas:[/cyan]")
+                self.console.print("[#EA580C]Available personas:[/#EA580C]")
                 for t in templates:
                     self.console.print(f"  [yellow]{t}[/yellow]")
                 self.console.print("[dim]Usage: /persona <name> or /persona <description>[/dim]")
@@ -1156,13 +1248,31 @@ class TerminalUI:
                 return True
             table = Table(title=f"Search Results: '{args.strip()}'")
             table.add_column("#", style="dim", width=4)
-            table.add_column("Role", style="cyan", width=10)
+            table.add_column("Role", style="#EA580C", width=10)
             table.add_column("Preview", style="green", max_width=60)
             table.add_column("Time", style="dim", width=19)
             for idx, role, preview, ts in results:
                 table.add_row(str(idx), role, preview, ts)
             self.console.print(table)
             self.console.print(f"[dim]{len(results)} match(es) found[/dim]")
+
+        elif cmd == "/context":
+            # Show context window usage
+            total_ctx = getattr(self.engine, 'config', {}).get('model', {}).get('n_ctx', 4096)
+            reserve = getattr(self.engine, 'config', {}).get('context', {}).get('reserve_tokens', 512)
+            msg_count = len(self.memory.messages)
+            est_tokens = msg_count * 60  # rough estimate
+            avail = total_ctx - reserve
+            pct = min(int(est_tokens / avail * 100), 100) if avail else 0
+            bar_len = 30
+            filled = int(pct / 100 * bar_len)
+            bar = "\u2588" * filled + "\u2591" * (bar_len - filled)
+            ctx_color = "#EA580C" if pct > 80 else ("yellow" if pct > 50 else "green")
+            self.console.print("[bold #EA580C]Context Window[/bold #EA580C]")
+            self.console.print(f"  Total: {total_ctx} | Reserved: {reserve} | Available: {avail}")
+            self.console.print(f"  [{ctx_color}]{bar}[/{ctx_color}] {pct}% (~{est_tokens} tokens)")
+            if pct > 80:
+                self.console.print("[yellow]  Context nearing capacity. Use /compact to free space.[/yellow]")
 
         elif cmd == "/cost":
             # Estimate token usage and API-equivalent cost
@@ -1178,7 +1288,7 @@ class TerminalUI:
             output_cost = est_output_tokens * 10.00 / 1_000_000
             total_cost = input_cost + output_cost
             table = Table(title="Token Usage & Cost Estimate")
-            table.add_column("Metric", style="cyan")
+            table.add_column("Metric", style="#EA580C")
             table.add_column("Value", style="green", justify="right")
             table.add_row("Total messages", str(len(non_system)))
             table.add_row("Total characters", f"{total_chars:,}")
@@ -1218,7 +1328,7 @@ class TerminalUI:
             current = self.engine.model_path if hasattr(self.engine, "model_path") else None if hasattr(self.engine, 'model_path') else None
             table = Table(title="Available Models")
             table.add_column("#", style="dim", width=4)
-            table.add_column("Model", style="cyan")
+            table.add_column("Model", style="#EA580C")
             table.add_column("Size", style="green", justify="right")
             table.add_column("Status", style="yellow")
             for i, p in enumerate(all_models, 1):
@@ -1240,7 +1350,7 @@ class TerminalUI:
                         if not new_model.exists():
                             self.console.print(f"[red]Model not found: {args.strip()}[/red]")
                             return True
-                    self.console.print(f"[cyan]Switching to {new_model.name}...[/cyan]")
+                    self.console.print(f"[#EA580C]Switching to {new_model.name}...[/#EA580C]")
                     try:
                         self.engine.load_model(str(new_model))
                         self.engine.config["model"]["path"] = str(new_model)
@@ -1268,7 +1378,7 @@ class TerminalUI:
                     last_user_msg = msg.get("content", "")
                     break
             if last_user_msg:
-                self.console.print("[cyan]Regenerating last response...[/cyan]")
+                self.console.print("[#EA580C]Regenerating last response...[/#EA580C]")
                 self._last_response_text = ""
                 self.generate_response(last_user_msg)
             else:
@@ -1305,7 +1415,7 @@ class TerminalUI:
             import platform as _platform
             import multiprocessing as _mp
             table = Table(title="System Information")
-            table.add_column("Property", style="cyan")
+            table.add_column("Property", style="#EA580C")
             table.add_column("Value", style="green")
             table.add_row("OS", _platform.system())
             table.add_row("OS Version", _platform.version())
@@ -1395,7 +1505,7 @@ class TerminalUI:
                 f"User: {first_user}\n"
                 f"Assistant: {first_assistant[:200]}"
             )
-            self.console.print("[cyan]Generating conversation title...[/cyan]")
+            self.console.print("[#EA580C]Generating conversation title...[/#EA580C]")
             try:
                 title = self.engine.generate(
                     self.engine.format_chat_prompt(
@@ -1413,23 +1523,200 @@ class TerminalUI:
             except Exception as e:
                 self.console.print(f"[red]Failed to generate title: {e}[/red]")
 
+        elif cmd == "/skill" or cmd == "/skills":
+            self._handle_skill_command(arg_text)
+
+        elif cmd == "/marketplace":
+            self._handle_skill_command(f"marketplace {arg_text}")
+
         elif cmd == "/quit":
-            self.console.print("[cyan]Goodbye![/cyan]")
+            self.console.print("[#EA580C]Goodbye![/#EA580C]")
             return False
 
         else:
             self.console.print(f"[red]Unknown command: {cmd}[/red]")
             self.console.print("Type [bold]/help[/bold] for available commands")
-        
+
         return True
-    
+
+    def _handle_skill_command(self, args: str) -> None:
+        """Handle /skill subcommands."""
+        parts = args.strip().split(None, 1)
+        subcmd = parts[0].lower() if parts else "list"
+        sub_args = parts[1].strip() if len(parts) > 1 else ""
+
+        if subcmd in ("list", "ls"):
+            skills = self.skill_manager.list_skills()
+            if not skills:
+                self.console.print("[yellow]No skills installed.[/yellow]")
+                return
+            from rich.table import Table
+            table = Table(title="Mythos Skills", show_lines=False)
+            table.add_column("Name", style="#EA580C")
+            table.add_column("Version", style="dim")
+            table.add_column("Source", style="cyan")
+            table.add_column("Description")
+            table.add_column("Commands", style="green")
+            for s in skills:
+                cmds = ", ".join(f"/{c.name}" for c in s.commands)
+                src_icon = {"preinstalled": "built-in", "marketplace": "store", "custom": "ai-made"}.get(s.source, s.source)
+                table.add_row(s.name, s.version, src_icon, s.description[:50], cmds)
+            self.console.print(table)
+
+        elif subcmd in ("info", "about"):
+            name = sub_args
+            if not name:
+                self.console.print("[yellow]Usage: /skill info <skill_name>[/yellow]")
+                return
+            skill = self.skill_manager.get_skill(name)
+            if not skill:
+                self.console.print(f"[red]Skill '{name}' not found.[/red]")
+                return
+            self.console.print(f"[bold]#EA580C]{skill.name}[/bold] v{skill.version}")
+            self.console.print(f"  Description: {skill.description}")
+            self.console.print(f"  Author: {skill.author}")
+            self.console.print(f"  Source: {skill.source}")
+            if skill.tags:
+                self.console.print(f"  Tags: {', '.join(skill.tags)}")
+            self.console.print("[bold]Commands:[/bold]")
+            for c in skill.commands:
+                self.console.print(f"  /{c.name} - {c.description}")
+
+        elif subcmd == "run":
+            # /skill run <skill_name> [command_name] [args]
+            run_parts = sub_args.split(None, 2)
+            if not run_parts:
+                self.console.print("[yellow]Usage: /skill run <skill_name> [command] [args][/yellow]")
+                return
+            skill_name = run_parts[0]
+            command_name = run_parts[1] if len(run_parts) > 1 else "run"
+            cmd_args = run_parts[2] if len(run_parts) > 2 else ""
+            context = {
+                "messages": self.memory.messages[-10:] if hasattr(self, 'memory') and self.memory else [],
+                "config": self.engine.config if hasattr(self, 'engine') else {},
+            }
+            try:
+                result = self.skill_manager.run_skill(skill_name, command_name, cmd_args, context)
+                self.console.print(f"[green][Skill: {skill_name}][/green] {result}")
+            except Exception as e:
+                self.console.print(f"[red]Skill error: {e}[/red]")
+
+        elif subcmd in ("install", "add"):
+            name = sub_args
+            if not name:
+                self.console.print("[yellow]Usage: /skill install <skill_name>[/yellow]")
+                return
+            if not self.marketplace:
+                self.console.print("[red]Marketplace not available (missing httpx or urllib).[/red]")
+                return
+            self.console.print(f"Installing skill [bold]{name}[/bold] from marketplace...")
+            result = self.marketplace.install(name, self.skill_manager)
+            if result:
+                self.console.print(f"[green]Skill '{result}' installed successfully![/green]")
+            else:
+                self.console.print(f"[red]Failed to install skill '{name}'. Check the name and try again.[/red]")
+
+        elif subcmd in ("uninstall", "remove", "rm"):
+            name = sub_args
+            if not name:
+                self.console.print("[yellow]Usage: /skill uninstall <skill_name>[/yellow]")
+                return
+            try:
+                if self.skill_manager.uninstall_skill(name):
+                    self.console.print(f"[green]Skill '{name}' uninstalled.[/green]")
+                else:
+                    self.console.print(f"[red]Skill '{name}' not found.[/red]")
+            except ValueError as e:
+                self.console.print(f"[red]{e}[/red]")
+
+        elif subcmd in ("marketplace", "store", "browse"):
+            if not self.marketplace:
+                self.console.print("[red]Marketplace not available.[/red]")
+                return
+            self.console.print("[dim]Fetching marketplace listings...[/dim]")
+            try:
+                listings = self.marketplace.list_available(self.skill_manager)
+                if not listings:
+                    # Try cache
+                    listings = self.skill_manager.load_marketplace_cache()
+                if not listings:
+                    self.console.print("[yellow]No marketplace skills found. Check your internet connection.[/yellow]")
+                    return
+                from rich.table import Table
+                table = Table(title="Skill Marketplace", show_lines=False)
+                table.add_column("Name", style="#EA580C")
+                table.add_column("Version", style="dim")
+                table.add_column("Description")
+                table.add_column("Tags", style="cyan")
+                table.add_column("Status", style="green")
+                for s in listings[:30]:
+                    name = s.get("name", "?")
+                    ver = s.get("version", "?")
+                    desc = s.get("description", "")[:50]
+                    tags = ", ".join(s.get("tags", []))[:30]
+                    status = "[green]installed[/green]" if s.get("installed") else ""
+                    table.add_row(name, ver, desc, tags, status)
+                self.console.print(table)
+                self.console.print("[dim]Install with: /skill install <name>[/dim]")
+            except Exception as e:
+                self.console.print(f"[red]Marketplace error: {e}[/red]")
+
+        elif subcmd in ("search", "find"):
+            if not sub_args:
+                self.console.print("[yellow]Usage: /skill search <query>[/yellow]")
+                return
+            if not self.marketplace:
+                self.console.print("[red]Marketplace not available.[/red]")
+                return
+            results = self.marketplace.search(sub_args)
+            if not results:
+                self.console.print(f"[yellow]No marketplace skills matching '{sub_args}'.[/yellow]")
+                return
+            for s in results[:10]:
+                name = s.get("name", "?")
+                desc = s.get("description", "")
+                self.console.print(f"  [#EA580C]{name}[/] - {desc}")
+            self.console.print("[dim]Install with: /skill install <name>[/dim]")
+
+        elif subcmd == "create":
+            if not sub_args:
+                self.console.print("[yellow]Usage: /skill create <description of what the skill should do>[/yellow]")
+                self.console.print("[dim]Example: /skill create a skill that generates random passwords[/dim]")
+                return
+            self._create_ai_skill(sub_args)
+
+        else:
+            self.console.print(f"[red]Unknown skill subcommand: {subcmd}[/red]")
+            self.console.print("[dim]Available: list, info, run, install, uninstall, marketplace, search, create[/dim]")
+
+    def _create_ai_skill(self, description: str) -> None:
+        """Create a new skill using AI generation."""
+        from engine.skills import SkillManager as SM
+        self.console.print(f"[#EA580C]Generating skill from description...[/]")
+        prompt = SM.build_create_prompt(description)
+        # Inject the prompt as a system message and generate
+        messages = [{"role": "system", "content": prompt}]
+        try:
+            response = ""
+            for chunk in self.engine.generate("Create the skill as described.", system_override=prompt):
+                response += chunk
+            manifest, skill_code = SM.parse_create_response(response)
+            skill = self.skill_manager.create_custom_skill("ai_skill", manifest, skill_code)
+            self.console.print(f"[green]AI-created skill '{skill.name}' saved![/green]")
+            self.console.print(f"  Commands: {', '.join('/' + c.name for c in skill.commands)}")
+            self.console.print("[dim]Run with: /skill run <name>[/dim]")
+        except Exception as e:
+            self.console.print(f"[red]Failed to create skill: {e}[/red]")
+            self.console.print("[dim]The AI may not have generated a valid skill. Try again with a clearer description.[/dim]")
+
+
     def generate_response(self, user_input: str) -> str:
         """
         Generate response with streaming
-        
+
         Args:
             user_input: User's input text
-        
+
         Returns:
             Complete response
         """
@@ -1440,10 +1727,10 @@ class TerminalUI:
                 self.console.print("[dim](RML: positive signal detected)[/dim]")
             elif implicit == "negative":
                 self.console.print("[dim](RML: negative signal detected)[/dim]")
-        
+
         # Add user message to memory
         self.memory.add_message("user", user_input)
-        
+
         # Get context from RAG if enabled
         rag_context = ""
         if self.rag_enabled and self.rag:
@@ -1630,7 +1917,8 @@ class TerminalUI:
 
             thinking_mode = self.reflector.should_think()
 
-            self.console.print("\n[bold green]Assistant:[/bold green] ", end="")
+            _spinner = ThinkingSpinner()
+            _spinner.start(self.console, label="Thinking")
 
             # Thinking-mode streaming: detect think tags in real-time
             # Tags supported: ««««/»»»» (Qwen-style) and <thinking>/</thinking>
@@ -1670,6 +1958,7 @@ class TerminalUI:
                 return ""
 
             try:
+                _first_chunk = True
                 for chunk in self.engine.generate(
                     prompt,
                     stream=True,
@@ -1679,6 +1968,10 @@ class TerminalUI:
                 ):
                     response_text += chunk
                     token_count += 1
+                    if _first_chunk:
+                        _first_chunk = False
+                        _spinner.stop()
+                        self.console.print("\n[bold #EA580C]Assistant[/bold #EA580C] ", end="")
 
                     if not thinking_mode:
                         # Normal streaming — no tag processing
@@ -1743,7 +2036,7 @@ class TerminalUI:
                                 # Print reasoning content before the closing tag (colored)
                                 if earliest > 0:
                                     self.console.print(
-                                        _display_buf[:earliest], end="", style="yellow italic"
+                                        _display_buf[:earliest], end="", style="#F97316 italic"
                                     )
                                 # Skip the closing tag
                                 _display_buf = _display_buf[earliest + tag_len:]
@@ -1761,12 +2054,19 @@ class TerminalUI:
                 elapsed = time.time() - start_time
                 tokens_per_sec = token_count / elapsed if elapsed > 0 else 0
 
+                # Response timing bar
+                timing_bar = "─" * min(int(tokens_per_sec), 40)
+                t_color = "#EA580C" if tokens_per_sec < 5 else ("yellow" if tokens_per_sec < 15 else "green")
+                self.console.print()
                 self.console.print(
-                    f"\n[dim]Generated {token_count} tokens in {elapsed:.1f}s "
-                    f"({tokens_per_sec:.1f} tok/s)[/dim]\n"
+                    f"[dim]Generated {token_count} tokens in {elapsed:.1f}s[/dim] "
+                    f"[{t_color}]{tokens_per_sec:.1f} tok/s[/{t_color}] [{t_color}]{timing_bar}[/{t_color}]",
+                    highlight=False,
                 )
+                self.console.print()
 
             except KeyboardInterrupt:
+                _spinner.stop()
                 self._last_ctrl_c_time = time.time()
                 self.console.print("\n\n[yellow]Generation interrupted[/yellow]\n")
                 # RML: record interrupt as negative signal (usually = too verbose / off-track)
@@ -1775,9 +2075,14 @@ class TerminalUI:
                 self._last_response_text = response_text
                 self.memory.add_message("assistant", response_text)
                 return response_text
+            except Exception as e:
+                _spinner.stop()
+                self.console.print(f"\n[red]Error: {e}[/red]\n")
+                return ""
+
 
             if self.reflector.should_reflect() and response_text:
-                self.console.print("[cyan]Applying self-reflection...[/cyan]")
+                self.console.print("[#EA580C]Applying self-reflection...[/#EA580C]")
                 response_text = self.reflector.reflect(
                     self.engine,
                     user_input,
@@ -1854,23 +2159,46 @@ class TerminalUI:
             self.voice.speak(response_text)
 
         self.memory.add_message("assistant", response_text)
-        
+
         # RML: track the last response for explicit feedback (/rml good|bad)
         self._last_response_text = response_text
 
         return response_text
-    
+
     def run(self):
         """Main chat loop"""
         self.show_header()
-        
+
         while self.running:
             try:
                 # Get user input
-                prompt_str = "\n[bold blue]You[/bold blue]"
+                prompt_str = "\n[bold #F97316]You[/bold #F97316]"
                 if self.voice.enabled and self.voice.is_recording:
-                    prompt_str = "\n[bold red][REC][/bold red] [bold blue]You[/bold blue] (press Enter to stop)"
+                    prompt_str = "\n[bold red][REC][/bold red] [bold #F97316]You[/bold #F97316] (press Enter to stop)"
 
+
+                # Status bar - model, mode, messages, context usage
+                model_name = getattr(self.engine, 'model_name', getattr(self.engine, 'model_path', ''))
+                model_str = str(model_name) if model_name else ''
+                model_short = model_str.split("/")[-1].replace(".gguf","") if model_str else ""
+                msg_count = len(self.memory.messages) if hasattr(self, 'memory') else 0
+                mode_tag = "[#FB923C]cloud[/#FB923C]" if self.cloud_mode else "[#FB923C]local[/#FB923C]"
+                # Context usage estimate
+                ctx_budget = getattr(self.engine, 'config', {}).get('context', {}).get('reserve_tokens', 512)
+                total_ctx = getattr(self.engine, 'config', {}).get('model', {}).get('n_ctx', 4096)
+                avail = max(total_ctx - ctx_budget, 1)
+                ctx_pct = min(int((msg_count * 60) / avail * 100), 100) if avail else 0
+                ctx_color = "#EA580C" if ctx_pct > 80 else ("yellow" if ctx_pct > 50 else "green")
+                ctx_bar_len = 10
+                ctx_filled = int(ctx_pct / 100 * ctx_bar_len)
+                ctx_bar = "█" * ctx_filled + "░" * (ctx_bar_len - ctx_filled)
+                status_parts = ["[bold #EA580C]Mythos[/bold #EA580C]"]
+                if model_short:
+                    status_parts.append(f"[#FB923C]{model_short}[/#FB923C]")
+                status_parts.append(f"{mode_tag}")
+                status_parts.append(f"[dim]{msg_count} msgs[/dim]")
+                status_parts.append(f"[{ctx_color}]{ctx_bar}[/{ctx_color}] [dim]{ctx_pct}%[/dim]")
+                self.console.print(" | ".join(status_parts), highlight=False)
                 user_input = Prompt.ask(prompt_str).strip()
 
                 if not user_input:
@@ -1890,7 +2218,27 @@ class TerminalUI:
                     self.running = self.handle_command(user_input)
                     continue
 
-                # Voice shortcut: "v" on empty-ish line triggers recording
+                # Multiline paste mode: lines starting with | are joined
+                if user_input.startswith("|"):
+                    user_input = user_input[1:].strip()
+                    if user_input:
+                        user_input = user_input + "\n"
+                    while True:
+                        try:
+                            extra = Prompt.ask("[dim]...[/dim]").strip()
+                            if not extra:
+                                break
+                            if extra.startswith("|"):
+                                user_input += extra[1:].strip() + "\n"
+                            else:
+                                user_input += extra + "\n"
+                        except (EOFError, KeyboardInterrupt):
+                            break
+                    user_input = user_input.strip()
+                    if not user_input:
+                        continue
+
+            # Voice shortcut: "v" on empty-ish line triggers recording
                 if self.voice.enabled and user_input.lower() == "v" and self.voice.is_available():
                     try:
                         self.voice.start_recording()
@@ -1909,11 +2257,11 @@ class TerminalUI:
 
                 # Generate response
                 self.generate_response(user_input)
-            
+
             except KeyboardInterrupt:
                 now = time.time()
                 if now - self._last_ctrl_c_time < 1.0:
-                    self.console.print("\n[cyan]Exiting...[/cyan]")
+                    self.console.print("\n[#EA580C]Exiting...[/#EA580C]")
                     # Install a SIGINT handler that force-kills on the
                     # NEXT Ctrl+C, so destructors (__del__, atexit) can't
                     # produce "Exception ignored" spam if the user mashes
@@ -1929,7 +2277,7 @@ class TerminalUI:
             except Exception as e:
                 logger.error(f"Error in chat loop: {e}", exc_info=True)
                 self.console.print(f"\n[bold red]Error: {e}[/bold red]\n")
-        
+
         # Save conversation on exit
         if self.memory.messages:
             save = Prompt.ask("Save conversation before exit?", choices=["y", "n"], default="y")
@@ -1973,7 +2321,7 @@ class TerminalUI:
 def run_terminal_ui(config_path: str = "config.yaml"):
     """
     Run the terminal UI
-    
+
     Args:
         config_path: Path to configuration file
     """

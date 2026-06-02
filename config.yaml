@@ -199,3 +199,11 @@ cloud:
   base_url: "https://api.openai.com/v1"
   model: "gpt-4o-mini"
   context_length: 128000
+
+# ── Skills ────────────────────────────────────────────────────────
+# Skills extend Mythos with new capabilities.
+# Manage with: /skill list|install|create|run  (in chat)
+# Or: mythos skill list|install|run|create     (CLI)
+skills:
+  marketplace_url: "https://raw.githubusercontent.com/creatorofsomethingthatisgood/Open-Mythos-2/main/skills"
+  auto_discover: true  # Scan for new skills on startup
