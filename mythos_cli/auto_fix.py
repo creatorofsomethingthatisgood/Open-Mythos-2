@@ -21,8 +21,8 @@ SKIP_RULES = frozenset({
     "SEC001", "SEC002", "SEC003", "SEC004", "SEC005",  # secrets / keys
     "SEC006",  # eval/exec
     "SEC007",  # shell injection
-    "SEC009",  # SQL — needs parameterized queries, not regex
-    "SEC013",  # webhooks — design change
+    "SEC009",  # SQL -- needs parameterized queries, not regex
+    "SEC013",  # webhooks -- design change
     "SEC014",  # logging
     "SEC015", "SEC016",  # .env presence
 })
@@ -109,7 +109,7 @@ def apply_fixes_to_file(
         if f.rule_id not in SKIP_RULES
         and (f.path == rel_name or str(filepath).endswith(f.path))
     ]
-    # Group by line — multiple findings per line are applied iteratively
+    # Group by line -- multiple findings per line are applied iteratively
     by_line: dict[int, List[Finding]] = {}
     for f in applicable:
         by_line.setdefault(f.line, []).append(f)
@@ -222,7 +222,7 @@ def apply_fixes_to_tree(
     resolved_root = root.resolve()
     for rel, file_findings in by_file.items():
         full = (root / rel).resolve()
-        # C-3 fix: prevent path traversal — file must be under scan root
+        # C-3 fix: prevent path traversal -- file must be under scan root
         if not full.is_relative_to(resolved_root):
             all_results.append(
                 FixResult(
@@ -230,7 +230,7 @@ def apply_fixes_to_tree(
                     path=rel,
                     line=0,
                     status="skipped",
-                    detail="Path escapes scan root — possible path traversal",
+                    detail="Path escapes scan root -- possible path traversal",
                 )
             )
             continue

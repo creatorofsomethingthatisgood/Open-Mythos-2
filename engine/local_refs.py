@@ -78,8 +78,33 @@ def ref_to_path(ref: str) -> Path:
             path = f"{parsed.netloc}:{path}"
         elif parsed.netloc and parsed.netloc not in ("", "localhost"):
             path = f"/{parsed.netloc}{path}"
-        return Path(path).expanduser()
-    return Path(ref).expanduser()
+        result = Path(path).expanduser()
+    else:
+        result = Path(ref).expanduser()
+    # Block access to sensitive system paths
+    try:
+        resolved = result.resolve()
+    except (OSError, ValueError):
+        return result
+    _guard_sensitive_path(resolved)
+    return result
+
+
+# Paths that should never be loaded into chat context
+_SENSITIVE_PATHS = (
+    "/etc/shadow", "/etc/passwd", "/etc/gshadow", "/etc/ssh",
+    "/root/.ssh", "/home",  # broad block for /home is too aggressive; skip
+    "/etc/ssl/private", "/etc/pki",
+    "/var/lib/secrets", "/run/secrets",
+)
+
+
+def _guard_sensitive_path(resolved: Path) -> None:
+    """Raise ValueError if the resolved path points to a sensitive location."""
+    s = str(resolved)
+    for sensitive in _SENSITIVE_PATHS:
+        if s == sensitive or s.startswith(sensitive + "/"):
+            raise ValueError(f"Access to sensitive path blocked: {resolved}")
 
 
 def _add_ref(refs: List[str], seen: set[str], raw: str) -> None:
@@ -176,7 +201,7 @@ def _format_findings(findings: List[Any], limit: int = 40) -> str:
     for f in findings[:limit]:
         snippet = _REDACTED_SNIPPET if f.rule_id in SECRET_RULES else f.snippet
         lines.append(
-            f"- [{f.severity.upper()}] {f.rule_id} {f.path}:{f.line} — {f.title}\n"
+            f"- [{f.severity.upper()}] {f.rule_id} {f.path}:{f.line} -- {f.title}\n"
             f"  {snippet}\n  Fix: {f.recommendation}"
         )
     if len(findings) > limit:

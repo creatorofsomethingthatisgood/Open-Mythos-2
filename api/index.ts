@@ -27,7 +27,7 @@ async function proxy(path: string, req: VercelRequest, res: VercelResponse) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS — restrict to configured origin; default to same-origin
+  // Enable CORS -- restrict to configured origin; default to same-origin
   const corsOrigin = process.env.MYTHOS_CORS_ORIGIN || "";
   if (corsOrigin) {
     res.setHeader("Access-Control-Allow-Origin", corsOrigin);
@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const subpath = (req.query?.path as string) || "";
-  // Prevent path traversal — reject anything that could escape /api/
+  // Prevent path traversal -- reject anything that could escape /api/
   if (subpath.includes("..") || subpath.includes("\0")) {
     return res.status(400).json({ error: "Invalid path" });
   }

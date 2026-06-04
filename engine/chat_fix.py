@@ -1,5 +1,5 @@
 """
-Fix vulnerabilities during chat — detect intent, run auto-fix, guide the LLM,
+Fix vulnerabilities during chat -- detect intent, run auto-fix, guide the LLM,
 and optionally apply patches from the assistant reply.
 """
 
@@ -38,7 +38,7 @@ PATCH_BLOCK_RE = re.compile(
     r"(?P<body>.*?)<<<END_PATCH>>>",
     re.DOTALL | re.IGNORECASE,
 )
-# Model sometimes omits END_PATCH — grab fenced code after path= line
+# Model sometimes omits END_PATCH -- grab fenced code after path= line
 PATCH_LOOSE_RE = re.compile(
     r"<<<MYTHOS_PATCH\s+path\s*=\s*(?P<path>[^>\n]+)>>>\s*"
     r"(?:```[\w]*\n(?P<body>.*?)```|(?P<raw>[^\n<]+))",
@@ -54,7 +54,7 @@ MARKDOWN_PATCH_RE = re.compile(
 MYTHOS_PATCH_FORMAT = """
 <<<MYTHOS_PATCH path="/Users/you/your-repo/src/module/file.py">>>
 ```python
-# complete file contents — use the REAL absolute path from the user message
+# complete file contents -- use the REAL absolute path from the user message
 ```
 <<<END_PATCH>>>
 """
@@ -66,11 +66,11 @@ _PATCH_PLACEHOLDER_MARKERS = (
 
 REWRITE_WARNING = (
     "WARNING: Full-file rewrite overwrites entire files on disk. "
-    "Mythos does not create .bak backups — commit or branch with git before continuing."
+    "Mythos does not create .bak backups -- commit or branch with git before continuing."
 )
 
 SECURITY_FIX_HINT = """
-FIX MODE: Output ONLY MYTHOS_PATCH blocks — one per changed file.
+FIX MODE: Output ONLY MYTHOS_PATCH blocks -- one per changed file.
 Each block must contain the COMPLETE file from line 1 to EOF (no snippets, no "..." placeholders).
 No git diff, no partial edits, no ### markdown sections.
 """
@@ -156,13 +156,13 @@ def format_finding_rationale(
 ) -> List[str]:
     """Human-readable lines explaining why a file is being rewritten."""
     if not findings:
-        return ["  • No static findings — applying general security hardening"]
+        return ["  • No static findings -- applying general security hardening"]
     lines: List[str] = []
     for f in findings[:max_items]:
         rec = getattr(f, "recommendation", "") or ""
         detail = f.title if hasattr(f, "title") else str(f)
         if rec and len(rec) < 120:
-            lines.append(f"  • [{f.severity}] line {f.line}: {detail} — {rec}")
+            lines.append(f"  • [{f.severity}] line {f.line}: {detail} -- {rec}")
         else:
             lines.append(f"  • [{f.severity}] line {f.line}: {detail}")
     if len(findings) > max_items:
@@ -265,13 +265,13 @@ def _format_fix_context(
         lines.append("No deterministic auto-fixes matched (see static findings below).")
 
     if skipped:
-        lines.append(f"\nSkipped {len(skipped)} item(s) — need manual/LLM fix (secrets, eval, SQL, etc.).")
+        lines.append(f"\nSkipped {len(skipped)} item(s) -- need manual/LLM fix (secrets, eval, SQL, etc.).")
 
     if findings:
         lines.append(f"\nRemaining static findings after fix ({len(findings)}):")
         for f in findings:
             lines.append(
-                f"  - [{f.severity}] {f.path}:{f.line} {f.title} — {f.recommendation}"
+                f"  - [{f.severity}] {f.path}:{f.line} {f.title} -- {f.recommendation}"
             )
 
     lines.append(
@@ -292,7 +292,7 @@ def handle_chat_fix(
     """
     If the user wants fixes, scan targets and prepare full-file rewrite context.
 
-    Line-level auto-fix is never written to disk here — only full MYTHOS_PATCH files.
+    Line-level auto-fix is never written to disk here -- only full MYTHOS_PATCH files.
 
     confirm_apply: callable(prompt) -> bool; when provided, called for every fix
     request to ask whether to rewrite files (recommended). If None, writes only when
@@ -318,7 +318,7 @@ def handle_chat_fix(
         return (
             "",
             [
-                "Fix requested — add a path (e.g. ~/my-api) or use /file <path> first, "
+                "Fix requested -- add a path (e.g. ~/my-api) or use /file <path> first, "
                 "then ask again: fix the vulns"
             ],
             [],
@@ -337,7 +337,7 @@ def handle_chat_fix(
     emit_progress(REWRITE_WARNING, on_progress)
     notices.append(REWRITE_WARNING)
 
-    # Scan only — chat rewrite uses full-file MYTHOS_PATCH, not line-level edits.
+    # Scan only -- chat rewrite uses full-file MYTHOS_PATCH, not line-level edits.
     for target in targets:
         label = target.name if target.is_file() else str(target)
         emit_progress(f"Scanning {label}…", on_progress)
@@ -345,7 +345,7 @@ def handle_chat_fix(
         all_findings.extend(findings)
         all_fixes.extend(fixes)
         emit_progress(
-            f"Scan complete: {label} — {len(findings)} finding(s)",
+            f"Scan complete: {label} -- {len(findings)} finding(s)",
             on_progress,
         )
         if _fix_cfg(config).get("show_finding_rationale", True) and findings:
@@ -379,13 +379,13 @@ def handle_chat_fix(
             emit_progress(msg, on_progress)
         else:
             msg = (
-                "Rewrite not confirmed — model may reply with patches; "
+                "Rewrite not confirmed -- model may reply with patches; "
                 "nothing will be written until you confirm"
             )
             notices.append(msg)
             emit_progress(msg, on_progress)
     elif rewrite_mode:
-        msg = "No files matched for rewrite — check the path"
+        msg = "No files matched for rewrite -- check the path"
         notices.append(msg)
         emit_progress(msg, on_progress)
 
@@ -604,7 +604,7 @@ def apply_patches_with_prompt(
 
     if not should_auto_write_patches(message, config, rewrite_approved=rewrite_approved):
         return [
-            f"Found {len(patches)} patch block(s) — not written (rewrite not confirmed). "
+            f"Found {len(patches)} patch block(s) -- not written (rewrite not confirmed). "
             "Confirm rewrite to write full files to disk."
         ]
 
@@ -663,7 +663,7 @@ def generate_mythos_patch(
         retry_note = ""
         if attempt > 0:
             emit_progress(
-                f"Retrying {path.name} — previous reply was not a valid MYTHOS_PATCH "
+                f"Retrying {path.name} -- previous reply was not a valid MYTHOS_PATCH "
                 f"(attempt {attempt + 1}/{total_attempts})…",
                 on_progress,
             )
@@ -701,7 +701,7 @@ def generate_mythos_patch(
             response = "".join(chunks)
         else:
             emit_progress(
-                f"Running model for {path.name} — this can take a minute…",
+                f"Running model for {path.name} -- this can take a minute…",
                 on_progress,
             )
             response = engine.generate(
@@ -755,7 +755,7 @@ def run_dedicated_rewrite(
     if limit_one and paths:
         paths = paths[:1]
     if not paths:
-        return ["No files to rewrite — reference a path with /file or in your message"]
+        return ["No files to rewrite -- reference a path with /file or in your message"]
 
     total = len(paths)
     emit_progress(
@@ -861,7 +861,7 @@ def run_rewrite_files(
             if _fix_cfg(config).get("show_finding_rationale", True):
                 emit_finding_rationale(path, file_findings, on_progress)
             finding_text = "\n".join(
-                f"- [{f.severity}] line {f.line}: {f.title} — {f.recommendation}"
+                f"- [{f.severity}] line {f.line}: {f.title} -- {f.recommendation}"
                 for f in file_findings
             ) or "(apply best-practice security hardening)"
 

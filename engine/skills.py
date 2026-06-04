@@ -331,7 +331,12 @@ class SkillManager:
         """
         Install a skill from raw YAML/Python content (used by marketplace).
         """
-        dest = self.installed_dir() / name
+        # Sanitize skill name to prevent path traversal
+        safe_name = name.lower().replace(" ", "_").replace("-", "_")
+        safe_name = "".join(c for c in safe_name if c.isalnum() or c == "_")
+        if not safe_name:
+            raise ValueError("Invalid skill name for install")
+        dest = self.installed_dir() / safe_name
         dest.mkdir(parents=True, exist_ok=True)
         (dest / "manifest.yaml").write_text(manifest_yaml)
         (dest / "skill.py").write_text(skill_py)

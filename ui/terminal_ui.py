@@ -5,6 +5,7 @@ Terminal UI - Beautiful terminal interface using Rich library
 import logging
 import os
 import signal
+import sys
 import threading
 import time
 from typing import List, Optional
@@ -81,7 +82,17 @@ class ThinkingSpinner:
         "\u2744", "\u2745", "\u2746", "\u2605",
     ]
 
+    # Moon-phase glyphs (toggle with M key while thinking)
+    MOON_GLYPHS = ["\u25D0", "\u25D1", "\u25D2", "\u25D3"]
+
     COLORS = ["#EA580C", "#F97316", "#FB923C", "#EF4444", "#F97316", "#EA580C"]
+
+    # Rotating labels when using default "Thinking" label
+    LABELS = [
+        "Thinking", "Reasoning", "Pondering", "Analyzing",
+        "Musing", "Deliberating", "Contemplating", "Processing",
+        "Reflecting", "Calculating",
+    ]
 
     def __init__(self) -> None:
         self._idx = 0
@@ -89,27 +100,44 @@ class ThinkingSpinner:
         self._thread = None
         self._live = None
         self._label = "Thinking"
+        self._moon = False
+        self._listener = None
 
     def start(self, console, label: str = "Thinking") -> None:
+        # Ensure previous listener is fully stopped and terminal is restored
+        # before we capture settings again in a new _start_listener().
+        if self._listener and self._listener.is_alive():
+            self._stop.set()
+            self._listener.join(timeout=1.0)
+            self._stop.clear()
         self._label = label
+        self._moon = False
         self._stop.clear()
         self._live = Live("", console=console, transient=True, refresh_per_second=8)
         self._live.__enter__()
         self._thread = threading.Thread(target=self._spin, daemon=True)
         self._thread.start()
+        self._start_listener()
 
     def stop(self) -> None:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=0.5)
+        # Join listener first so terminal settings are restored before
+        # the main thread touches stdin again (e.g. for Prompt input).
+        if self._listener:
+            self._listener.join(timeout=1.0)
+            self._listener = None
         if self._live:
             self._live.__exit__(None, None, None)
             self._live = None
 
     def _frame_text(self) -> str:
-        glyph = self.GLYPHS[self._idx % len(self.GLYPHS)]
+        glyphs = self.MOON_GLYPHS if self._moon else self.GLYPHS
+        glyph = glyphs[self._idx % len(glyphs)]
         color = self.COLORS[self._idx % len(self.COLORS)]
-        return f"[{color}]{glyph}[/{color}] [dim]{self._label}...[/dim]"
+        label = self.LABELS[self._idx % len(self.LABELS)] if self._label == "Thinking" else self._label
+        return f"[{color}]{glyph}[/{color}] [dim]{label}...[/dim]"
 
     def _spin(self) -> None:
         while not self._stop.is_set():
@@ -117,6 +145,41 @@ class ThinkingSpinner:
                 self._live.update(self._frame_text())
             self._idx += 1
             self._stop.wait(0.12)
+
+    def _start_listener(self) -> None:
+        """Spawn a daemon thread listening for 'm' keypress to toggle moon mode."""
+        try:
+            import tty
+            import termios
+            import select
+        except ImportError:
+            return
+        if not sys.stdin.isatty():
+            return
+
+        def _listen():
+            fd = sys.stdin.fileno()
+            old_settings = None
+            try:
+                old_settings = termios.tcgetattr(fd)
+                tty.setcbreak(fd)
+                while not self._stop.is_set():
+                    ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+                    if ready:
+                        ch = sys.stdin.read(1)
+                        if ch.lower() == "m":
+                            self._moon = not self._moon
+            except (termios.error, OSError, ValueError):
+                pass
+            finally:
+                if old_settings is not None:
+                    try:
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                    except (termios.error, OSError):
+                        pass
+
+        self._listener = threading.Thread(target=_listen, daemon=True)
+        self._listener.start()
 
 
 
@@ -189,12 +252,19 @@ class TerminalUI:
             if not self.cloud_mode:
                 try:
                     self.rag = RAGPipeline(config_path)
-                    stats = self.rag.get_stats()
-                    self.console.print(
-                        f"[green]RAG ready[/green] ({stats['total_chunks']} chunks indexed)"
-                    )
+                    if not getattr(self.rag, "available", True):
+                        self.rag = None
+                        self.console.print(
+                            "[dim]RAG disabled (install chromadb + sentence-transformers to enable)[/dim]"
+                        )
+                    else:
+                        self.rag_enabled = True
+                        stats = self.rag.get_stats()
+                        self.console.print(
+                            f"[green]RAG ready[/green] ({stats['total_chunks']} chunks indexed)"
+                        )
                 except Exception as rag_err:
-                    logger.exception("RAG init failed")
+                    logger.debug("RAG init failed: %s", rag_err)
                     self.console.print(f"[yellow]RAG not available: {rag_err}[/yellow]")
                     self.console.print(
                         "[dim] Fix: python main.py --mode rag-index --path <dir> "

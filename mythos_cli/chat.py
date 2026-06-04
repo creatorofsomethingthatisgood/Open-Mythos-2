@@ -1,5 +1,5 @@
 """
-Mythos Chat Launcher — starts the terminal (or web) chat interface.
+Mythos Chat Launcher -- starts the terminal (or web) chat interface.
 
 Uses ~/.config/mythos for models and caches so a new clone does not re-download.
 Run via ./mythos (repo wrapper) or venv/bin/mythos after setup.

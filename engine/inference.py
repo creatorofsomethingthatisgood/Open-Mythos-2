@@ -162,7 +162,7 @@ class InferenceEngine:
             raise FileNotFoundError(f"Model file not found: {new_path}")
         if "-of-" in new_path.name:
             raise ValueError(
-                f"'{new_path.name}' is a multi-part split file — "
+                f"'{new_path.name}' is a multi-part split file -- "
                 "all parts must be merged first. "
                 "Use: llama-gguf-split --merge <input> <output.gguf>"
             )

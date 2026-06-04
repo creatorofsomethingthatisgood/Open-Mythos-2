@@ -11,7 +11,7 @@ from engine.chat_fix import format_finding_rationale
 
 def test_format_finding_rationale_empty():
     assert format_finding_rationale([]) == [
-        "  • No static findings — applying general security hardening"
+        "  • No static findings -- applying general security hardening"
     ]
 
 

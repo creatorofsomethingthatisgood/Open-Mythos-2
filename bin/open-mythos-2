@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * open-mythos-2 — npm/pnpm wrapper for the Mythos local AI CLI.
+ * open-mythos-2 -- npm/pnpm wrapper for the Mythos local AI CLI.
  *
  * This script bootstraps the Python virtual environment on first run,
  * then delegates to the Python CLI (mythos_cli).
@@ -46,7 +46,7 @@ function isVenvReady() {
 function ensureSetup() {
   if (isVenvReady()) return;
 
-  console.log("Mythos: First run — setting up Python environment...\n");
+  console.log("Mythos: First run -- setting up Python environment...\n");
 
   // 1. Create venv
   if (!fs.existsSync(VENV_DIR)) {
@@ -65,14 +65,14 @@ function ensureSetup() {
       run(`bash "${setupScript}"`, { cwd: PKG_ROOT });
     } catch {
       // setup.sh may prompt for model download; fallback to minimal install
-      console.log("Setup script exited — trying minimal pip install...");
+      console.log("Setup script exited -- trying minimal pip install...");
       run(`"${VENV_PYTHON}" -m pip install --upgrade pip setuptools wheel`, {
         stdio: "pipe",
       });
       run(`"${VENV_PYTHON}" -m pip install -e ".[web]"`, { stdio: "pipe" });
     }
   } else {
-    // No setup script (e.g. Windows or custom env) — minimal install
+    // No setup script (e.g. Windows or custom env) -- minimal install
     run(`"${VENV_PYTHON}" -m pip install --upgrade pip setuptools wheel`, {
       stdio: "pipe",
     });

@@ -1,5 +1,5 @@
 """
-Shared Rich Console instance for Mythos CLI — single import point for
+Shared Rich Console instance for Mythos CLI -- single import point for
 colorized terminal output.
 """
 

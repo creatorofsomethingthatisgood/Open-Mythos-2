@@ -119,7 +119,7 @@ class Bitacora:
         for entry in self.entries[-max_lines:]:
             style = style_map.get(entry.kind, "white")
             if entry.kind == "stream":
-                # Thinking state — centered, drop the timestamp clutter.
+                # Thinking state -- centered, drop the timestamp clutter.
                 renderables.append(
                     Align.center(Text(entry.message, style=style))
                 )

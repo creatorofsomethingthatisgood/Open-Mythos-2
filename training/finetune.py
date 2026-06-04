@@ -67,7 +67,7 @@ class LoRAFineTuner:
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if self.device == "cpu":
-            logger.warning("No GPU detected — training on CPU will be very slow.")
+            logger.warning("No GPU detected -- training on CPU will be very slow.")
 
     def prepare_model(self):
         """Load base model, apply LoRA, return (model, tokenizer)."""
@@ -187,7 +187,7 @@ class LoRAFineTuner:
         logging_steps: int = 10,
     ):
         """
-        Train LoRA adapter — actually runs HuggingFace Trainer.
+        Train LoRA adapter -- actually runs HuggingFace Trainer.
 
         Args:
             dataset_path: Path to JSONL training data (messages format).

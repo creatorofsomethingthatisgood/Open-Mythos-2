@@ -1,5 +1,5 @@
 """
-Fast static security pattern scanner — runs in seconds, no model required.
+Fast static security pattern scanner -- runs in seconds, no model required.
 """
 
 from __future__ import annotations

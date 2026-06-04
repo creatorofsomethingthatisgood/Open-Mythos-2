@@ -55,7 +55,7 @@ body {
   flex-direction: column;
 }
 
-/* Scrollbar — thin, dark, subtle */
+/* Scrollbar -- thin, dark, subtle */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--mythos-border); border-radius: 4px; }

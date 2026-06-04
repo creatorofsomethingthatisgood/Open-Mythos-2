@@ -24,7 +24,7 @@ if [[ -n "$DOCS_PATH" ]]; then
 else
   DOCS_DIR="$(python -c "import yaml; c=yaml.safe_load(open('config.yaml')); print(c.get('rag',{}).get('docs_dir','rag_docs'))")"
   if [[ ! -d "$DOCS_DIR" ]]; then
-    echo "Missing $DOCS_DIR/ — create it, copy docs, or pass a path:" >&2
+    echo "Missing $DOCS_DIR/ -- create it, copy docs, or pass a path:" >&2
     echo "  ./scripts/index-rag.sh /path/to/your/code" >&2
     exit 1
   fi

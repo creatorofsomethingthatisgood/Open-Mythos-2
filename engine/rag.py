@@ -49,8 +49,11 @@ class RAGPipeline:
             config_path: Path to configuration file
         """
         if not CHROMADB_AVAILABLE or not SENTENCE_TRANSFORMERS_AVAILABLE:
-            raise RuntimeError("ChromaDB and sentence-transformers required for RAG")
+            self.available = False
+            logger.info("RAG disabled: ChromaDB and sentence-transformers not installed")
+            return
         
+        self.available = True
         self.config_path = Path(config_path).resolve()
         self.project_root = self.config_path.parent
         self.config = self._load_config()
@@ -374,6 +377,8 @@ class RAGPipeline:
             clear: Clear existing index first (uses config clear_before_index if None)
             path: Optional path string override (resolved via resolve_docs_path)
         """
+        if not getattr(self, "available", True):
+            raise RuntimeError("ChromaDB and sentence-transformers required. Install with: pip install -e \".[rag]\"")
         if path is not None:
             directory = self.resolve_docs_path(path)
             self.docs_dir = directory
@@ -491,6 +496,8 @@ class RAGPipeline:
     
     def clear_index(self):
         """Clear all indexed documents"""
+        if not getattr(self, "available", True):
+            return
         # Delete and recreate collection
         self.client.delete_collection(name="documents")
         self.collection = self.client.get_or_create_collection(

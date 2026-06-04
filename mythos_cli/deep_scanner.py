@@ -37,6 +37,8 @@ def run_deep_audit(target: Path, temperature: float = 0.2, max_tokens: int = 409
 
     target = target.resolve()
     rag = RAGPipeline(str(config))
+    if not getattr(rag, "available", True):
+        return "RAG dependencies not installed. Install chromadb + sentence-transformers for deep scanning."
     rag.index_directory(path=str(target))
 
     stats = rag.get_stats()
