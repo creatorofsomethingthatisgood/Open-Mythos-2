@@ -9,7 +9,7 @@ The configuration has been completely rewritten with correct model URLs.
 ```bash
 cd ~/mythos_local/amd-vulkan-llm-project
 source venv/bin/activate
-./run_chat.sh
+sudo bash run_chat.sh
 ```
 
 That's it! The model will auto-download on first run.
@@ -20,7 +20,7 @@ That's it! The model will auto-download on first run.
 
 ### Option 1: Terminal Chat (Recommended First)
 ```bash
-./run_chat.sh
+sudo bash run_chat.sh
 ```
 - Clean terminal interface
 - Streaming responses
@@ -28,7 +28,7 @@ That's it! The model will auto-download on first run.
 
 ### Option 2: Web Interface (Pretty UI)
 ```bash
-./run_web.sh
+sudo bash run_web.sh
 ```
 - Opens at http://localhost:7860
 - Sliders for temperature, top-p, etc.

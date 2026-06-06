@@ -66,7 +66,7 @@ Examples:
         '--mode',
         type=str,
         default='chat',
-        choices=['chat', 'web', 'benchmark', 'download', 'rag-index', 'rag-explore', 'finetune'],
+        choices=['chat', 'agent', 'web', 'benchmark', 'download', 'rag-index', 'rag-explore', 'finetune'],
         help='Operation mode (default: chat)'
     )
 
@@ -194,6 +194,70 @@ def mode_chat(config_path: str):
         logger.info("Chat interrupted by user")
     except Exception as e:
         logger.error(f"Chat error: {e}", exc_info=True)
+        sys.exit(1)
+
+
+def mode_agent(config_path: str, task: str = None, sandbox: str = None, dry_run: bool = False):
+    """Run autonomous agent loop with tool access"""
+    logger.info("Starting agent mode...")
+
+    try:
+        from engine.inference import InferenceEngine
+        from engine.prompt_manager import PromptManager
+        from engine.agent import AgentLoop
+
+        engine = InferenceEngine(config_path)
+        prompt_manager = PromptManager(config_path)
+
+        sandbox_dir = Path(sandbox) if sandbox else Path.cwd()
+        if not sandbox_dir.exists():
+            logger.error(f"Sandbox directory does not exist: {sandbox_dir}")
+            sys.exit(1)
+
+        import yaml
+        with open(config_path) as f:
+            config = yaml.safe_load(f) or {}
+
+        def confirm(desc: str) -> bool:
+            if dry_run:
+                print(f"  [DRY RUN] {desc}")
+                return True
+            answer = input(f"  Allow? {desc} [y/N]: ").strip().lower()
+            return answer in ("y", "yes")
+
+        agent = AgentLoop(
+            engine=engine,
+            prompt_manager=prompt_manager,
+            config=config,
+            sandbox_dir=sandbox_dir,
+            confirm_fn=confirm,
+            dry_run=dry_run,
+            on_thinking=lambda msg: print(f"\n  [{msg}]"),
+            on_tool_result=lambda r: print(f"  {r.to_message()}"),
+        )
+
+        if task:
+            summary = agent.run(task)
+            print(f"\nAgent complete: {summary}")
+        else:
+            print("\nMythos Agent - autonomous mode")
+            print(f"Sandbox: {sandbox_dir}")
+            print(f"Dry run: {dry_run}")
+            print("Type a task or 'exit' to quit.\n")
+            while True:
+                try:
+                    task = input("Agent> ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    break
+                if not task or task.lower() in ("exit", "quit", "q"):
+                    break
+                summary = agent.run(task)
+                print(f"\nResult: {summary}\n")
+
+    except KeyboardInterrupt:
+        logger.info("Agent interrupted by user")
+    except Exception as e:
+        logger.error(f"Agent error: {e}", exc_info=True)
         sys.exit(1)
 
 
@@ -516,6 +580,12 @@ def main():
     try:
         if args.mode == 'chat':
             mode_chat(str(config_path))
+
+        elif args.mode == 'agent':
+            mode_agent(str(config_path),
+                       task=getattr(args, 'task', None),
+                       sandbox=getattr(args, 'sandbox', None),
+                       dry_run=getattr(args, 'dry_run', False))
 
         elif args.mode == 'web':
             mode_web(str(config_path), args.port, args.share)

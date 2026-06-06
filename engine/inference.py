@@ -62,6 +62,10 @@ class InferenceEngine:
         
         # Initialize the model
         self.model = self._load_model()
+
+        # Save original SIGINT handler so __del__ can restore it
+        import signal as _signal
+        self._orig_sigint = _signal.getsignal(_signal.SIGINT)
         
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from YAML"""
@@ -387,10 +391,17 @@ class InferenceEngine:
         """Cleanup on deletion -- interrupt-safe."""
         if hasattr(self, 'model'):
             import signal as _signal
-            # Temporarily ignore SIGINT so KeyboardInterrupt can't
-            # fire inside llama_model_free() during shutdown.
+            orig = getattr(self, '_orig_sigint', None)
             _signal.signal(_signal.SIGINT, _signal.SIG_IGN)
             try:
                 del self.model
             except KeyboardInterrupt:
                 pass
+            finally:
+                try:
+                    if orig is not None:
+                        _signal.signal(_signal.SIGINT, orig)
+                    else:
+                        _signal.signal(_signal.SIGINT, _signal.SIG_DFL)
+                except (ValueError, OSError):
+                    pass

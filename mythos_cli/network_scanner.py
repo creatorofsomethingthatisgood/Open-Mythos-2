@@ -860,6 +860,11 @@ def _try_arp_scan(
 ) -> Tuple[List[HostInfo], str]:
     """Attempt arp-scan (requires root / sudo)."""
     try:
+        import ipaddress
+        ipaddress.IPv4Network(subnet, strict=False)
+    except (ValueError, TypeError):
+        return [], ""
+    try:
         cmd = ["sudo", "arp-scan", "--retry=2", f"--timeout={int(timeout)}", subnet]
         if interface:
             cmd.extend(["--interface", interface])

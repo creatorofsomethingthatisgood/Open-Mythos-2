@@ -93,7 +93,7 @@ def ref_to_path(ref: str) -> Path:
 # Paths that should never be loaded into chat context
 _SENSITIVE_PATHS = (
     "/etc/shadow", "/etc/passwd", "/etc/gshadow", "/etc/ssh",
-    "/root/.ssh", "/home",  # broad block for /home is too aggressive; skip
+    "/root/.ssh",
     "/etc/ssl/private", "/etc/pki",
     "/var/lib/secrets", "/run/secrets",
 )

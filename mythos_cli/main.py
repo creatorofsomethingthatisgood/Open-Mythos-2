@@ -168,6 +168,83 @@ def _cmd_chat(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_agent(args: argparse.Namespace) -> int:
+    """Launch autonomous agent loop with tool access."""
+    import yaml
+    from pathlib import Path
+    from mythos_cli.console import console, STYLE_OK, STYLE_WARN, STYLE_INFO
+
+    ensure_initialized()
+    config_path = args.config if args.config != "config.yaml" else str(user_config_path() / "config.yaml")
+    if not Path(config_path).exists():
+        config_path = str(PACKAGE_ROOT / "config.yaml")
+
+    try:
+        from engine.inference import InferenceEngine
+        from engine.prompt_manager import PromptManager
+        from engine.agent import AgentLoop
+    except ImportError as exc:
+        console.print(f"[red]Cannot load engine: {exc}[/red]")
+        console.print("[dim]Run 'mythos doctor' to check dependencies.[/dim]")
+        return 1
+
+    try:
+        engine = InferenceEngine(config_path)
+    except Exception as exc:
+        console.print(f"[red]Failed to load model: {exc}[/red]")
+        console.print("[dim]Run 'mythos model download' first.[/dim]")
+        return 1
+
+    prompt_manager = PromptManager(config_path)
+
+    sandbox_dir = Path(args.sandbox) if args.sandbox else Path.cwd()
+    if not sandbox_dir.exists():
+        console.print(f"[red]Sandbox directory not found: {sandbox_dir}[/red]")
+        return 1
+
+    with open(config_path) as f:
+        config = yaml.safe_load(f) or {}
+
+    def confirm(desc: str) -> bool:
+        if args.dry_run:
+            console.print(f"  [{STYLE_INFO}]DRY RUN:[/] {desc}")
+            return True
+        answer = input(f"  Allow? {desc} [y/N]: ").strip().lower()
+        return answer in ("y", "yes")
+
+    agent = AgentLoop(
+        engine=engine,
+        prompt_manager=prompt_manager,
+        config=config,
+        sandbox_dir=sandbox_dir,
+        confirm_fn=confirm,
+        dry_run=args.dry_run,
+        on_thinking=lambda msg: console.print(f"  [dim]{msg}[/dim]"),
+        on_tool_result=lambda r: console.print(f"  {r.to_message()}"),
+    )
+
+    if args.task:
+        console.print(f"\n[{STYLE_OK}]Agent task:[/] {args.task}")
+        summary = agent.run(args.task)
+        console.print(f"\n[{STYLE_OK}]Agent complete:[/] {summary}")
+    else:
+        console.print(f"\n[{STYLE_OK}]Mythos Agent[/] - autonomous mode")
+        console.print(f"[dim]Sandbox: {sandbox_dir}[/dim]")
+        console.print(f"[dim]Dry run: {args.dry_run}[/dim]")
+        console.print("[dim]Type a task or 'exit' to quit.[/dim]\n")
+        while True:
+            try:
+                task = input("Agent> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                break
+            if not task or task.lower() in ("exit", "quit", "q"):
+                break
+            summary = agent.run(task)
+            console.print(f"\n[{STYLE_OK}]Result:[/] {summary}\n")
+
+    return 0
+
+
 def _cmd_web(args: argparse.Namespace) -> int:
     from mythos_cli.chat import launch_web
     launch_web(
@@ -1120,6 +1197,14 @@ Examples:
     p_chat.add_argument("--config", default="config.yaml", help="Config file path")
     p_chat.add_argument("--verbose", action="store_true", help="Debug logging")
     p_chat.set_defaults(func=_cmd_chat)
+
+    # ── agent ───────────────────────────────────────────────────────────
+    p_agent = sub.add_parser("agent", help="Autonomous agent mode (read/write/exec tools)")
+    p_agent.add_argument("task", nargs="?", help="Task to execute (interactive if omitted)")
+    p_agent.add_argument("--config", default="config.yaml", help="Config file path")
+    p_agent.add_argument("--sandbox", default=None, help="Sandbox directory (default: cwd)")
+    p_agent.add_argument("--dry-run", action="store_true", help="Preview actions without executing")
+    p_agent.set_defaults(func=_cmd_agent)
 
     # ── web ─────────────────────────────────────────────────────────────
     p_web = sub.add_parser("web", help="Launch web UI (Gradio)")
