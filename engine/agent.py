@@ -18,6 +18,7 @@ import re
 import shlex
 import subprocess
 import difflib
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -62,6 +63,13 @@ ALLOWED_READ_COMMANDS = {
 }
 
 MAX_ITERATIONS = 50
+
+
+class SafetyTier(Enum):
+    """Controls tool access levels for the agent."""
+    SAFE = "safe"          # sandbox confined, read + scan only
+    ELEVATED = "elevated"  # CWD tree access, write/fix with confirm, port scan ok
+    UNLEASHED = "unleashed"  # full filesystem, all tools, confirm destructive only
 
 
 def _is_path_safe(path: Path, sandbox_dir: Path) -> bool:
@@ -125,10 +133,12 @@ class AgentToolExecutor:
         sandbox_dir: Path,
         confirm_fn: Optional[Callable[[str], bool]] = None,
         dry_run: bool = False,
+        safety_tier: "SafetyTier" = SafetyTier.ELEVATED,
     ):
         self.sandbox_dir = sandbox_dir
         self.confirm_fn = confirm_fn or (lambda _: True)
         self.dry_run = dry_run
+        self.safety_tier = safety_tier
 
     def _resolve(self, raw_path: str) -> Path:
         p = Path(raw_path).expanduser()
@@ -143,6 +153,12 @@ class AgentToolExecutor:
             "WRITE_FILE": self._write_file,
             "PATCH_FILE": self._patch_file,
             "RUN_COMMAND": self._run_command,
+            "SCAN": self._scan,
+            "DEEP_SCAN": self._deep_scan,
+            "FIX": self._fix,
+            "GREP": self._grep,
+            "CONTAINER_DETECT": self._container_detect,
+            "NETWORK_SCAN": self._network_scan,
             "DONE": lambda a, b: ToolResult("DONE", True, ""),
         }
         handler = dispatch.get(tool)
@@ -157,7 +173,7 @@ class AgentToolExecutor:
         if not raw:
             return ToolResult("READ_FILE", False, "Missing path attribute")
         path = self._resolve(raw)
-        if not _is_path_safe(path, self.sandbox_dir):
+        if self.safety_tier != SafetyTier.UNLEASHED and not _is_path_safe(path, self.sandbox_dir):
             return ToolResult("READ_FILE", False, f"Path outside sandbox: {path}")
         if not path.exists():
             return ToolResult("READ_FILE", False, f"File not found: {path}")
@@ -177,7 +193,7 @@ class AgentToolExecutor:
     def _list_dir(self, attrs: Dict[str, str], _body: str) -> ToolResult:
         raw = attrs.get("path", ".")
         path = self._resolve(raw)
-        if not _is_path_safe(path, self.sandbox_dir):
+        if self.safety_tier != SafetyTier.UNLEASHED and not _is_path_safe(path, self.sandbox_dir):
             return ToolResult("LIST_DIR", False, f"Path outside sandbox: {path}")
         if not path.exists():
             return ToolResult("LIST_DIR", False, f"Directory not found: {path}")
@@ -204,8 +220,10 @@ class AgentToolExecutor:
         if not raw:
             return ToolResult("WRITE_FILE", False, "Missing path attribute")
         path = self._resolve(raw)
-        if not _is_path_safe(path, self.sandbox_dir):
+        if self.safety_tier != SafetyTier.UNLEASHED and not _is_path_safe(path, self.sandbox_dir):
             return ToolResult("WRITE_FILE", False, f"Path outside sandbox: {path}")
+        if self.safety_tier == SafetyTier.SAFE:
+            return ToolResult("WRITE_FILE", False, "Write operations not allowed in safe tier")
 
         desc = f"Write {len(body.splitlines())} lines to {path}"
         if self.dry_run:
@@ -225,8 +243,10 @@ class AgentToolExecutor:
         if not raw:
             return ToolResult("PATCH_FILE", False, "Missing path attribute")
         path = self._resolve(raw)
-        if not _is_path_safe(path, self.sandbox_dir):
+        if self.safety_tier != SafetyTier.UNLEASHED and not _is_path_safe(path, self.sandbox_dir):
             return ToolResult("PATCH_FILE", False, f"Path outside sandbox: {path}")
+        if self.safety_tier == SafetyTier.SAFE:
+            return ToolResult("PATCH_FILE", False, "Patch operations not allowed in safe tier")
         if not path.exists():
             return ToolResult(
                 "PATCH_FILE", False,
@@ -259,7 +279,11 @@ class AgentToolExecutor:
             return ToolResult("RUN_COMMAND", False, "Empty command")
 
         if _is_command_dangerous(cmd):
-            return ToolResult("RUN_COMMAND", False, f"Blocked command: {cmd}")
+            if self.safety_tier != SafetyTier.UNLEASHED:
+                return ToolResult("RUN_COMMAND", False, f"Blocked command: {cmd}")
+
+        if self.safety_tier == SafetyTier.SAFE and not _is_command_readonly(cmd):
+            return ToolResult("RUN_COMMAND", False, f"Non-read-only command blocked in safe tier: {cmd}")
 
         if not _is_command_readonly(cmd):
             desc = f"Run command: {cmd}"
@@ -294,6 +318,226 @@ class AgentToolExecutor:
             return ToolResult("RUN_COMMAND", False, "Command timed out (60s)")
         except Exception as exc:
             return ToolResult("RUN_COMMAND", False, str(exc))
+
+    def _scan(self, attrs: Dict[str, str], _body: str) -> ToolResult:
+        """Run static security scanner on a path."""
+        if self.safety_tier == SafetyTier.SAFE:
+            raw = attrs.get("path", ".")
+            path = self._resolve(raw)
+            if not _is_path_safe(path, self.sandbox_dir):
+                return ToolResult("SCAN", False, f"Path outside sandbox: {path}")
+        raw = attrs.get("path", ".")
+        path = self._resolve(raw)
+        if not path.exists():
+            return ToolResult("SCAN", False, f"Path not found: {path}")
+        try:
+            from mythos_cli.static_scanner import scan_directory
+            findings = scan_directory(str(path))
+            if not findings:
+                return ToolResult("SCAN", True, "No vulnerabilities found")
+            lines = []
+            for f in findings:
+                lines.append(f"[{f.severity}] {f.rule_id}: {f.title}")
+                lines.append(f"  Location: {f.path}:{f.line}")
+                if f.snippet:
+                    snippet = f.snippet.strip()[:120]
+                    lines.append(f"  Code: {snippet}")
+                if f.recommendation:
+                    lines.append(f"  Fix: {f.recommendation}")
+            output = "\n".join(lines)
+            if len(output) > 12000:
+                output = output[:12000] + f"\n... truncated ({len(findings)} total findings)"
+            return ToolResult("SCAN", True, output)
+        except ImportError:
+            return ToolResult("SCAN", False, "Static scanner not available (mythos_cli.static_scanner)")
+        except Exception as exc:
+            return ToolResult("SCAN", False, f"Scan error: {exc}")
+
+    def _deep_scan(self, attrs: Dict[str, str], _body: str) -> ToolResult:
+        """Run AI-powered deep security audit."""
+        if self.safety_tier == SafetyTier.SAFE:
+            raw = attrs.get("path", ".")
+            path = self._resolve(raw)
+            if not _is_path_safe(path, self.sandbox_dir):
+                return ToolResult("DEEP_SCAN", False, f"Path outside sandbox: {path}")
+        raw = attrs.get("path", ".")
+        path = self._resolve(raw)
+        if not path.exists():
+            return ToolResult("DEEP_SCAN", False, f"Path not found: {path}")
+        try:
+            from mythos_cli.deep_scanner import run_deep_audit
+            findings = run_deep_audit(str(path), self.engine)
+            if not findings:
+                return ToolResult("DEEP_SCAN", True, "No deep vulnerabilities found")
+            lines = []
+            for f in findings:
+                sev = getattr(f, "severity", "unknown")
+                title = getattr(f, "title", "finding")
+                desc = getattr(f, "description", "")
+                lines.append(f"[{sev}] {title}")
+                if desc:
+                    lines.append(f"  {desc[:200]}")
+            output = "\n".join(lines)
+            if len(output) > 12000:
+                output = output[:12000] + "\n... truncated"
+            return ToolResult("DEEP_SCAN", True, output)
+        except ImportError:
+            return ToolResult("DEEP_SCAN", False, "Deep scanner not available (mythos_cli.deep_scanner)")
+        except Exception as exc:
+            return ToolResult("DEEP_SCAN", False, f"Deep scan error: {exc}")
+
+    def _fix(self, attrs: Dict[str, str], _body: str) -> ToolResult:
+        """Auto-fix security findings in a directory."""
+        if self.safety_tier == SafetyTier.SAFE:
+            return ToolResult("FIX", False, "Fix operations not allowed in safe tier")
+        raw = attrs.get("path", ".")
+        path = self._resolve(raw)
+        if self.safety_tier != SafetyTier.UNLEASHED and not _is_path_safe(path, self.sandbox_dir):
+            return ToolResult("FIX", False, f"Path outside sandbox: {path}")
+        if not path.exists():
+            return ToolResult("FIX", False, f"Path not found: {path}")
+        desc = f"Auto-fix security issues in {path}"
+        if self.dry_run:
+            return ToolResult("FIX", True, f"[DRY RUN] {desc}")
+        if not self.confirm_fn(desc):
+            return ToolResult("FIX", False, "User declined fix")
+        try:
+            from mythos_cli.auto_fix import apply_fixes_to_tree
+            fixes = apply_fixes_to_tree(str(path))
+            if not fixes:
+                return ToolResult("FIX", True, "No auto-fixable issues found")
+            lines = []
+            for fix in fixes:
+                lines.append(f"Fixed: {fix}")
+            output = "\n".join(lines)
+            return ToolResult("FIX", True, output)
+        except ImportError:
+            return ToolResult("FIX", False, "Auto-fix not available (mythos_cli.auto_fix)")
+        except Exception as exc:
+            return ToolResult("FIX", False, f"Fix error: {exc}")
+
+    def _grep(self, attrs: Dict[str, str], _body: str) -> ToolResult:
+        """Search for pattern in files."""
+        pattern = attrs.get("pattern", "")
+        raw_path = attrs.get("path", ".")
+        if not pattern:
+            return ToolResult("GREP", False, "Missing pattern attribute")
+        path = self._resolve(raw_path)
+        if self.safety_tier != SafetyTier.UNLEASHED and not _is_path_safe(path, self.sandbox_dir):
+            return ToolResult("GREP", False, f"Path outside sandbox: {path}")
+        if not path.exists():
+            return ToolResult("GREP", False, f"Path not found: {path}")
+        try:
+            cmd = f"grep -rn -- {shlex.quote(pattern)} {shlex.quote(str(path))}"
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(self.sandbox_dir),
+            )
+            output = result.stdout
+            if result.stderr and "Permission denied" not in result.stderr:
+                output += f"\nSTDERR:\n{result.stderr}"
+            if len(output) > 12000:
+                output = output[:12000] + "\n... truncated"
+            if not output.strip():
+                return ToolResult("GREP", True, "No matches found")
+            return ToolResult("GREP", True, output)
+        except subprocess.TimeoutExpired:
+            return ToolResult("GREP", False, "Grep timed out (30s)")
+        except Exception as exc:
+            return ToolResult("GREP", False, str(exc))
+
+    def _container_detect(self, _attrs: Dict[str, str], _body: str) -> ToolResult:
+        """Detect container environment and escape vectors."""
+        try:
+            from engine.container_detect import detect_container, check_escape_vectors
+            info = detect_container()
+            findings = check_escape_vectors()
+            lines = []
+            lines.append(f"Container: {'Yes' if info.is_container else 'No'}")
+            if info.is_container:
+                lines.append(f"Type: {info.container_type}")
+                if info.container_id:
+                    lines.append(f"ID: {info.container_id[:12]}")
+                lines.append(f"Hostname: {info.hostname}")
+            if findings:
+                lines.append(f"\nEscape Vectors ({len(findings)} found):")
+                for f in findings:
+                    lines.append(f"  [{f.severity}] {f.vector}: {f.description}")
+                    if f.detail:
+                        lines.append(f"    {f.detail}")
+            else:
+                lines.append("\nNo escape vectors detected")
+            output = "\n".join(lines)
+            return ToolResult("CONTAINER_DETECT", True, output)
+        except ImportError:
+            return ToolResult("CONTAINER_DETECT", False, "Container detection not available (engine.container_detect)")
+        except Exception as exc:
+            return ToolResult("CONTAINER_DETECT", False, f"Container detect error: {exc}")
+
+    def _network_scan(self, attrs: Dict[str, str], _body: str) -> ToolResult:
+        """Network scanning: LAN discovery, port scan, or DNS lookup."""
+        scan_type = attrs.get("type", "lan")
+        host = attrs.get("host", "")
+        ports_str = attrs.get("ports", "")
+        if self.safety_tier == SafetyTier.SAFE and scan_type != "lan":
+            return ToolResult("NETWORK_SCAN", False, f"Network scan type '{scan_type}' not allowed in safe tier")
+        try:
+            from engine.network_tools import port_scan, lan_discover, dns_lookup
+            if scan_type == "lan":
+                result = lan_discover()
+                interfaces = result.get("interfaces", [])
+                hosts = result.get("hosts", [])
+                lines = []
+                lines.append(f"Interfaces: {len(interfaces)}")
+                for iface in interfaces:
+                    lines.append(f"  {iface}")
+                lines.append(f"Hosts: {len(hosts)}")
+                for h in hosts:
+                    lines.append(f"  {h}")
+                output = "\n".join(lines)
+                if len(output) > 12000:
+                    output = output[:12000] + "\n... truncated"
+                return ToolResult("NETWORK_SCAN", True, output)
+            elif scan_type == "port":
+                if not host:
+                    return ToolResult("NETWORK_SCAN", False, "Missing host attribute for port scan")
+                if not ports_str:
+                    return ToolResult("NETWORK_SCAN", False, "Missing ports attribute for port scan")
+                try:
+                    ports = [int(p.strip()) for p in ports_str.split(",")]
+                except ValueError:
+                    return ToolResult("NETWORK_SCAN", False, "Invalid ports format (use comma-separated integers)")
+                results = port_scan(host, ports)
+                lines = []
+                for pr in results:
+                    lines.append(f"  Port {pr.port}: {pr.state} ({pr.service})")
+                    if pr.banner:
+                        lines.append(f"    Banner: {pr.banner[:100]}")
+                output = "\n".join(lines) or "No open ports found"
+                return ToolResult("NETWORK_SCAN", True, output)
+            elif scan_type == "dns":
+                if not host:
+                    return ToolResult("NETWORK_SCAN", False, "Missing host attribute for DNS lookup")
+                result = dns_lookup(host)
+                lines = [f"Hostname: {result.hostname}"]
+                if result.addresses:
+                    lines.append(f"Addresses: {', '.join(result.addresses)}")
+                if result.cname:
+                    lines.append(f"CNAME: {result.cname}")
+                if result.mx_records:
+                    lines.append(f"MX: {', '.join(result.mx_records)}")
+                output = "\n".join(lines)
+                return ToolResult("NETWORK_SCAN", True, output)
+            else:
+                return ToolResult("NETWORK_SCAN", False, f"Unknown scan type: {scan_type}. Use lan, port, or dns.")
+        except ImportError:
+            return ToolResult("NETWORK_SCAN", False, "Network tools not available (engine.network_tools)")
+        except Exception as exc:
+            return ToolResult("NETWORK_SCAN", False, f"Network scan error: {exc}")
 
 
 # -- Patch application --------------------------------------------------------
@@ -406,7 +650,7 @@ def parse_tool_calls(text: str) -> List[Tuple[str, Dict[str, str], str]]:
     # Inline tags (READ_FILE, LIST_DIR with no body)
     for m in TOOL_INLINE_RE.finditer(text):
         tool = m.group(1)
-        if tool in ("READ_FILE", "LIST_DIR"):
+        if tool in ("READ_FILE", "LIST_DIR", "SCAN", "DEEP_SCAN", "GREP", "CONTAINER_DETECT", "NETWORK_SCAN"):
             attrs = _parse_tool_attrs(m.group(2) or "")
             # Skip if already captured as a full block
             already = any(c[0] == tool and c[1].get("path") == attrs.get("path") for c in calls)
@@ -459,10 +703,14 @@ class AgentLoop:
         self.on_response = on_response
         self.on_tool_result = on_tool_result
 
+        self.safety_tier = config.get("operative", {}).get("safety_tier", "elevated")
+        if isinstance(self.safety_tier, str):
+            self.safety_tier = SafetyTier(self.safety_tier)
         self.executor = AgentToolExecutor(
             sandbox_dir=sandbox_dir,
             confirm_fn=confirm_fn or self._default_confirm,
             dry_run=dry_run,
+            safety_tier=self.safety_tier,
         )
         self.max_iterations = config.get("agent", {}).get("max_iterations", MAX_ITERATIONS)
 
@@ -488,10 +736,14 @@ class AgentLoop:
         from engine.context_budget import fit_chat_context
 
         # Build system prompt
+        prompt_name = "operative" if self.safety_tier != SafetyTier.SAFE else "agent"
         try:
-            system_prompt = self.prompt_manager.load_prompt("agent")
+            system_prompt = self.prompt_manager.load_prompt(prompt_name)
         except Exception:
-            system_prompt = Path("prompts/agent.txt").read_text(encoding="utf-8")
+            try:
+                system_prompt = Path(f"prompts/{prompt_name}.txt").read_text(encoding="utf-8")
+            except FileNotFoundError:
+                system_prompt = Path("prompts/agent.txt").read_text(encoding="utf-8")
 
         system_prompt += f"\n\nWorking directory: {self.sandbox_dir}"
 

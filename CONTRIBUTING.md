@@ -99,4 +99,4 @@ opening a public issue. Include:
 ## License
 
 By contributing, you agree that your code will be released into the
-[public domain under the Unlicense](LICENSE).
+[Apache License 2.0](LICENSE).

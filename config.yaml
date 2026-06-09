@@ -2,68 +2,52 @@
 # Edit these settings to customize your LLM experience
 
 model:
- # Primary model configuration
- name: "mythos-4.8"
- huggingface_id: "google/gemma-3-12b-it" # Full HF model ID for fine-tuning
- path: "models/mythos-4.8-Q4_K_M.gguf"
- repo_id: "bartowski/google-gemma-3-12b-it-GGUF"
- filename: "google-gemma-3-12b-it-Q4_K_M.gguf"
+ # Primary model configuration: Open-1 (Optimized for 4GB RAM)
+ name: "Open-1"
+ huggingface_id: "Qwen/Qwen2.5-Coder-3B-Instruct"
+ path: "models/Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf"
+ repo_id: "bartowski/Qwen2.5-Coder-3B-Instruct-GGUF"
+ filename: "Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf"
  
- # Fallback models (tried in order if primary is unavailable)
+ # Fallback models
  fallbacks:
+ - name: "mythos-4.8"
+   huggingface_id: "google/gemma-3-12b-it"
+   path: "models/mythos-4.8-Q4_K_M.gguf"
+   repo_id: "bartowski/google-gemma-3-12b-it-GGUF"
+   filename: "google-gemma-3-12b-it-Q4_K_M.gguf"
  - name: "qwen2.5-7b-instruct"
- huggingface_id: "Qwen/Qwen2.5-7B-Instruct"
- path: "models/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
- repo_id: "bartowski/Qwen2.5-7B-Instruct-GGUF"
- filename: "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
- - name: "mistral-7b-instruct-v0.3"
- path: "models/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
- repo_id: "bartowski/Mistral-7B-Instruct-v0.3-GGUF"
- filename: "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
- - name: "llama-3.1-8b-instruct"
- path: "models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
- repo_id: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
- filename: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+   huggingface_id: "Qwen/Qwen2.5-7B-Instruct"
+   path: "models/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+   repo_id: "bartowski/Qwen2.5-7B-Instruct-GGUF"
+   filename: "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
  
- # Context and performance settings
- # Gemma 3 supports 128K context. Use 32768 if you run out of RAM; restart chat after changing.
- context_length: 131072
- n_gpu_layers: 0 # 0 = auto (Metal on Apple Silicon, CPU on Linux); -1 = all GPU layers
- n_threads: 0 # 0 = auto-detect (uses half of available cores)
- n_batch: 512 # Batch size for prompt processing
- use_mmap: true # Memory-map model file (faster loading on Linux)
- use_mlock: false # Lock model in RAM (prevents swapping, use if you have enough RAM)
- rope_freq_base: 0.0 # 0.0 = auto, adjust for extended context
+ # Context and performance settings for Open-1
+ context_length: 4096
+ n_gpu_layers: 0
+ n_threads: 0
+ n_batch: 256
+ use_mmap: true
+ use_mlock: false
+ rope_freq_base: 0.0
 
 generation:
  # Generation parameters
- temperature: 0.7 # 0.0 = deterministic, 2.0 = very creative
- top_p: 0.9 # Nucleus sampling threshold
- top_k: 40 # Top-k sampling
- repeat_penalty: 1.1 # Penalize repetition (1.0 = no penalty)
- max_tokens: 8192 # Large enough for full-file MYTHOS_PATCH rewrites
- stream: true # Stream tokens as they're generated
- stop_sequences: # Stop generation at these sequences
+ temperature: 0.3 # Precision-focused for Open-1
+ top_p: 0.9
+ top_k: 40
+ repeat_penalty: 1.1
+ max_tokens: 2048
+ stream: true
+ stop_sequences:
  - "<|im_end|>"
  - "<|endoftext|>"
  - "</s>"
 
 system:
- # System prompt configuration
- # Available prompts:
- # - prompts/default.txt (general purpose, enhanced for coding)
- # - prompts/coding.txt (ELITE 5-pass verification coding mode)
- # - prompts/code_review.txt (systematic code review)
- # - prompts/debugging.txt (methodical bug hunting)
- # - prompts/creative.txt (storytelling and creative writing)
- # - prompts/analytical.txt (deep analysis and reasoning)
- # - prompts/roleplay.txt (character roleplay)
- # - prompts/security_audit.txt (codebase security review)
- # Default: security_fix (MYTHOS_PATCH). Switch: /system security_audit or /system default
- # For audits with RAG: index your repo, then /rag on, /temp 0.3
- prompt_file: "prompts/security_fix.txt"
- self_reflect: false # Enable self-reflection quality pass (slower but higher quality)
- thinking_mode: true # Show internal reasoning process
+ prompt_file: "prompts/open1.txt"
+ self_reflect: true
+ thinking_mode: true
  
 security:
  # Mythos Sentinel CLI (mythos scan) -- also see ~/.config/mythos/config.yaml after mythos init
@@ -207,3 +191,27 @@ cloud:
 skills:
  marketplace_url: "https://raw.githubusercontent.com/creatorofsomethingthatisgood/Open-Mythos-2/main/skills"
  auto_discover: true # Scan for new skills on startup
+
+# Operative Mode
+# Autonomous agent with file access, vulnerability scanning, container detection, and network inspection.
+# Activate in chat with: /operative [safe|elevated|unleashed]
+# Or via CLI: mythos operative --task "..." --tier elevated
+operative:
+ safety_tier: "elevated" # safe (scan-only), elevated (write with confirm), unleashed (full access)
+ max_iterations: 50 # Max tool-use iterations per task
+ sandbox: "." # Default working directory for file operations
+ tools:
+  scan: true # Static vulnerability scanning
+  deep_scan: true # AI-powered deep security audit
+  fix: true # Auto-fix security findings (requires confirmation in elevated tier)
+  grep: true # Search file contents
+  container_detect: true # Container environment and escape vector detection
+  network_scan: false # Network scanning (off by default, enable with /operative elevated or --tier unleashed)
+ network:
+  allowed_hosts: [] # Empty = local only in safe tier; unrestricted in elevated/unleashed
+  max_ports: 100 # Maximum ports per scan
+  timeout: 2 # Connection timeout in seconds
+ container:
+  check_escape: true # Check for container escape vectors
+  check_suid: true # Scan for SUID binaries
+  check_mounts: true # Check mounted filesystems

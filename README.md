@@ -30,7 +30,7 @@
 [![npm published](https://img.shields.io/npm/v/open-mythos-2?style=for-the-badge&label=npm&color=cb3837)](https://www.npmjs.com/package/open-mythos-2)
 [![GitHub stars](https://img.shields.io/github/stars/creatorofsomethingthatisgood/Open-Mythos-2?style=for-the-badge&logo=github&color=FFD700&label=Stars)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/creatorofsomethingthatisgood/Open-Mythos-2?style=for-the-badge&logo=github&color=9cf&label=Forks)](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/network/members)
-[![License: MIT](https://img.shields.io/badge/License-MIT-gold?style=for-the-badge)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)](LICENSE)
 [![No API Required](https://img.shields.io/badge/No%20API-Required-darkgreen?style=for-the-badge&logo=gnubash&logoColor=white)]()
 [![Runs in Terminal](https://img.shields.io/badge/Runs%20In-Terminal-black?style=for-the-badge&logo=windowsterminal&logoColor=white)]()
 [![Open Source](https://img.shields.io/badge/Open-Source-orange?style=for-the-badge&logo=opensourceinitiative&logoColor=white)]()

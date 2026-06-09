@@ -1,0 +1,91 @@
+# Open-1 Optimized Configuration for 4GB RAM
+# Optimized for Qwen2.5-Coder-3B-Instruct-GGUF
+
+model:
+  name: "Open-1"
+  huggingface_id: "Qwen/Qwen2.5-Coder-3B-Instruct"
+  path: "models/Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf"
+  repo_id: "bartowski/Qwen2.5-Coder-3B-Instruct-GGUF"
+  filename: "Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf"
+  
+  # Context and performance settings for 4GB RAM
+  # 4096 context length saves ~1GB RAM vs default 32k/128k
+  context_length: 4096
+  n_gpu_layers: 0 # Force CPU for predictability on low-end hardware
+  n_threads: 0 # Auto-detect (usually 2-4 threads on low-end laptops)
+  n_batch: 256 # Reduced batch size to lower peak memory usage
+  use_mmap: true # Efficient memory mapping
+  use_mlock: false # Do NOT lock in RAM to allow OS to manage pressure
+  rope_freq_base: 0.0
+
+generation:
+  temperature: 0.3 # Lower temperature for more precise coding/security logic
+  top_p: 0.9
+  top_k: 40
+  repeat_penalty: 1.1
+  max_tokens: 2048 # Sufficient for most coding tasks on 4k context
+  stream: true
+  stop_sequences:
+    - "<|im_end|>"
+    - "<|endoftext|>"
+    - "</s>"
+
+system:
+  prompt_file: "prompts/open1.txt"
+  self_reflect: true # Enable for high-stakes coding/security tasks
+  thinking_mode: true
+ 
+security:
+  min_severity: low
+  static_enabled: true
+  deep_temperature: 0.1
+  deep_max_tokens: 2048
+
+rag:
+  enabled: false # Disabled by default for 4GB RAM to save memory
+  top_k: 3
+  max_context_chars: 10000
+
+chat:
+  local_files:
+    enabled: true
+    max_files: 5 # Cap files to prevent context bloat
+    max_file_bytes: 524288 # 512KB limit per file
+  fix:
+    enabled: true
+    auto_write_patches: false # Safety first
+
+context:
+  reserve_tokens: 1024
+
+memory:
+  save_conversations: true
+  max_history_turns: 20 # Lower history to save context RAM
+  auto_summarize: true
+  cross_session:
+    enabled: true
+    max_facts: 30
+
+ui:
+  mode: "terminal"
+  show_timing: true
+
+logging:
+  level: "INFO"
+  file: "open1.log"
+
+operative:
+  safety_tier: "elevated"
+  max_iterations: 30
+  sandbox: "./sandbox"
+  tools:
+    scan: true
+    deep_scan: true
+    fix: true
+    grep: true
+    container_detect: true
+    network_scan: false
+  container:
+    check_escape: true
+    check_suid: true
+    check_mounts: true

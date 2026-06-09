@@ -85,6 +85,13 @@ class InferenceEngine:
         Returns:
             Loaded Llama model instance
         """
+        if "-of-" in self.model_path.name:
+            raise ValueError(
+                f"'{self.model_path.name}' is a multi-part split file -- "
+                "all parts must be merged first. "
+                "Use: llama-gguf-split --merge <input> <output.gguf>"
+            )
+
         model_config = self.config.get('model', {})
         
         # Determine number of threads

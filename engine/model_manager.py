@@ -163,15 +163,18 @@ class ModelManager:
     
     def list_available_models(self) -> list:
         """
-        List all available (downloaded) models
+        List all available (downloaded) models, skipping split files.
         
         Returns:
             List of model paths
         """
         available = []
         for path in self.models_dir.glob("*.gguf"):
+            # Skip multi-part split files which llama-cpp-python can't load directly
+            if "-of-" in path.name:
+                continue
             available.append(path)
-        return available
+        return sorted(available)
     
     def find_model(self, model_name: Optional[str] = None) -> Optional[Path]:
         """

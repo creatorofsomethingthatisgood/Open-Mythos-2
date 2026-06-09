@@ -309,6 +309,9 @@ class TerminalUI:
         self._last_response_text: str = ""  # for RML explicit feedback
         self._last_ctrl_c_time: float = 0.0  # for double Ctrl+C exit
 
+        self.operative_mode: bool = False
+        self.operative_tier: str = "elevated"  # operative safety tier
+
         # Voice input (whisper.cpp on AMD Vulkan)
         self.voice = VoiceEngine(self.engine.config)
         if self.voice.is_available():
@@ -446,6 +449,7 @@ class TerminalUI:
 [yellow]/sysinfo[/yellow] - Show system/hardware info for performance tuning
 [yellow]/skill list|info|run|install|uninstall|create[/yellow] - Manage skills (built-in, marketplace, AI-created)
 [yellow]/marketplace[/yellow] - Browse and install community skills
+[yellow]/operative [safe|elevated|unleashed|off][/yellow] - Toggle autonomous agent mode
 [yellow]/quit[/yellow] - Exit the chat
 
 [bold #EA580C]🔥 Enhanced Coding Modes:[/bold #EA580C]
@@ -1599,6 +1603,36 @@ class TerminalUI:
         elif cmd == "/marketplace":
             self._handle_skill_command(f"marketplace {arg_text}")
 
+        elif cmd == "/operative":
+            valid_tiers = ("safe", "elevated", "unleashed")
+            if arg_text.strip() in valid_tiers:
+                self.operative_tier = arg_text.strip()
+                self.operative_mode = True
+            elif arg_text.strip() == "off":
+                self.operative_mode = False
+            elif arg_text.strip():
+                self.console.print(f"[red]Unknown tier: {arg_text.strip()}. Use: safe, elevated, unleashed, or off[/red]")
+                return True
+            else:
+                self.operative_mode = not self.operative_mode
+            if self.operative_mode:
+                from pathlib import Path as _P
+                self.operative_tier = getattr(self, "operative_tier", "elevated")
+                cfg = self.engine.config.setdefault("operative", {})
+                cfg["safety_tier"] = self.operative_tier
+                sandbox = cfg.get("sandbox", ".")
+                self.console.print(Panel(
+                    f"[bold #EA580C]Operative mode ON[/bold #EA580C]\n"
+                    f"Tier: [yellow]{self.operative_tier}[/yellow]\n"
+                    f"Sandbox: [dim]{_P(sandbox).resolve()}[/dim]\n\n"
+                    f"[dim]safe[/dim] = read-only scan | [dim]elevated[/dim] = write with confirm | [dim]unleashed[/dim] = full access\n"
+                    f"Use [bold]/operative off[/bold] to disable.",
+                    title="Operative",
+                    border_style="#EA580C",
+                ))
+            else:
+                self.console.print("[#EA580C]Operative mode OFF[/#EA580C]")
+
         elif cmd == "/quit":
             self.console.print("[#EA580C]Goodbye![/#EA580C]")
             return False
@@ -1824,6 +1858,55 @@ class TerminalUI:
                 part for part in (self._pending_local_context, local_context) if part
             )
             self._pending_local_context = ""
+
+        # Operative mode: run agent loop instead of normal streaming
+        if getattr(self, "operative_mode", False):
+            from pathlib import Path as _POp
+            from engine.agent import AgentLoop
+            sandbox = _POp(self.engine.config.get("operative", {}).get("sandbox", ".")).resolve()
+            cfg = self.engine.config
+            cfg.setdefault("operative", {})["safety_tier"] = self.operative_tier
+
+            def _on_thinking(msg: str):
+                self.console.print(f"[dim yellow]{msg}[/dim yellow]")
+
+            def _on_response(text: str):
+                self.console.print(text, style="grey70")
+
+            def _on_tool_result(result):
+                icon = "[green]OK[/green]" if result.success else "[red]FAIL[/red]"
+                self.console.print(f"  {icon} [dim]{result.tool}[/dim]: {result.output[:200]}")
+
+            def _confirm(desc: str) -> bool:
+                from rich.prompt import Confirm
+                return Confirm.ask(f"  [bold yellow]Allow?[/bold yellow] {desc}", default=False)
+
+            loop = AgentLoop(
+                engine=self.engine,
+                prompt_manager=self.prompt_manager,
+                config=cfg,
+                sandbox_dir=sandbox,
+                confirm_fn=_confirm if self.operative_tier != "unleashed" else None,
+                on_thinking=_on_thinking,
+                on_response=_on_response,
+                on_tool_result=_on_tool_result,
+            )
+            self.console.print(Panel(
+                f"[bold #EA580C]Operative: {self.operative_tier}[/bold #EA580C]\n"
+                f"[dim]Agent loop active. Ctrl+C to abort.[/dim]",
+                border_style="#EA580C",
+            ))
+            operative_messages = self.memory.get_recent_context(max_turns=10)
+            try:
+                result = loop.run(user_input, history=operative_messages)
+                response_text = result or ""
+                self.console.print()
+            except KeyboardInterrupt:
+                self.console.print("\n[yellow]Operative interrupted[/yellow]")
+                response_text = ""
+            self.memory.add_message("assistant", response_text)
+            self._last_response_text = response_text
+            return response_text
 
         rewrite_approved = False
         rewrite_paths: List[str] = []

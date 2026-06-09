@@ -66,7 +66,7 @@ Examples:
         '--mode',
         type=str,
         default='chat',
-        choices=['chat', 'agent', 'web', 'benchmark', 'download', 'rag-index', 'rag-explore', 'finetune'],
+        choices=['chat', 'agent', 'operative', 'web', 'benchmark', 'download', 'rag-index', 'rag-explore', 'finetune'],
         help='Operation mode (default: chat)'
     )
 
@@ -109,7 +109,33 @@ Examples:
         help='Directory to index or explore for RAG (default: rag.docs_dir in config)'
     )
 
-    # Training arguments
+    # Operative mode arguments
+    parser.add_argument(
+        '--tier',
+        type=str,
+        default='elevated',
+        choices=['safe', 'elevated', 'unleashed'],
+        help='Operative safety tier (default: elevated)'
+    )
+    parser.add_argument(
+        '--task',
+        type=str,
+        default=None,
+        help='Task for agent/operative mode'
+    )
+    parser.add_argument(
+        '--sandbox',
+        type=str,
+        default=None,
+        help='Sandbox directory for agent/operative mode'
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Dry run mode for agent/operative (preview actions without executing)'
+    )
+
+ # Training arguments
     parser.add_argument(
         '--train-data',
         type=str,
