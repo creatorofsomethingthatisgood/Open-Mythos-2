@@ -241,7 +241,7 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
             filepath = memory.save()
             return {"status": f"Saved to: {filepath}"}
         except Exception as e:
-            raise HTTPException(500, str(e)) from e
+            raise HTTPException(500, "Internal server error") from e
 
     @app.get("/api/prompt")
     async def get_prompt(name: str = "default"):

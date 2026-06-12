@@ -10,12 +10,12 @@ We welcome bug reports, fixes, features, docs, and general feedback. The full gu
 
 ## Quick links
 
-- 🐛 [Report a bug](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issues/new?labels=bug)
-- ✨ [Request a feature](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issues/new?labels=enhancement)
-- 🔒 [Report a security issue privately](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/security/advisories/new)
-- 📥 [Browse open PRs](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/pulls)
-- 💬 [Discussions](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/discussions)
-- 📜 [Code of Conduct](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/blob/main/CONTRIBUTING.md)
+-  [Report a bug](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issues/new?labels=bug)
+-  [Request a feature](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/issues/new?labels=enhancement)
+-  [Report a security issue privately](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/security/advisories/new)
+-  [Browse open PRs](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/pulls)
+-  [Discussions](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/discussions)
+-  [Code of Conduct](https://github.com/creatorofsomethingthatisgood/Open-Mythos-2/blob/main/CONTRIBUTING.md)
 
 ---
 

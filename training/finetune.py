@@ -36,14 +36,14 @@ class LoRAFineTuner:
 
     def __init__(
         self,
-        base_model: str = "google/gemma-3-12b-it",
+        base_model: str = "Qwen/Qwen2.5-1.5B-Instruct",
         output_dir: str = "lora",
-        lora_r: int = 64,
-        lora_alpha: int = 128,
-        lora_dropout: float = 0.05,
+        lora_r: int = 4,
+        lora_alpha: int = 8,
+        lora_dropout: float = 0.1,
         target_modules: Optional[list] = None,
-        max_seq_length: int = 8192,
-        use_rslora: bool = True,
+        max_seq_length: int = 512,
+        use_rslora: bool = False,
         use_unsloth: bool = False,
         lr_scheduler_type: str = "cosine",
     ):
@@ -59,7 +59,7 @@ class LoRAFineTuner:
         self.lora_r = lora_r
         self.lora_alpha = lora_alpha
         self.lora_dropout = lora_dropout
-        self.target_modules = target_modules or ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+        self.target_modules = target_modules or ["q_proj", "v_proj"]
         self.max_seq_length = max_seq_length
         self.use_rslora = use_rslora
         self.use_unsloth = use_unsloth
@@ -284,18 +284,18 @@ class LoRAFineTuner:
 
 def run_finetuning(
     dataset_path: Optional[Path] = None,
-    base_model: str = "google/gemma-3-12b-it",
+    base_model: str = "Qwen/Qwen2.5-1.5B-Instruct",
     output_dir: str = "lora",
-    num_epochs: int = 2,
+    num_epochs: int = 1,
     max_steps: int = -1,
-    batch_size: int = 2,
-    learning_rate: float = 2e-4,
-    lora_r: int = 64,
-    lora_alpha: int = 128,
-    gradient_accumulation_steps: int = 16,
-    use_rslora: bool = True,
+    batch_size: int = 1,
+    learning_rate: float = 3e-4,
+    lora_r: int = 4,
+    lora_alpha: int = 8,
+    gradient_accumulation_steps: int = 4,
+    use_rslora: bool = False,
     use_unsloth: bool = False,
-    max_seq_length: int = 8192,
+    max_seq_length: int = 512,
 ):
     """Main fine-tuning entry point."""
     if dataset_path is None:

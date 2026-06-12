@@ -96,7 +96,7 @@ def _cmd_cloud_set_key(args: argparse.Namespace) -> int:
         cloud["model"] = args.model
 
     with open(cfg_path, "w") as f:
-        yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+        yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
 
     masked = args.api_key[:4] + "..." + args.api_key[-4:] if len(args.api_key) > 8 else "***"
     console.print(f"\n[{STYLE_OK}]Cloud API key saved:[/] [dim]{masked}[/dim]")
@@ -151,7 +151,7 @@ def _cmd_cloud_clear(_args: argparse.Namespace) -> int:
     cloud.pop("api_key", None)
 
     with open(cfg_path, "w") as f:
-        yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+        yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
 
     console.print(f"\n[{STYLE_OK}]Cloud API key removed.[/] Local AI mode will be used by default.")
     return 0

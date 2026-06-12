@@ -6,12 +6,21 @@ authorization via the ``authorized`` parameter.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
+import re
 import socket
 import subprocess
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
+
+# Hostname validation: allow domain names, IPv4 -- block shell metacharacters
+_HOSTNAME_RE = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?)*$"
+)
+_DNS_RECORD_TYPES = frozenset({"A", "AAAA", "CNAME", "MX", "NS", "TXT", "SOA", "PTR"})
 
 # Common port-to-service mapping
 _PORT_MAP: dict[int, str] = {
@@ -71,6 +80,32 @@ def _require_authorization(authorized: bool) -> None:
         raise RuntimeError("Network scanning requires authorization")
 
 
+def _validate_hostname(name: str) -> str:
+    """Reject hostnames with shell metacharacters or invalid DNS names.
+
+    Prevents argument injection in subprocess calls to dig/nslookup/whois.
+    Uses ipaddress for strict IP validation and RFC 1035 hostname rules.
+    """
+    if not name or not isinstance(name, str):
+        raise ValueError("Hostname must be a non-empty string")
+    if len(name) > 253:
+        raise ValueError(f"Hostname too long ({len(name)} chars, max 253): {name!r}")
+    # Strip bracketed IPv6 notation like [::1]
+    check = name
+    if check.startswith("[") and check.endswith("]"):
+        check = check[1:-1]
+    # Try strict IP validation first (handles IPv4, IPv6, IPv4-mapped)
+    try:
+        ipaddress.ip_address(check)
+        return name
+    except ValueError:
+        pass
+    # Not an IP -- validate as DNS hostname per RFC 1035
+    if not _HOSTNAME_RE.match(check):
+        raise ValueError(f"Invalid hostname (possible injection): {name!r}")
+    return name
+
+
 def port_scan(
     host: str,
     ports: list[int],
@@ -83,6 +118,7 @@ def port_scan(
     best-effort banner grab (up to 256 bytes).
     """
     _require_authorization(authorized)
+    _validate_hostname(host)
 
     results: list[PortInfo] = []
     for port in ports:
@@ -202,6 +238,9 @@ def dns_lookup(hostname: str, record_type: str = "A") -> DNSInfo:
     Uses :func:`socket.getaddrinfo` for A/AAAA records. Falls back to
     ``nslookup`` or ``dig`` for CNAME and MX records when available.
     """
+    _validate_hostname(hostname)
+    if record_type.upper() not in _DNS_RECORD_TYPES:
+        raise ValueError(f"Invalid DNS record type: {record_type!r}")
     info = DNSInfo(hostname=hostname)
 
     # Basic A/AAAA resolution via stdlib
@@ -312,6 +351,7 @@ def whois_lookup(
 ) -> str:
     """Run ``whois`` against *target* and return the raw output."""
     _require_authorization(authorized)
+    _validate_hostname(target)
 
     try:
         result = subprocess.run(

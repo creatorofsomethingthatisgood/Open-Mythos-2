@@ -126,6 +126,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
  { name: "think", description: "Toggle step-by-step reasoning display", usage: "/think <on|off>", args: "<on|off>", aliases: ["thinking"] },
  { name: "reflect", description: "Toggle self-reflection quality pass", usage: "/reflect <on|off>", args: "<on|off>" },
  { name: "rag", description: "Toggle RAG retrieval", usage: "/rag <on|off>", args: "<on|off>" },
+  { name: "clean", description: "Toggle clean output (strip emojis, em dashes, most punctuation)", usage: "/clean <on|off>", args: "<on|off>" },
 
  /* Info */
  { name: "config", description: "Show current configuration", usage: "/config" },

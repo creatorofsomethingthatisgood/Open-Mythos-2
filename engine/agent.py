@@ -77,7 +77,7 @@ def _is_path_safe(path: Path, sandbox_dir: Path) -> bool:
     try:
         resolved = path.resolve()
         sandbox = sandbox_dir.resolve()
-        return str(resolved).startswith(str(sandbox))
+        return resolved.is_relative_to(sandbox)
     except Exception:
         return False
 
@@ -95,8 +95,11 @@ def _parse_tool_attrs(attr_str: str) -> Dict[str, str]:
 def _is_command_dangerous(cmd: str) -> bool:
     """Check if a command matches the blocklist."""
     stripped = cmd.strip().lower()
+    # Extract the base command (first token or basename after /)
+    base = stripped.split()[0] if stripped.split() else ""
+    base = base.rsplit("/", maxsplit=1)[-1] if "/" in base else base
     for blocked in BLOCKED_COMMANDS:
-        if stripped.startswith(blocked):
+        if base == blocked or base.startswith(blocked + "-"):
             return True
     return False
 
@@ -104,8 +107,10 @@ def _is_command_dangerous(cmd: str) -> bool:
 def _is_command_readonly(cmd: str) -> bool:
     """Check if a command is in the read-only allowlist."""
     stripped = cmd.strip().lower()
+    base = stripped.split()[0] if stripped.split() else ""
+    base = base.rsplit("/", maxsplit=1)[-1] if "/" in base else base
     for allowed in ALLOWED_READ_COMMANDS:
-        if stripped.startswith(allowed):
+        if base == allowed or base.startswith(allowed + "-"):
             return True
     return False
 
@@ -136,7 +141,7 @@ class AgentToolExecutor:
         safety_tier: "SafetyTier" = SafetyTier.ELEVATED,
     ):
         self.sandbox_dir = sandbox_dir
-        self.confirm_fn = confirm_fn or (lambda _: True)
+        self.confirm_fn = confirm_fn or (lambda _: False)
         self.dry_run = dry_run
         self.safety_tier = safety_tier
 
@@ -296,9 +301,10 @@ class AgentToolExecutor:
             return ToolResult("RUN_COMMAND", True, f"[DRY RUN] {cmd}")
 
         try:
+            cmd_parts = shlex.split(cmd)
             result = subprocess.run(
-                cmd,
-                shell=True,
+                cmd_parts,
+                shell=False,
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -428,10 +434,10 @@ class AgentToolExecutor:
         if not path.exists():
             return ToolResult("GREP", False, f"Path not found: {path}")
         try:
-            cmd = f"grep -rn -- {shlex.quote(pattern)} {shlex.quote(str(path))}"
+            cmd_parts = ["grep", "-rn", "--", pattern, str(path)]
             result = subprocess.run(
-                cmd,
-                shell=True,
+                cmd_parts,
+                shell=False,
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -716,8 +722,8 @@ class AgentLoop:
 
     @staticmethod
     def _default_confirm(desc: str) -> bool:
-        """Default confirmation: auto-approve reads, ask for writes."""
-        return True
+        """Default confirmation: require explicit approval for all operations."""
+        return False
 
     def run(
         self,

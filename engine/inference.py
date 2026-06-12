@@ -230,17 +230,24 @@ class InferenceEngine:
         top_p = top_p if top_p is not None else gen_config.get('top_p', 0.9)
         top_k = top_k if top_k is not None else gen_config.get('top_k', 40)
         repeat_penalty = repeat_penalty if repeat_penalty is not None else gen_config.get('repeat_penalty', 1.1)
-        stop = stop or gen_config.get('stop_sequences', [])
+        stop = [s for s in (stop or gen_config.get('stop_sequences', [])) if s]
 
         prompt_tokens = self.count_tokens(prompt)
         reserve = max_tokens
         if prompt_tokens + reserve > self.context_length:
-            raise ValueError(
-                f"Prompt uses {prompt_tokens} tokens but context window is "
-                f"{self.context_length} (need ~{reserve} more for the reply). "
-                f"Enable context trimming, reduce RAG top_k, or raise model.context_length "
-                f"in config.yaml and restart chat."
+            available = self.context_length - prompt_tokens
+            if available <= 0:
+                raise ValueError(
+                    f"Prompt uses {prompt_tokens} tokens, which exceeds the total context "
+                    f"window of {self.context_length}. Please trim your input or "
+                    "increase model.context_length in config.yaml."
+                )
+            
+            logger.warning(
+                "Prompt uses %d tokens. Reducing max_tokens from %d to %d to fit context (%d).",
+                prompt_tokens, max_tokens, available, self.context_length
             )
+            max_tokens = available
 
         try:
             output = self.model(

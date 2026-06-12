@@ -140,7 +140,70 @@ class BenchmarkSuite:
                 'category': 'instruction'
             }
         ]
-    
+
+        self.deepswe_tests = [
+            {
+                'prompt': 'Write a Python function `merge_intervals(intervals: List[List[int]]) -> List[List[int]]` that takes a list of possibly overlapping intervals and returns merged non-overlapping intervals sorted by start. Handle empty input, single intervals, and fully nested intervals.',
+                'expected_keywords': ['def', 'merge_intervals', 'sort', 'overla', 'append', 'intervals', 'start', 'end'],
+                'category': 'deepswe',
+                'difficulty': 'hard'
+            },
+            {
+                'prompt': 'Implement a Python LRU cache class with `get(key)` and `put(key, value)` both O(1). Use OrderedDict or doubly-linked list + hash map. It must evict the least recently used item when capacity is exceeded.',
+                'expected_keywords': ['class', 'LRU', 'get', 'put', 'capacity', 'def', 'move_to_end', 'popitem', 'OrderedDict'],
+                'category': 'deepswe',
+                'difficulty': 'hard'
+            },
+            {
+                'prompt': "Write a Python function `topological_sort(graph: Dict[str, List[str]]) -> List[str]` that performs Kahn's algorithm topological sort on a directed acyclic graph represented as adjacency list. Return sorted order or raise ValueError if cycle detected.",
+                'expected_keywords': ['def', 'topological', 'indegree', 'queue', 'append', 'graph', 'cycle', 'ValueError'],
+                'category': 'deepswe',
+                'difficulty': 'hard'
+            },
+            {
+                'prompt': 'Implement a thread-safe Python rate limiter class using the token bucket algorithm. It should have `acquire()` that blocks until a token is available. Parameters: rate (tokens per second), capacity (max burst). Use threading.Lock.',
+                'expected_keywords': ['class', 'rate', 'limiter', 'token', 'bucket', 'Lock', 'acquire', 'capacity', 'sleep', 'threading'],
+                'category': 'deepswe',
+                'difficulty': 'hard'
+            },
+            {
+                'prompt': 'Write a Python function `parse_csv_line(line: str, delimiter = chr(44)) -> List[str]` that correctly handles quoted fields with embedded delimiters, escaped quotes (doubled quotes inside quoted fields), and trailing delimiters. Do not use the csv module.',
+                'expected_keywords': ['def', 'parse_csv', 'quote', 'delimiter', 'split', 'append', 'field', 'strip'],
+                'category': 'deepswe',
+                'difficulty': 'hard'
+            },
+            {
+                'prompt': 'Implement a Python function `flatten_json(data: dict, sep = chr(46)) -> dict` that flattens a nested dictionary. Example: dict with nested keys becomes dot-separated keys. Handle lists by using index as key. ',
+                'expected_keywords': ['def', 'flatten', 'dict', 'sep', 'items', 'isinstance', 'list', 'enumerate', 'update'],
+                'category': 'deepswe',
+                'difficulty': 'hard'
+            },
+            {
+                'prompt': 'Write a Python function `find_security_vulnerabilities(code: str) -> List[Dict]` that scans Python source code for: SQL injection (string formatting in execute calls), command injection (os.system/subprocess with user input), eval/exec on user input, and hardcoded secrets (password=, api_key=). Return list of findings with line number, type, and severity.',
+                'expected_keywords': ['def', 'find_security', 'vuln', 'injection', 'eval', 'exec', 'severity', 'append', 'line'],
+                'category': 'deepswe',
+                'difficulty': 'hard'
+            },
+            {
+                'prompt': 'Implement a Python ConnectionPool class that manages a fixed-size pool of database connections. Include get_connection() that blocks if pool is empty, release_connection(conn) that returns a connection, close_all() that closes every connection. Use threading.Condition for synchronization.',
+                'expected_keywords': ['class', 'ConnectionPool', 'Condition', 'get_connection', 'release', 'close_all', 'wait', 'notify', 'pool', 'threading'],
+                'category': 'deepswe',
+                'difficulty': 'hard'
+            },
+            {
+                'prompt': 'Write a Python function trie_insert(root: dict, word: str) -> None and trie_search(root: dict, word: str) -> bool and trie_starts_with(root: dict, prefix: str) -> bool for a trie prefix tree. Use nested dicts with an is_end key. Do not use a class.',
+                'expected_keywords': ['def', 'trie', 'insert', 'search', 'starts_with', 'is_end', 'root', 'char', 'word'],
+                'category': 'deepswe',
+                'difficulty': 'hard'
+            },
+            {
+                'prompt': 'Implement a Python function diff_strings(a: str, b: str) that computes a simple diff between two strings line by line. Return a list of tuples with tag equal, replace, insert, or delete plus index ranges. Do not use difflib.',
+                'expected_keywords': ['def', 'diff', 'equal', 'replace', 'insert', 'delete', 'append', 'line', 'tuple'],
+                'category': 'deepswe',
+                'difficulty': 'hard'
+            },
+        ]
+
     def _load_config(self) -> Dict:
         """Load configuration from YAML"""
         try:
@@ -278,6 +341,7 @@ class BenchmarkSuite:
             ('Reasoning', self.reasoning_tests),
             ('Creative Writing', self.creative_tests),
             ('Coding', self.coding_tests),
+            ('DeepSWE', self.deepswe_tests),
             ('Instruction Following', self.instruction_tests)
         ]
         

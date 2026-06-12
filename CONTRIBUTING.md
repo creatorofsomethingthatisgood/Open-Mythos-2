@@ -1,6 +1,6 @@
 # Contributing to Mythos
 
-Thanks for your interest! We welcome contributions of all kinds — bug fixes,
+Thanks for your interest! We welcome contributions of all kinds - bug fixes,
 features, documentation, prompts, and tests.
 
 ## Quick Start

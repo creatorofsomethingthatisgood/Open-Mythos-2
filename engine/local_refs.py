@@ -85,25 +85,52 @@ def ref_to_path(ref: str) -> Path:
     try:
         resolved = result.resolve()
     except (OSError, ValueError):
-        return result
+        # resolve() failed (broken symlink, permission, etc).
+        # Guard on best-available path to avoid skipping checks entirely.
+        fallback = result.absolute()
+        _guard_sensitive_path(fallback)
+        return fallback
     _guard_sensitive_path(resolved)
-    return result
+    return resolved
 
 
 # Paths that should never be loaded into chat context
 _SENSITIVE_PATHS = (
     "/etc/shadow", "/etc/passwd", "/etc/gshadow", "/etc/ssh",
-    "/root/.ssh",
     "/etc/ssl/private", "/etc/pki",
+    "/etc/environment",
     "/var/lib/secrets", "/run/secrets",
+    "/proc", "/sys", "/dev",
+    "/root/.ssh", "/root/.gnupg", "/root/.aws",
+    # Also block user-home sensitive dirs (resolved at runtime)
 )
+
+
+def _user_sensitive_paths() -> list[str]:
+    """Expand ~ to the actual home dir for user-level sensitive paths."""
+    home = Path.home()
+    return [
+        str(home / ".ssh"),
+        str(home / ".gnupg"),
+        str(home / ".aws"),
+        str(home / ".netrc"),
+        str(home / ".kube/config"),
+        str(home / ".docker/config.json"),
+        str(home / ".config/gcloud"),
+        str(home / ".azure"),
+        str(home / ".config/mythos/rml_preferences.json"),
+    ]
 
 
 def _guard_sensitive_path(resolved: Path) -> None:
     """Raise ValueError if the resolved path points to a sensitive location."""
-    s = str(resolved)
     for sensitive in _SENSITIVE_PATHS:
-        if s == sensitive or s.startswith(sensitive + "/"):
+        sensitive_path = Path(sensitive)
+        if resolved == sensitive_path or resolved.is_relative_to(sensitive_path):
+            raise ValueError(f"Access to sensitive path blocked: {resolved}")
+    for sensitive in _user_sensitive_paths():
+        sensitive_path = Path(sensitive)
+        if resolved == sensitive_path or resolved.is_relative_to(sensitive_path):
             raise ValueError(f"Access to sensitive path blocked: {resolved}")
 
 
@@ -240,22 +267,17 @@ def _resolve_targets(refs: List[str]) -> Tuple[List[Path], List[str]]:
 
     for ref in refs:
         path = ref_to_path(ref)
-        try:
-            resolved = path.resolve()
-        except OSError:
-            notices.append(f"Invalid path: {ref}")
-            continue
-
-        key = str(resolved)
+        # ref_to_path already resolves and guards the path; no second resolve needed
+        key = str(path)
         if key in seen_paths:
             continue
         seen_paths.add(key)
 
-        if not resolved.exists():
-            notices.append(f"Not found: {resolved}")
+        if not path.exists():
+            notices.append(f"Not found: {path}")
             continue
 
-        targets.append(resolved)
+        targets.append(path)
 
     return targets, notices
 

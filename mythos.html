@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mythos - Local AI Chat</title>
+<style>
+:root {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface2: #1c1c1c;
+  --border: #2a2a2a;
+  --accent: #EA580C;
+  --accent-dim: #EA580C22;
+  --accent-hover: #F97316;
+  --text: #e5e5e5;
+  --text2: #a3a3a3;
+  --text3: #525252;
+  --user-bg: #1a1208;
+  --user-border: #EA580C44;
+  --code-bg: #0d0d0d;
+  --error: #ef4444;
+  --success: #22c55e;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent);
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.logo-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.header-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.mode-tab {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.mode-tab:hover { color: var(--text2); background: var(--surface2); }
+.mode-tab.active { color: var(--accent); background: var(--accent-dim); }
+
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.icon-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.icon-btn:hover { color: var(--text2); border-color: var(--text3); }
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--error);
+  transition: background 0.3s;
+}
+
+.status-dot.connected { background: var(--success); }
+
+/* Chat area */
+.chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 0;
+  scroll-behavior: smooth;
+}
+
+.chat-area::-webkit-scrollbar { width: 6px; }
+.chat-area::-webkit-scrollbar-track { background: transparent; }
+.chat-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  padding: 40px;
+}
+
+.empty-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -1px;
+}
+
+.empty-sub {
+  font-size: 14px;
+  color: var(--text3);
+  max-width: 400px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 500px;
+}
+
+.quick-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.quick-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* Messages */
+.message {
+  padding: 12px 24px;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.message.user-msg {
+  background: var(--user-bg);
+  border-left: 2px solid var(--accent);
+}
+
+.message.assistant-msg {
+  background: transparent;
+}
+
+.msg-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.message.user-msg .msg-role { color: var(--text2); }
+
+.msg-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.msg-content p { margin-bottom: 8px; }
+.msg-content p:last-child { margin-bottom: 0; }
+
+.msg-content code {
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px;
+  color: var(--accent-hover);
+}
+
+.msg-content pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  margin: 8px 0;
+  position: relative;
+}
+
+.msg-content pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text3);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.msg-content pre:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { color: var(--text2); border-color: var(--text3); }
+
+/* Thinking block */
+.thinking-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.thinking-header {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.thinking-header:hover { color: var(--text2); }
+
+.thinking-chevron {
+  transition: transform 0.2s;
+  font-size: 10px;
+}
+
+.thinking-chevron.open { transform: rotate(90deg); }
+
+.thinking-content {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text3);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  display: none;
+  border-top: 1px solid var(--border);
+}
+
+.thinking-content.open { display: block; }
+
+/* Typing indicator */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  max-width: 800px;
+  margin: 0 auto;
+  color: var(--text3);
+  font-size: 13px;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 3px;
+}
+
+.typing-dots span {
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: typingBounce 1.2s infinite;
+}
+
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Input area */
+.input-area {
+  padding: 12px 24px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.input-wrapper {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.input-box {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+  min-height: 42px;
+  max-height: 160px;
+  outline: none;
+  transition: border-color 0.15s;
+  line-height: 1.5;
+}
+
+.input-box:focus { border-color: var(--accent); }
+.input-box::placeholder { color: var(--text3); }
+
+.send-btn {
+  background: var(--accent);
+  border: none;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.send-btn:hover { background: var(--accent-hover); }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.input-hint {
+  max-width: 800px;
+  margin: 6px auto 0;
+  font-size: 11px;
+  color: var(--text3);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Settings panel */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 100;
+  display: none;
+}
+
+.settings-overlay.open { display: block; }
+
+.settings-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 320px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 101;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.2s;
+  padding: 20px;
+}
+
+.settings-panel.open { transform: translateX(0); }
+
+.settings-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: var(--text);
+}
+
+.setting-group {
+  margin-bottom: 16px;
+}
+
+.setting-label {
+  font-size: 12px;
+  color: var(--text3);
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.setting-label span { color: var(--text2); font-family: monospace; }
+
+.setting-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+
+.setting-input:focus { border-color: var(--accent); }
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  height: 4px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.toggle-label { font-size: 13px; color: var(--text2); }
+
+.toggle {
+  width: 36px;
+  height: 20px;
+  background: var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.toggle.on { background: var(--accent); }
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle.on::after { transform: translateX(16px); }
+
+.backend-url-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: monospace;
+  outline: none;
+  margin-top: 4px;
+}
+
+.backend-url-input:focus { border-color: var(--accent); }
+
+/* Status bar */
+.status-bar {
+  padding: 4px 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text3);
+  display: flex;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .message { padding: 10px 14px; }
+  .input-area { padding: 10px 14px 12px; }
+  .header { padding: 6px 10px; }
+  .empty-title { font-size: 22px; }
+  .settings-panel { width: 100%; }
+}
+
+/* Connection banner */
+.connection-banner {
+  background: #7f1d1d;
+  color: #fca5a5;
+  font-size: 12px;
+  padding: 6px 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.connection-banner a {
+  color: #fca5a5;
+  text-decoration: underline;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Connection banner (shown when disconnected) -->
+  <div class="connection-banner" id="connBanner" style="display:none">
+    Backend not connected. Start the Mythos server with <code>python main.py --mode web</code> or change the backend URL in settings.
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      Mythos
+    </div>
+    <div class="header-sep"></div>
+    <div class="mode-tabs" id="modeTabs"></div>
+    <div class="header-actions">
+      <button class="icon-btn" id="clearBtn" title="New chat (Ctrl+N)">Clear</button>
+      <button class="icon-btn" id="exportBtn" title="Export conversation">Export</button>
+      <button class="icon-btn" id="settingsBtn" title="Settings (Ctrl+B)">&#9881;</button>
+      <div class="status-dot" id="statusDot" title="Disconnected"></div>
+    </div>
+  </header>
+
+  <!-- Chat area -->
+  <div class="chat-area" id="chatArea">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-title">Mythos</div>
+      <div class="empty-sub">Local AI assistant. Fully offline, private, and yours. Start a conversation or try a quick action below.</div>
+      <div class="quick-actions">
+        <button class="quick-btn" data-prompt="Write a Python function that finds all prime numbers up to n">Write code</button>
+        <button class="quick-btn" data-prompt="Explain how transformer attention works">Explain concept</button>
+        <button class="quick-btn" data-prompt="Review this code for security issues:">Security audit</button>
+        <button class="quick-btn" data-prompt="Help me debug this error:">Debug issue</button>
+        <button class="quick-btn" data-prompt="Design an architecture for a real-time chat system">Architect system</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Typing indicator -->
+  <div class="typing-indicator" id="typingIndicator" style="display:none">
+    <div class="typing-dots"><span></span><span></span><span></span></div>
+    <span>Mythos is thinking...</span>
+  </div>
+
+  <!-- Input area -->
+  <div class="input-area">
+    <div class="input-wrapper">
+      <textarea class="input-box" id="inputBox" placeholder="Send a message..." rows="1"></textarea>
+      <button class="send-btn" id="sendBtn">Send</button>
+    </div>
+    <div class="input-hint">
+      <span>Enter to send, Shift+Enter for new line</span>
+      <span id="charCount">0 chars</span>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span id="statusLeft">Ready</span>
+    <span id="statusRight">Mode: chat</span>
+  </div>
+</div>
+
+<!-- Settings overlay -->
+<div class="settings-overlay" id="settingsOverlay"></div>
+<div class="settings-panel" id="settingsPanel">
+  <div class="settings-title">Settings</div>
+
+  <div class="setting-group">
+    <div class="setting-label">Backend URL</div>
+    <input class="backend-url-input" id="backendUrl" value="http://localhost:7860" placeholder="http://localhost:7860">
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">System Prompt</div>
+    <textarea class="setting-input" id="systemPrompt" rows="4" style="resize:vertical"></textarea>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">Temperature <span id="tempVal">0.7</span></div>
+    <input type="range" id="temperature" min="0" max="2" step="0.05" value="0.7">
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">Top P <span id="topPVal">0.9</span></div>
+    <input type="range" id="topP" min="0" max="1" step="0.05" value="0.9">
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">Top K <span id="topKVal">40</span></div>
+    <input type="range" id="topK" min="1" max="200" step="1" value="40">
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">Max Tokens <span id="maxTokVal">2048</span></div>
+    <input type="range" id="maxTokens" min="128" max="8192" step="128" value="2048">
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">Repeat Penalty <span id="repPenVal">1.1</span></div>
+    <input type="range" id="repeatPenalty" min="1" max="2" step="0.05" value="1.1">
+  </div>
+
+  <div class="setting-group">
+    <div class="toggle-row">
+      <span class="toggle-label">Thinking mode</span>
+      <div class="toggle on" id="toggleThinking" data-key="useThinking"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">Reflection</span>
+      <div class="toggle" id="toggleReflection" data-key="useReflection"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">RAG</span>
+      <div class="toggle" id="toggleRag" data-key="useRag"></div>
+    </div>
+  </div>
+
+  <div class="setting-group" style="margin-top:24px">
+    <button class="icon-btn" style="width:100%;padding:8px" id="saveSettingsBtn">Save to localStorage</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  // --- State ---
+  let messages = [];
+  let isTyping = false;
+  let settingsOpen = false;
+  let connected = false;
+
+  const MODES = [
+    { key: 'chat', label: 'Chat', temp: 0.7 },
+    { key: 'code', label: 'Code', temp: 0.2 },
+    { key: 'review', label: 'Review', temp: 0.3 },
+    { key: 'debug', label: 'Debug', temp: 0.3 },
+    { key: 'architect', label: 'Architect', temp: 0.5 },
+    { key: 'security', label: 'Security', temp: 0.2 },
+  ];
+
+  let currentMode = 'chat';
+
+  let settings = {
+    systemPrompt: 'You are Mythos, an advanced AI assistant. You approach every task with depth, nuance, and precision. Think deeply before responding. Acknowledge uncertainty honestly rather than fabricating information. If asked who created you, answer: Anonymous0304 on GitHub.',
+    temperature: 0.7,
+    topP: 0.9,
+    topK: 40,
+    maxTokens: 2048,
+    repeatPenalty: 1.1,
+    useThinking: true,
+    useReflection: false,
+    useRag: false,
+    backendUrl: 'http://localhost:7860',
+  };
+
+  // --- DOM refs ---
+  const chatArea = document.getElementById('chatArea');
+  const emptyState = document.getElementById('emptyState');
+  const inputBox = document.getElementById('inputBox');
+  const sendBtn = document.getElementById('sendBtn');
+  const typingIndicator = document.getElementById('typingIndicator');
+  const modeTabs = document.getElementById('modeTabs');
+  const statusDot = document.getElementById('statusDot');
+  const connBanner = document.getElementById('connBanner');
+  const statusLeft = document.getElementById('statusLeft');
+  const statusRight = document.getElementById('statusRight');
+  const charCount = document.getElementById('charCount');
+  const settingsOverlay = document.getElementById('settingsOverlay');
+  const settingsPanel = document.getElementById('settingsPanel');
+
+  // --- Load saved settings ---
+  try {
+    const saved = localStorage.getItem('mythos_settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.assign(settings, parsed);
+      // Restore UI
+      document.getElementById('backendUrl').value = settings.backendUrl || 'http://localhost:7860';
+      document.getElementById('systemPrompt').value = settings.systemPrompt || '';
+      document.getElementById('temperature').value = settings.temperature;
+      document.getElementById('topP').value = settings.topP;
+      document.getElementById('topK').value = settings.topK;
+      document.getElementById('maxTokens').value = settings.maxTokens;
+      document.getElementById('repeatPenalty').value = settings.repeatPenalty;
+      updateSliderLabels();
+      updateToggles();
+    }
+  } catch(e) {}
+
+  // --- Mode tabs ---
+  MODES.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'mode-tab' + (m.key === currentMode ? ' active' : '');
+    btn.textContent = m.label;
+    btn.dataset.mode = m.key;
+    btn.addEventListener('click', () => switchMode(m.key));
+    modeTabs.appendChild(btn);
+  });
+
+  function switchMode(mode) {
+    currentMode = mode;
+    const cfg = MODES.find(m => m.key === mode);
+    settings.temperature = cfg.temp;
+    document.getElementById('temperature').value = cfg.temp;
+    updateSliderLabels();
+    document.querySelectorAll('.mode-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.mode === mode);
+    });
+    statusRight.textContent = 'Mode: ' + mode;
+  }
+
+  // --- Auto-resize textarea ---
+  inputBox.addEventListener('input', () => {
+    inputBox.style.height = 'auto';
+    inputBox.style.height = Math.min(inputBox.scrollHeight, 160) + 'px';
+    charCount.textContent = inputBox.value.length + ' chars';
+  });
+
+  // --- Send on Enter ---
+  inputBox.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  sendBtn.addEventListener('click', sendMessage);
+
+  // --- Quick actions ---
+  document.querySelectorAll('.quick-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      inputBox.value = btn.dataset.prompt;
+      sendMessage();
+    });
+  });
+
+  // --- Clear ---
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    messages = [];
+    renderMessages();
+    statusLeft.textContent = 'Conversation cleared';
+  });
+
+  // --- Export ---
+  document.getElementById('exportBtn').addEventListener('click', () => {
+    const text = messages.map(m => {
+      const label = m.role === 'user' ? 'You' : 'Mythos';
+      return label + ': ' + m.content;
+    }).join('\n\n---\n\n');
+    const blob = new Blob([text || 'Empty conversation'], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mythos-export-' + Date.now() + '.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // --- Settings panel ---
+  document.getElementById('settingsBtn').addEventListener('click', toggleSettings);
+  settingsOverlay.addEventListener('click', toggleSettings);
+
+  function toggleSettings() {
+    settingsOpen = !settingsOpen;
+    settingsOverlay.classList.toggle('open', settingsOpen);
+    settingsPanel.classList.toggle('open', settingsOpen);
+  }
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'b') {
+      e.preventDefault();
+      toggleSettings();
+    }
+    if (e.ctrlKey && e.key === 'n') {
+      e.preventDefault();
+      messages = [];
+      renderMessages();
+    }
+  });
+
+  // --- Slider labels ---
+  function updateSliderLabels() {
+    document.getElementById('tempVal').textContent = document.getElementById('temperature').value;
+    document.getElementById('topPVal').textContent = document.getElementById('topP').value;
+    document.getElementById('topKVal').textContent = document.getElementById('topK').value;
+    document.getElementById('maxTokVal').textContent = document.getElementById('maxTokens').value;
+    document.getElementById('repPenVal').textContent = document.getElementById('repeatPenalty').value;
+  }
+
+  ['temperature', 'topP', 'topK', 'maxTokens', 'repeatPenalty'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateSliderLabels);
+  });
+
+  // --- Toggles ---
+  document.querySelectorAll('.toggle').forEach(t => {
+    t.addEventListener('click', () => {
+      t.classList.toggle('on');
+    });
+  });
+
+  function updateToggles() {
+    document.getElementById('toggleThinking').classList.toggle('on', settings.useThinking);
+    document.getElementById('toggleReflection').classList.toggle('on', settings.useReflection);
+    document.getElementById('toggleRag').classList.toggle('on', settings.useRag);
+  }
+
+  // --- Save settings ---
+  document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+    readSettingsFromUI();
+    try {
+      localStorage.setItem('mythos_settings', JSON.stringify(settings));
+      statusLeft.textContent = 'Settings saved';
+    } catch(e) {
+      statusLeft.textContent = 'Could not save settings';
+    }
+  });
+
+  function readSettingsFromUI() {
+    settings.backendUrl = document.getElementById('backendUrl').value.replace(/\/+$/, '');
+    settings.systemPrompt = document.getElementById('systemPrompt').value;
+    settings.temperature = parseFloat(document.getElementById('temperature').value);
+    settings.topP = parseFloat(document.getElementById('topP').value);
+    settings.topK = parseInt(document.getElementById('topK').value);
+    settings.maxTokens = parseInt(document.getElementById('maxTokens').value);
+    settings.repeatPenalty = parseFloat(document.getElementById('repeatPenalty').value);
+    settings.useThinking = document.getElementById('toggleThinking').classList.contains('on');
+    settings.useReflection = document.getElementById('toggleReflection').classList.contains('on');
+    settings.useRag = document.getElementById('toggleRag').classList.contains('on');
+  }
+
+  // --- Health check ---
+  async function checkHealth() {
+    try {
+      const resp = await fetch(settings.backendUrl + '/api/health', { signal: AbortSignal.timeout(3000) });
+      if (resp.ok) {
+        const data = await resp.json();
+        connected = true;
+        statusDot.classList.add('connected');
+        statusDot.title = 'Connected: ' + (data.model || 'unknown');
+        connBanner.style.display = 'none';
+        return;
+      }
+    } catch(e) {}
+    connected = false;
+    statusDot.classList.remove('connected');
+    statusDot.title = 'Disconnected';
+    connBanner.style.display = 'block';
+  }
+
+  checkHealth();
+  setInterval(checkHealth, 30000);
+
+  // --- Send message ---
+  async function sendMessage() {
+    const text = inputBox.value.trim();
+    if (!text || isTyping) return;
+
+    // Handle slash commands locally
+    if (text.startsWith('/')) {
+      handleCommand(text);
+      inputBox.value = '';
+      inputBox.style.height = 'auto';
+      charCount.textContent = '0 chars';
+      return;
+    }
+
+    const userMsg = { role: 'user', content: text, timestamp: Date.now() };
+    messages.push(userMsg);
+    inputBox.value = '';
+    inputBox.style.height = 'auto';
+    charCount.textContent = '0 chars';
+    renderMessages();
+    scrollToBottom();
+
+    isTyping = true;
+    typingIndicator.style.display = 'flex';
+    sendBtn.disabled = true;
+    statusLeft.textContent = 'Generating...';
+
+    readSettingsFromUI();
+
+    try {
+      const history = messages.filter(m => m.role !== 'system').map(m => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const resp = await fetch(settings.backendUrl + '/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          history: history.slice(0, -1), // exclude the just-added user msg, backend re-adds it
+          system_prompt: settings.systemPrompt,
+          temperature: settings.temperature,
+          top_p: settings.topP,
+          top_k: settings.topK,
+          max_tokens: settings.maxTokens,
+          repeat_penalty: settings.repeatPenalty,
+          use_reflection: settings.useReflection,
+          use_rag: settings.useRag,
+          use_thinking: settings.useThinking,
+        }),
+      });
+
+      if (!resp.ok) {
+        throw new Error('Server returned ' + resp.status);
+      }
+
+      const data = await resp.json();
+
+      // Replace history with server response
+      messages = data.history.map(m => ({
+        role: m.role,
+        content: m.content,
+        reasoning: m.reasoning || null,
+        timestamp: m.timestamp || Date.now(),
+      }));
+
+      statusLeft.textContent = data.status || 'Done';
+    } catch(err) {
+      const errMsg = {
+        role: 'assistant',
+        content: '**Backend not connected.**\n\nStart the Mythos server:\n```\npython main.py --mode web\n```\n\nOr change the backend URL in settings.',
+        timestamp: Date.now(),
+      };
+      messages.push(errMsg);
+      statusLeft.textContent = 'Error: ' + (err.message || 'Unknown');
+      if (!connected) {
+        connBanner.style.display = 'block';
+      }
+    } finally {
+      isTyping = false;
+      typingIndicator.style.display = 'none';
+      sendBtn.disabled = false;
+      renderMessages();
+      scrollToBottom();
+    }
+  }
+
+  // --- Slash commands ---
+  function handleCommand(text) {
+    const parts = text.slice(1).split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const args = parts.slice(1).join(' ');
+
+    const addMsg = (content) => {
+      messages.push({ role: 'assistant', content, timestamp: Date.now() });
+      renderMessages();
+      scrollToBottom();
+    };
+
+    switch(cmd) {
+      case 'help':
+        addMsg('**Commands:**\n\n' +
+          '- `/clear` -- Clear conversation\n' +
+          '- `/export` -- Export conversation\n' +
+          '- `/mode <mode>` -- Switch mode (chat, code, review, debug, architect, security)\n' +
+          '- `/think <on|off>` -- Toggle thinking\n' +
+          '- `/reflect <on|off>` -- Toggle reflection\n' +
+          '- `/rag <on|off>` -- Toggle RAG\n' +
+          '- `/temp <value>` -- Set temperature\n' +
+          '- `/topp <value>` -- Set top-p\n' +
+          '- `/topk <value>` -- Set top-k\n' +
+          '- `/maxtokens <value>` -- Set max tokens\n' +
+          '- `/config` -- Show current config\n' +
+          '- `/version` -- Show version');
+        break;
+      case 'clear':
+        messages = [];
+        renderMessages();
+        statusLeft.textContent = 'Cleared';
+        break;
+      case 'mode':
+        if (args && MODES.find(m => m.key === args)) {
+          switchMode(args);
+          statusLeft.textContent = 'Mode: ' + args;
+        } else {
+          addMsg('**Available modes:** ' + MODES.map(m => '`' + m.key + '`').join(', '));
+        }
+        break;
+      case 'think':
+      case 'thinking':
+        if (args === 'on') { settings.useThinking = true; updateToggles(); statusLeft.textContent = 'Thinking on'; }
+        else if (args === 'off') { settings.useThinking = false; updateToggles(); statusLeft.textContent = 'Thinking off'; }
+        else statusLeft.textContent = 'Thinking: ' + (settings.useThinking ? 'on' : 'off');
+        break;
+      case 'reflect':
+        if (args === 'on') { settings.useReflection = true; updateToggles(); statusLeft.textContent = 'Reflection on'; }
+        else if (args === 'off') { settings.useReflection = false; updateToggles(); statusLeft.textContent = 'Reflection off'; }
+        else statusLeft.textContent = 'Reflection: ' + (settings.useReflection ? 'on' : 'off');
+        break;
+      case 'rag':
+        if (args === 'on') { settings.useRag = true; updateToggles(); statusLeft.textContent = 'RAG on'; }
+        else if (args === 'off') { settings.useRag = false; updateToggles(); statusLeft.textContent = 'RAG off'; }
+        else statusLeft.textContent = 'RAG: ' + (settings.useRag ? 'on' : 'off');
+        break;
+      case 'temp': {
+        const v = parseFloat(args);
+        if (!isNaN(v) && v >= 0 && v <= 2) {
+          settings.temperature = v;
+          document.getElementById('temperature').value = v;
+          updateSliderLabels();
+          statusLeft.textContent = 'Temperature: ' + v;
+        } else statusLeft.textContent = 'Usage: /temp <0.0-2.0>';
+        break;
+      }
+      case 'topp': {
+        const v = parseFloat(args);
+        if (!isNaN(v) && v >= 0 && v <= 1) {
+          settings.topP = v;
+          document.getElementById('topP').value = v;
+          updateSliderLabels();
+          statusLeft.textContent = 'Top-p: ' + v;
+        } else statusLeft.textContent = 'Usage: /topp <0.0-1.0>';
+        break;
+      }
+      case 'topk': {
+        const v = parseInt(args);
+        if (!isNaN(v) && v >= 1 && v <= 200) {
+          settings.topK = v;
+          document.getElementById('topK').value = v;
+          updateSliderLabels();
+          statusLeft.textContent = 'Top-k: ' + v;
+        } else statusLeft.textContent = 'Usage: /topk <1-200>';
+        break;
+      }
+      case 'maxtokens': {
+        const v = parseInt(args);
+        if (!isNaN(v) && v >= 128 && v <= 65536) {
+          settings.maxTokens = v;
+          document.getElementById('maxTokens').value = Math.min(v, 8192);
+          updateSliderLabels();
+          statusLeft.textContent = 'Max tokens: ' + v;
+        } else statusLeft.textContent = 'Usage: /maxtokens <128-65536>';
+        break;
+      }
+      case 'config':
+        addMsg('**Current config:**\n\n' +
+          '| Setting | Value |\n|---|---|\n' +
+          '| Mode | ' + currentMode + ' |\n' +
+          '| Temperature | ' + settings.temperature + ' |\n' +
+          '| Top-p | ' + settings.topP + ' |\n' +
+          '| Top-k | ' + settings.topK + ' |\n' +
+          '| Repeat penalty | ' + settings.repeatPenalty + ' |\n' +
+          '| Max tokens | ' + settings.maxTokens + ' |\n' +
+          '| Thinking | ' + (settings.useThinking ? 'on' : 'off') + ' |\n' +
+          '| Reflection | ' + (settings.useReflection ? 'on' : 'off') + ' |\n' +
+          '| RAG | ' + (settings.useRag ? 'on' : 'off') + ' |\n' +
+          '| Backend | ' + settings.backendUrl + ' |');
+        break;
+      case 'version':
+        addMsg('**Mythos** -- Open-Mythos-2\n\nLocal AI coding assistant with GGUF inference.');
+        break;
+      case 'export':
+        document.getElementById('exportBtn').click();
+        break;
+      default:
+        statusLeft.textContent = 'Unknown command: /' + cmd + '. Try /help';
+    }
+  }
+
+  // --- Render messages ---
+  function renderMessages() {
+    // Remove all children except emptyState
+    Array.from(chatArea.children).forEach(c => {
+      if (c !== emptyState) chatArea.removeChild(c);
+    });
+
+    if (messages.length === 0) {
+      emptyState.style.display = 'flex';
+      return;
+    }
+
+    emptyState.style.display = 'none';
+
+    messages.forEach(msg => {
+      const div = document.createElement('div');
+      div.className = 'message ' + (msg.role === 'user' ? 'user-msg' : 'assistant-msg');
+
+      const role = document.createElement('div');
+      role.className = 'msg-role';
+      role.textContent = msg.role === 'user' ? 'You' : 'Mythos';
+      div.appendChild(role);
+
+      // Thinking block
+      if (msg.reasoning) {
+        const thinkBlock = document.createElement('div');
+        thinkBlock.className = 'thinking-block';
+
+        const thinkHeader = document.createElement('div');
+        thinkHeader.className = 'thinking-header';
+        thinkHeader.innerHTML = '<span class="thinking-chevron">&#9654;</span> Thinking';
+
+        const thinkContent = document.createElement('div');
+        thinkContent.className = 'thinking-content';
+        thinkContent.textContent = msg.reasoning;
+
+        thinkHeader.addEventListener('click', () => {
+          const chevron = thinkHeader.querySelector('.thinking-chevron');
+          const isOpen = thinkContent.classList.toggle('open');
+          chevron.classList.toggle('open', isOpen);
+        });
+
+        thinkBlock.appendChild(thinkHeader);
+        thinkBlock.appendChild(thinkContent);
+        div.appendChild(thinkBlock);
+      }
+
+      const content = document.createElement('div');
+      content.className = 'msg-content';
+      content.innerHTML = formatMarkdown(msg.content);
+      div.appendChild(content);
+
+      // Add copy buttons to code blocks
+      div.querySelectorAll('pre').forEach(pre => {
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = 'Copy';
+        btn.addEventListener('click', () => {
+          const code = pre.querySelector('code');
+          navigator.clipboard.writeText(code ? code.textContent : pre.textContent).then(() => {
+            btn.textContent = 'Copied';
+            setTimeout(() => btn.textContent = 'Copy', 1500);
+          });
+        });
+        pre.style.position = 'relative';
+        pre.appendChild(btn);
+      });
+
+      chatArea.appendChild(div);
+    });
+  }
+
+  // --- Simple markdown formatter ---
+  function formatMarkdown(text) {
+    let html = escapeHtml(text);
+
+    // Code blocks: ```lang\n...\n```
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+      return '<pre><code class="language-' + lang + '">' + code.trim() + '</code></pre>';
+    });
+
+    // Inline code: `...`
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Bold: **...**
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    // Italic: *...*
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+    // Links: [text](url)
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:var(--accent)">$1</a>');
+
+    // Line breaks to paragraphs
+    html = html.split('\n\n').map(p => '<p>' + p.replace(/\n/g, '<br>') + '</p>').join('');
+
+    return html;
+  }
+
+  function escapeHtml(text) {
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return text.replace(/[&<>"']/g, c => map[c]);
+  }
+
+  function scrollToBottom() {
+    requestAnimationFrame(() => {
+      chatArea.scrollTop = chatArea.scrollHeight;
+    });
+  }
+})();
+</script>
+
+</body>
+</html>

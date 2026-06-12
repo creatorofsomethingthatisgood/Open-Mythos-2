@@ -311,3 +311,6 @@ CLAUDE.md
 .dockerignore
 .npmignore
 
+
+.antigravitycli
+GEMINI.md

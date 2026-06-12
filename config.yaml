@@ -2,216 +2,206 @@
 # Edit these settings to customize your LLM experience
 
 model:
- # Primary model configuration: Open-1 (Optimized for 4GB RAM)
- name: "Open-1"
- huggingface_id: "Qwen/Qwen2.5-Coder-3B-Instruct"
- path: "models/Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf"
- repo_id: "bartowski/Qwen2.5-Coder-3B-Instruct-GGUF"
- filename: "Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf"
- 
- # Fallback models
- fallbacks:
- - name: "mythos-4.8"
-   huggingface_id: "google/gemma-3-12b-it"
-   path: "models/mythos-4.8-Q4_K_M.gguf"
-   repo_id: "bartowski/google-gemma-3-12b-it-GGUF"
-   filename: "google-gemma-3-12b-it-Q4_K_M.gguf"
- - name: "qwen2.5-7b-instruct"
-   huggingface_id: "Qwen/Qwen2.5-7B-Instruct"
-   path: "models/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
-   repo_id: "bartowski/Qwen2.5-7B-Instruct-GGUF"
-   filename: "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
- 
- # Context and performance settings for Open-1
- context_length: 4096
- n_gpu_layers: 0
- n_threads: 0
- n_batch: 256
- use_mmap: true
- use_mlock: false
- rope_freq_base: 0.0
+  # Primary model configuration: Open-1 (Optimized for 4GB RAM)
+  name: "Open-1"
+  huggingface_id: "Qwen/Qwen2.5-Coder-3B-Instruct"
+  path: "models/Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf"
+  repo_id: "bartowski/Qwen2.5-Coder-3B-Instruct-GGUF"
+  filename: "Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf"
+
+  # Fallback models
+  fallbacks:
+    - name: "mythos-4.8"
+      huggingface_id: "google/gemma-3-12b-it"
+      path: "models/mythos-4.8-Q4_K_M.gguf"
+      repo_id: "bartowski/google-gemma-3-12b-it-GGUF"
+      filename: "google-gemma-3-12b-it-Q4_K_M.gguf"
+    - name: "qwen2.5-7b-instruct"
+      huggingface_id: "Qwen/Qwen2.5-7B-Instruct"
+      path: "models/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+      repo_id: "bartowski/Qwen2.5-7B-Instruct-GGUF"
+      filename: "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+
+  # Context and performance settings for Open-1
+  context_length: 4096
+  n_gpu_layers: 0
+  n_threads: 0
+  n_batch: 256
+  use_mmap: true
+  use_mlock: false
+  rope_freq_base: 0.0
 
 generation:
- # Generation parameters
- temperature: 0.3 # Precision-focused for Open-1
- top_p: 0.9
- top_k: 40
- repeat_penalty: 1.1
- max_tokens: 2048
- stream: true
- stop_sequences:
- - "<|im_end|>"
- - "<|endoftext|>"
- - "</s>"
+  # Generation parameters
+  temperature: 0.3 # Precision-focused for Open-1
+  top_p: 0.9
+  top_k: 40
+  repeat_penalty: 1.1
+  max_tokens: 2048
+  stream: true
+  stop_sequences:
+    - "<|im_end|>"
+    - "<|im_start|>"
+       - "</s>"
 
 system:
- prompt_file: "prompts/open1.txt"
- self_reflect: true
- thinking_mode: true
- 
+  prompt_file: "prompts/open1.txt"
+  self_reflect: true
+  thinking_mode: true
+
 security:
- # Mythos Sentinel CLI (mythos scan) -- also see ~/.config/mythos/config.yaml after mythos init
- min_severity: low
- static_enabled: true
- deep_temperature: 0.2
- deep_max_tokens: 4096
+  # Mythos Sentinel CLI (mythos scan) -- also see ~/.config/mythos/config.yaml after mythos init
+  min_severity: low
+  static_enabled: true
+  deep_temperature: 0.2
+  deep_max_tokens: 4096
 
 rag:
- # Retrieval-Augmented Generation settings
- enabled: false
- docs_dir: "rag_docs" # Default folder for RAG; override with --path on CLI
- chunk_size: 500 # Words per chunk (word-based splitter)
- chunk_overlap: 50 # Overlap between chunks
- top_k: 5 # Chunks retrieved per query
- max_context_chars: 20000 # Cap RAG text injected into the system prompt
- max_history_turns: 6 # Max chat turns when RAG is on (terminal UI)
- clear_before_index: true # Replace index on each rag-index run
- max_file_bytes: 2097152 # Skip files larger than 2 MiB (e.g. lockfiles)
- exclude_dirs: # Never index these directory names
- - ".git"
- - "node_modules"
- - "__pycache__"
- - ".pytest_cache"
- - "venv"
- - ".venv"
- - "dist"
- - "build"
- - ".next"
- - "coverage"
- - "chroma_db"
- - "models"
- embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
- hf_cache_dir: ".cache/huggingface" # Local HF cache (not ~/.cache)
- embedding_local_only: true # Prefer cache; auto-download to .cache/huggingface if missing
- persist_dir: "chroma_db" # ChromaDB persistence directory
+  # Retrieval-Augmented Generation settings
+  enabled: false
+  docs_dir: "rag_docs" # Default folder for RAG; override with --path on CLI
+  chunk_size: 500 # Words per chunk (word-based splitter)
+  chunk_overlap: 50 # Overlap between chunks
+  top_k: 5 # Chunks retrieved per query
+  max_context_chars: 20000 # Cap RAG text injected into the system prompt
+  max_history_turns: 6 # Max chat turns when RAG is on (terminal UI)
+  clear_before_index: true # Replace index on each rag-index run
+  max_file_bytes: 2097152 # Skip files larger than 2 MiB (e.g. lockfiles)
+  exclude_dirs: # Never index these directory names
+    - ".git"
+    - "node_modules"
+    - "__pycache__"
+    - ".pytest_cache"
+    - "venv"
+    - ".venv"
+    - "dist"
+    - "build"
+    - ".next"
+    - "coverage"
+    - "chroma_db"
+    - "models"
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  hf_cache_dir: ".cache/huggingface" # Local HF cache (not ~/.cache)
+  embedding_local_only: true # Prefer cache; auto-download to .cache/huggingface if missing
+  persist_dir: "chroma_db" # ChromaDB persistence directory
 
 chat:
- # Inline local paths in chat (file:// or /Users/.../app.py)
- local_files:
- enabled: true
- static_scan: true # Run mythos static rules on referenced files/folders
- max_files: 0 # 0 = unlimited files loaded per message
- max_dir_sample_files: 0 # 0 = unlimited files loaded per directory scan
- max_file_bytes: 2097152 # Skip files larger than 2 MiB
- max_context_chars: 30000 # Cap injected source text
- # Natural language: "fix vulns in ~/my-repo" / "apply fixes to ~/my-repo"
- fix:
- enabled: true # Run scan + full-file MYTHOS_PATCH rewrite flow in chat
- auto_write_patches: true # false = ask before writing (recommended; use git)
- max_rewrite_files: 0 # 0 = unlimited files rewritten per fix/rewrite run
- show_finding_rationale: true # show scan findings as "why" before each rewrite
- stream_rewrite: true # stream raw model output during dedicated rewrite (verbose)
+  # Clean output mode: strip emojis, em dashes, most punctuation (keeps ? and !)
+  clean_output: false
+  # Inline local paths in chat (file:// or /Users/.../app.py)
+  local_files:
+    enabled: true
+    static_scan: true # Run mythos static rules on referenced files/folders
+    max_files: 0 # 0 = unlimited files loaded per message
+    max_dir_sample_files: 0 # 0 = unlimited files loaded per directory scan
+    max_file_bytes: 2097152 # Skip files larger than 2 MiB
+    max_context_chars: 30000 # Cap injected source text
+    # Natural language: "fix vulns in ~/my-repo" / "apply fixes to ~/my-repo"
+    fix:
+      enabled: true # Run scan + full-file MYTHOS_PATCH rewrite flow in chat
+      auto_write_patches: true # false = ask before writing (recommended; use git)
+      max_rewrite_files: 0 # 0 = unlimited files rewritten per fix/rewrite run
+      show_finding_rationale: true # show scan findings as "why" before each rewrite
+      stream_rewrite: true # stream raw model output during dedicated rewrite (verbose)
 
 context:
- reserve_tokens: 2048 # Tokens reserved for the assistant reply (trim prompt to fit)
+  reserve_tokens: 2048 # Tokens reserved for the assistant reply (trim prompt to fit)
 
 rml:
- # Reinforcement Machine Learning -- adapts model behaviour from user feedback
- enabled: true # Turn on with /rml on in chat
- learning_rate: 0.05 # How fast RML adjusts (0.01 = slow, 0.2 = fast)
- max_param_offset: 0.3 # Maximum drift from base temperature/top_p
- hint_threshold: 3.0 # Negative score before a learned hint is injected
+  # Reinforcement Machine Learning -- adapts model behaviour from user feedback
+  enabled: true # Turn on with /rml on in chat
+  learning_rate: 0.05 # How fast RML adjusts (0.01 = slow, 0.2 = fast)
+  max_param_offset: 0.3 # Maximum drift from base temperature/top_p
+  hint_threshold: 3.0 # Negative score before a learned hint is injected
 
 session_summaries:
- # Session Summaries -- "Mythos Remembers Your Sessions"
- # Generates structured digests of what you discussed, decided, and modified.
- # Browse past sessions with /sessions, generate on-demand with /summary.
- enabled: true
- auto_on_exit: true # Automatically summarize when you quit a session
- max_summaries: 200 # Oldest summaries pruned when limit is reached
+  # Session Summaries -- "Mythos Remembers Your Sessions"
+  # Generates structured digests of what you discussed, decided, and modified.
+  # Browse past sessions with /sessions, generate on-demand with /summary.
+  enabled: true
+  auto_on_exit: true # Automatically summarize when you quit a session
+  max_summaries: 200 # Oldest summaries pruned when limit is reached
 
 memory:
- # Conversation memory settings
- save_conversations: true
- conversations_dir: "conversations"
- max_history_turns: 50 # Maximum turns to keep in memory
- auto_summarize: true # Summarize old context when full
- cross_session:
- # Cross-Session Memory -- "Mythos Remembers"
- # Persists key facts across sessions so Mythos starts with user context.
- # Toggle with /memory on|off in chat. View facts with /memory.
- enabled: true
- max_facts: 50 # Maximum facts stored (oldest pruned first)
- decay_days: 30 # Facts with no reinforcement fade after this many days
- max_context_chars: 2000 # Cap for the injected memory block in the system prompt
- 
+  # Conversation memory settings
+  save_conversations: true
+  conversations_dir: "conversations"
+  max_history_turns: 50 # Maximum turns to keep in memory
+  auto_summarize: true # Summarize old context when full
+  cross_session:
+    # Cross-Session Memory -- "Mythos Remembers"
+    # Persists key facts across sessions so Mythos starts with user context.
+    # Toggle with /memory on|off in chat. View facts with /memory.
+    enabled: true
+    max_facts: 50 # Maximum facts stored (oldest pruned first)
+    decay_days: 30 # Facts with no reinforcement fade after this many days
+    max_context_chars: 2000 # Cap for the injected memory block in the system prompt
 
 voice:
- # Voice I/O: talk to the AI and hear responses aloud
- # Enable with: /voice on in chat
- # Input: whisper.cpp (scripts/install_whisper.sh) or pip install openai-whisper
- # Output: espeak-ng (sudo apt install espeak-ng) for text-to-speech
- enabled: true
- whisper_bin: "whisper-cli" # path to whisper-cli binary (or full path)
- model: "models/ggml-base.en.bin" # GGML model file
- language: "en" # "en" for English, "auto" for auto-detect
- push_to_talk: true # true = hold key to record, false = toggle
- silence_threshold: 2.0 # seconds of silence before auto-stop
- max_duration: 30 # max recording length in seconds
+  # Voice I/O: talk to the AI and hear responses aloud
+  # Enable with: /voice on in chat
+  # Input: whisper.cpp (scripts/install_whisper.sh) or pip install openai-whisper
+  # Output: espeak-ng (sudo apt install espeak-ng) for text-to-speech
+  enabled: true
+  whisper_bin: "whisper-cli" # path to whisper-cli binary (or full path)
+  model: "models/ggml-base.en.bin" # GGML model file
+  language: "en" # "en" for English, "auto" for auto-detect
+  push_to_talk: true # true = hold key to record, false = toggle
+  silence_threshold: 2.0 # seconds of silence before auto-stop
+  max_duration: 30 # max recording length in seconds
 ui:
- # User interface settings
- mode: "terminal" # "terminal" or "web"
- web_port: 7860
- web_share: false # Create public Gradio link
- terminal_theme: "monokai" # Terminal color theme
- show_timing: true # Display generation speed
+  # User interface settings
+  mode: "terminal" # "terminal" or "web"
+  web_port: 7860
+  web_share: false # Create public Gradio link
+  terminal_theme: "monokai" # Terminal color theme
+  show_timing: true # Display generation speed
 
 logging:
- # Logging configuration
- level: "INFO" # DEBUG, INFO, WARNING, ERROR
- file: "mythos.log"
- console: true
+  # Logging configuration
+  level: "INFO" # DEBUG, INFO, WARNING, ERROR
+  file: "mythos.log"
+  console: true
 
-# Cloud Mode 
-# Optional: Use an OpenAI-compatible API instead of local inference.
-# Enable with: mythos cloud
-# Set API key with: mythos cloud set-key <your-key>
-# Local AI is recommended for privacy and zero cost.
-cloud:
- # api_key: "" # Your API key (set via: mythos cloud set-key)
- base_url: "https://api.openai.com/v1" # OpenAI-compatible endpoint
- model: "gpt-4o-mini" # Model name at the endpoint
- context_length: 128000
-
-# Cloud API Configuration 
+# Cloud API Configuration
 # Use 'mythos cloud' to chat via an OpenAI-compatible API endpoint.
 # Set your API key with: mythos cloud set-key <your-key>
 # RECOMMENDED: Use local AI (mythos chat) for privacy and zero cost.
 cloud:
- # api_key: "" # Your API key (set via: mythos cloud set-key)
- # provider: "nvidia" # Provider preset: openai, nvidia, together, groq
- base_url: "https://api.openai.com/v1"
- model: "gpt-4o-mini"
- context_length: 128000
+  # api_key: "" # Your API key (set via: mythos cloud set-key)
+  # provider: "nvidia" # Provider preset: openai, nvidia, together, groq
+  base_url: "https://api.openai.com/v1"
+  model: "gpt-4o-mini"
+  context_length: 128000
 
-# Skills 
+# Skills
 # Skills extend Mythos with new capabilities.
 # Manage with: /skill list|install|create|run (in chat)
 # Or: mythos skill list|install|run|create (CLI)
 skills:
- marketplace_url: "https://raw.githubusercontent.com/creatorofsomethingthatisgood/Open-Mythos-2/main/skills"
- auto_discover: true # Scan for new skills on startup
+  marketplace_url: "https://raw.githubusercontent.com/creatorofsomethingthatisgood/Open-Mythos-2/main/skills"
+  auto_discover: true # Scan for new skills on startup
 
 # Operative Mode
 # Autonomous agent with file access, vulnerability scanning, container detection, and network inspection.
 # Activate in chat with: /operative [safe|elevated|unleashed]
 # Or via CLI: mythos operative --task "..." --tier elevated
 operative:
- safety_tier: "elevated" # safe (scan-only), elevated (write with confirm), unleashed (full access)
- max_iterations: 50 # Max tool-use iterations per task
- sandbox: "." # Default working directory for file operations
- tools:
-  scan: true # Static vulnerability scanning
-  deep_scan: true # AI-powered deep security audit
-  fix: true # Auto-fix security findings (requires confirmation in elevated tier)
-  grep: true # Search file contents
-  container_detect: true # Container environment and escape vector detection
-  network_scan: false # Network scanning (off by default, enable with /operative elevated or --tier unleashed)
- network:
-  allowed_hosts: [] # Empty = local only in safe tier; unrestricted in elevated/unleashed
-  max_ports: 100 # Maximum ports per scan
-  timeout: 2 # Connection timeout in seconds
- container:
-  check_escape: true # Check for container escape vectors
-  check_suid: true # Scan for SUID binaries
-  check_mounts: true # Check mounted filesystems
+  safety_tier: "elevated" # safe (scan-only), elevated (write with confirm), unleashed (full access)
+  max_iterations: 50 # Max tool-use iterations per task
+  sandbox: "." # Default working directory for file operations
+  tools:
+    scan: true # Static vulnerability scanning
+    deep_scan: true # AI-powered deep security audit
+    fix: true # Auto-fix security findings (requires confirmation in elevated tier)
+    grep: true # Search file contents
+    container_detect: true # Container environment and escape vector detection
+    network_scan: false # Network scanning (off by default, enable with /operative elevated or --tier unleashed)
+    network:
+      allowed_hosts: [] # Empty = local only in safe tier; unrestricted in elevated/unleashed
+      max_ports: 100 # Maximum ports per scan
+      timeout: 2 # Connection timeout in seconds
+    container:
+      check_escape: true # Check for container escape vectors
+      check_suid: true # Scan for SUID binaries
+      check_mounts: true # Check mounted filesystems

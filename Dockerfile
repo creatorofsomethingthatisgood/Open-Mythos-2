@@ -5,7 +5,7 @@
 # Build:
 #   docker build -t mythos .
 #
-# Run (terminal chat — REQUIRES -it):
+# Run (terminal chat - REQUIRES -it):
 #   docker run -it --rm mythos
 #
 # Run (web UI on http://localhost:7860):

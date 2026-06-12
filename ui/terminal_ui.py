@@ -8,8 +8,55 @@ import signal
 import sys
 import threading
 import time
+import unicodedata
 from typing import List, Optional
 from pathlib import Path
+
+
+def clean_output_filter(text: str) -> str:
+    """Strip emojis, em dashes, and most punctuation from text.
+    Keeps: ? ! backticks (code fences) letters digits whitespace newlines
+    Removes: . ; , - " ' : ( ) _ em-dash en-dash smart-quotes and all other punctuation
+    Inserted space when removal would merge two words (e.g. "word--word" -> "word word").
+    """
+    _STRIP_PUNCT = frozenset('.;,—–“”‘’:()_"\'-')
+    _KEEP_PUNCT = frozenset('?!`')
+    out = []
+    prev_was_alnum = False
+    for ch in text:
+        cat = unicodedata.category(ch)
+        # Keep newlines and whitespace
+        if ch in '\n\r\t' or ch.isspace():
+            out.append(ch)
+            prev_was_alnum = False
+        # Keep explicitly allowed punctuation
+        elif ch in _KEEP_PUNCT:
+            out.append(ch)
+            prev_was_alnum = False
+        # Strip known punctuation chars
+        elif ch in _STRIP_PUNCT:
+            # Insert space if removing would merge two words
+            if prev_was_alnum:
+                out.append(' ')
+            prev_was_alnum = False
+        # Strip any Unicode punctuation category
+        elif cat.startswith('P'):
+            if prev_was_alnum:
+                out.append(' ')
+            prev_was_alnum = False
+        # Strip emoji and symbol categories (So, Sm, Sk)
+        elif cat in ('So', 'Sm', 'Sk'):
+            prev_was_alnum = False
+        # Strip surrogate and other special
+        elif cat.startswith('C') and ch not in '\n\r\t':
+            prev_was_alnum = False
+        # Strip modifier marks (emoji skin tones etc)
+        elif cat.startswith('M'):
+            pass
+        else:
+            out.append(ch)
+            prev_was_alnum = ch.isalnum()
+    return ''.join(out)
 
 try:
     from rich.console import Console
@@ -279,6 +326,8 @@ class TerminalUI:
             self.console.print(f"[bold red]Error initializing engine: {e}[/bold red]")
             raise
         # RML (Reinforcement Machine Learning) engine
+        # Read clean_output from config
+        self.clean_output = self.engine.config.get("chat", {}).get("clean_output", False)
         self.rml = RMLEngine(self.engine.config)
         if self.rml.enabled:
             self.console.print("[green]RML (Reinforcement ML) enabled â learning from your feedback[/green]")
@@ -373,7 +422,8 @@ class TerminalUI:
             self.console.print(f"  Endpoint: [dim]{self.engine.base_url}[/dim]")
         else:
             self.console.print("[bold #EA580C]\u2500\u2500 Local Mode \u2500\u2500[/bold #EA580C]")
-            self.console.print(f"  Model: [green]{self.engine.model_path.name}[/green]")
+            model_display = self.engine.config.get("model", {}).get("name", self.engine.model_path.name)
+            self.console.print(f" Model: [green]{model_display}[/green]")
             self.console.print(f"  Context: [green]{self.engine.context_length:,}[/green] tokens")
 
         self.console.print(f"  Mode: [bold #F97316]{emoji} {mode_name}[/bold #F97316]")
@@ -450,6 +500,7 @@ class TerminalUI:
 [yellow]/skill list|info|run|install|uninstall|create[/yellow] - Manage skills (built-in, marketplace, AI-created)
 [yellow]/marketplace[/yellow] - Browse and install community skills
 [yellow]/operative [safe|elevated|unleashed|off][/yellow] - Toggle autonomous agent mode
+[yellow]/clean on|off[/yellow] - Clean output: strip emojis, em dashes, most punctuation (keeps ? and !)
 [yellow]/quit[/yellow] - Exit the chat
 
 [bold #EA580C]🔥 Enhanced Coding Modes:[/bold #EA580C]
@@ -492,7 +543,7 @@ class TerminalUI:
         table.add_column("Value", style="green")
 
 
-        table.add_row("Model", str(self.engine.model_path.name) if hasattr(self.engine, "model_path") else self.engine.model_name)
+        table.add_row("Model", self.engine.config.get("model", {}).get("name", str(self.engine.model_path.name) if hasattr(self.engine, "model_path") else self.engine.model_name))
         table.add_row("Temperature", str(self.engine.config.get('generation', {}).get('temperature', 0.7)))
         table.add_row("Max Tokens", str(self.engine.config.get('generation', {}).get('max_tokens', 2048)))
         table.add_row("Top-p", str(self.engine.config.get('generation', {}).get('top_p', 0.9)))
@@ -503,6 +554,7 @@ class TerminalUI:
         table.add_row("RAG", "On" if self.rag_enabled and self.rag else "Off")
         table.add_row("RML", "On" if self.rml.enabled else "Off")
         table.add_row("Session Summaries", "On" if self.session_summaries.enabled else "Off")
+        table.add_row("Clean Output", "On" if self.clean_output else "Off")
         self.console.print(table)
 
     def handle_command(self, command: str) -> bool:
@@ -1023,6 +1075,19 @@ class TerminalUI:
             else:
                 self.console.print("[red]Use /think on or /think off[/red]")
 
+        elif cmd == "/clean":
+            if args.lower() == "on":
+                self.clean_output = True
+                self.console.print("[green]Clean output enabled[/green]")
+                self.console.print("[dim]Emojis, em dashes, and most punctuation will be stripped. Only ? and ! are kept.[/dim]")
+            elif args.lower() == "off":
+                self.clean_output = False
+                self.console.print("[yellow]Clean output disabled[/yellow]")
+            else:
+                status = "on" if self.clean_output else "off"
+                self.console.print(f"[#EA580C]Clean output is currently: {status}[/#EA580C]")
+                self.console.print("[dim]Use /clean on or /clean off[/dim]")
+
         elif cmd == "/sessions-clear":
             if not self.session_summaries.enabled:
                 self.console.print("[yellow]Session Summaries not enabled.[/yellow]")
@@ -1033,7 +1098,7 @@ class TerminalUI:
         elif cmd == "/version":
             from mythos_cli import __version__
             self.console.print(f"[#EA580C]Mythos[/#EA580C] [bold]{__version__}[/bold]")
-            self.console.print(f"[dim]Model: {self.engine.model_path.name if hasattr(self.engine, 'model_path') else self.engine.model_name}[/dim]")
+            self.console.print(f"[dim]Model: {self.engine.config.get('model', {}).get('name', self.engine.model_path.name if hasattr(self.engine, 'model_path') else self.engine.model_name)}[/dim]")
 
         elif cmd == "/tokens":
             gen_cfg = self.engine.config.get('generation', {})
@@ -2119,7 +2184,7 @@ class TerminalUI:
                     top_p=gen_config.get("top_p"),
                     repeat_penalty=gen_config.get("repeat_penalty"),
                 ):
-                    response_text += chunk
+                    response_text += clean_output_filter(chunk) if self.clean_output else chunk
                     token_count += 1
                     if _first_chunk:
                         _first_chunk = False
@@ -2128,11 +2193,12 @@ class TerminalUI:
 
                     if not thinking_mode:
                         # Normal streaming — no tag processing
-                        self.console.print(chunk, end="", style=_answer_style)
+                        _display_chunk = clean_output_filter(chunk) if self.clean_output else chunk
+                        self.console.print(_display_chunk, end="", style=_answer_style)
                         continue
 
                     # Thinking-mode: process buffer for think-tag display
-                    _display_buf += chunk
+                    _display_buf += clean_output_filter(chunk) if self.clean_output else chunk
                     while _display_buf:
                         if not _in_think:
                             # Look for opening tags «««« or <thinking>

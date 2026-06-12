@@ -13,20 +13,21 @@ model:
   context_length: 4096
   n_gpu_layers: 0 # Force CPU for predictability on low-end hardware
   n_threads: 0 # Auto-detect (usually 2-4 threads on low-end laptops)
-  n_batch: 256 # Reduced batch size to lower peak memory usage
+  n_batch: 512 # Reduced batch size to lower peak memory usage
   use_mmap: true # Efficient memory mapping
   use_mlock: false # Do NOT lock in RAM to allow OS to manage pressure
   rope_freq_base: 0.0
 
 generation:
-  temperature: 0.3 # Lower temperature for more precise coding/security logic
-  top_p: 0.9
-  top_k: 40
-  repeat_penalty: 1.1
-  max_tokens: 2048 # Sufficient for most coding tasks on 4k context
+  temperature: 0.2 # Lower temperature for more precise coding/security logic
+  top_p: 0.85
+  top_k: 20
+  repeat_penalty: 1.15
+  max_tokens: 3072 # Sufficient for most coding tasks on 4k context
   stream: true
   stop_sequences:
     - "<|im_end|>"
+    - "<|im_start|>"
     - "<|endoftext|>"
     - "</s>"
 
@@ -39,7 +40,7 @@ security:
   min_severity: low
   static_enabled: true
   deep_temperature: 0.1
-  deep_max_tokens: 2048
+  deep_max_tokens: 3072
 
 rag:
   enabled: false # Disabled by default for 4GB RAM to save memory

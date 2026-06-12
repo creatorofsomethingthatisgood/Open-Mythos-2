@@ -172,8 +172,21 @@ def ensure_chat_edit_config() -> None:
 
     merged = merge_chat_defaults(cfg)
     gen = merged.setdefault("generation", {})
+    model_cfg = merged.setdefault("model", {})
+    
+    # Check if we actually need to write changes by looking at the ORIGINAL config
+    # We must do this BEFORE we potentially modify merged and affect its references
+    orig_gen = cfg.get("generation") if isinstance(cfg.get("generation"), dict) else {}
+    orig_model = cfg.get("model") if isinstance(cfg.get("model"), dict) else {}
+    current_max = int(orig_gen.get("max_tokens", 2048))
+    current_ctx = int(orig_model.get("context_length", 4096))
+
     if int(gen.get("max_tokens", 2048)) < 8192:
         gen["max_tokens"] = 8192
+    
+    # Ensure context_length is at least as large as max_tokens to prevent startup errors
+    if int(model_cfg.get("context_length", 4096)) < int(gen["max_tokens"]):
+        model_cfg["context_length"] = int(gen["max_tokens"])
 
     old_chat = cfg.get("chat") if isinstance(cfg.get("chat"), dict) else {}
     old_fix = old_chat.get("fix") if isinstance(old_chat.get("fix"), dict) else {}
@@ -189,11 +202,13 @@ def ensure_chat_edit_config() -> None:
     ) and "security_fix" not in old_pf
     if prompt_should_upgrade and DEFAULT_PROMPT_FILE.exists():
         merged.setdefault("system", {})["prompt_file"] = str(DEFAULT_PROMPT_FILE)
+    
     need_write = (
         not isinstance(cfg.get("chat"), dict)
         or limits_need_upgrade
         or prompt_should_upgrade
-        or int(cfg.get("generation", {}).get("max_tokens", 2048)) < 8192
+        or current_max < 8192
+        or current_ctx < 8192
     )
     if need_write:
         with open(llm, "w", encoding="utf-8") as f:
