@@ -49,7 +49,8 @@ class ModelManager:
 	def download_model(self, model_info: Optional[Dict[str, Any]] = None) -> Path:
 		"""Download a model from HuggingFace.
 
-		Uses aria2c (16 parallel connections + resume) when available,
+		Delegates to the native V binary if available (supporting parallel chunk curl downloads).
+		Otherwise uses aria2c (16 parallel connections + resume) when available,
 		otherwise falls back to huggingface_hub (single connection).
 		"""
 		if model_info is None:
@@ -64,6 +65,21 @@ class ModelManager:
 				logger.info(f"Model already exists at {model_path} ({size_mb:.0f} MB)")
 				return model_path
 			logger.info(f"Partial download detected ({size_mb:.0f} MB), re-downloading...")
+
+		# Check if compiled V binary exists
+		project_root = Path(__file__).resolve().parent.parent
+		v_binary = project_root / "mythos-v" / "build" / "mythos"
+		if v_binary.exists() and os.access(v_binary, os.X_OK):
+			logger.info("V binary found, delegating model download for native parallel chunk performance...")
+			try:
+				cmd = [str(v_binary), "model", "download"]
+				result = subprocess.run(cmd, cwd=str(project_root))
+				if result.returncode == 0 and model_path.exists():
+					return model_path
+				else:
+					logger.warning(f"V model downloader exited with code {result.returncode}. Falling back to Python.")
+			except Exception as e:
+				logger.warning(f"Failed to run V downloader: {e}. Falling back to Python.")
 
 		logger.info(f"Downloading model: {model_info['name']}")
 
@@ -81,6 +97,18 @@ class ModelManager:
 
 			model_path.parent.mkdir(parents=True, exist_ok=True)
 			url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
+
+			# Try to use V-compiled downloader for maximum speed (Native Parallel Orchestration)
+			v_binary = Path("mythos-v/build/mythos")
+			if v_binary.exists():
+				logger.info("Using high-performance V-native downloader (Native Parallel Orchestrator)")
+				try:
+					import subprocess
+					result = subprocess.run([str(v_binary), "model", "download"])
+					if result.returncode == 0 and model_path.exists():
+						return model_path
+				except Exception as ve:
+					logger.warning(f"V downloader failed, falling back to aria2c: {ve}")
 
 			# Try aria2c first (much faster: 16 parallel connections + resume)
 			if shutil.which('aria2c'):

@@ -591,6 +591,27 @@ def main():
     args = parser.parse_args()
     _configure_runtime()
 
+    # Check if compiled V binary exists to delegate for speed
+    v_binary = Path(__file__).resolve().parent / "mythos-v" / "build" / "mythos"
+    if v_binary.exists() and os.access(v_binary, os.X_OK):
+        if args.mode in ('chat', 'download'):
+            import subprocess
+            cmd = []
+            if args.mode == 'chat':
+                cmd = [str(v_binary), "chat"]
+                if args.config:
+                    cmd.extend(["--config", args.config])
+                if args.verbose:
+                    cmd.append("--verbose")
+            elif args.mode == 'download':
+                cmd = [str(v_binary), "model", "download"]
+            
+            if cmd:
+                try:
+                    sys.exit(subprocess.run(cmd).returncode)
+                except Exception as e:
+                    logger.warning(f"Failed to delegate to V binary: {e}. Falling back to Python.")
+
     # Set logging level
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)

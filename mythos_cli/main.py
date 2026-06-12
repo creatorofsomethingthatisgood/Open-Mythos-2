@@ -160,6 +160,19 @@ def _cmd_cloud_clear(_args: argparse.Namespace) -> int:
 # ── chat / web ──────────────────────────────────────────────────────────
 
 def _cmd_chat(args: argparse.Namespace) -> int:
+    if args.fast:
+        v_binary = Path("mythos-v/build/mythos")
+        if v_binary.exists():
+            import subprocess
+            cmd = [str(v_binary), "chat"]
+            if args.config != "config.yaml":
+                cmd += ["--config", args.config]
+            return subprocess.run(cmd).returncode
+        else:
+            from mythos_cli.console import console, STYLE_WARN
+            console.print(f"[{STYLE_WARN}]V-native binary not found at {v_binary}. Falling back to Python engine.[/{STYLE_WARN}]")
+            console.print("[dim]Build it first: cd mythos-v && make prod[/dim]\n")
+
     from mythos_cli.chat import launch_chat
     launch_chat(
         config_path=args.config if args.config != "config.yaml" else None,
@@ -324,6 +337,17 @@ def _cmd_path_remove(args: argparse.Namespace) -> int:
 
 
 def _cmd_scan(args: argparse.Namespace) -> int:
+    if args.fast:
+        v_binary = Path("mythos-v/build/mythos")
+        if v_binary.exists():
+            import subprocess
+            cmd = [str(v_binary), "scan", args.path or "."]
+            return subprocess.run(cmd).returncode
+        else:
+            from mythos_cli.console import console, STYLE_WARN
+            console.print(f"[{STYLE_WARN}]V-native binary not found at {v_binary}. Falling back to Python engine.[/{STYLE_WARN}]")
+            console.print("[dim]Build it first: cd mythos-v && make prod[/dim]\n")
+
     from mythos_cli.console import console
     from mythos_cli.spinner import spinner
     from mythos_cli.suggest import after_scan, show_suggestions, on_error
@@ -1196,6 +1220,7 @@ Examples:
     p_chat = sub.add_parser("chat", help="Launch terminal chat interface (default)")
     p_chat.add_argument("--config", default="config.yaml", help="Config file path")
     p_chat.add_argument("--verbose", action="store_true", help="Debug logging")
+    p_chat.add_argument("--fast", action="store_true", help="V-native engine (5ms startup, zero Python overhead)")
     p_chat.set_defaults(func=_cmd_chat)
 
     # ── agent ───────────────────────────────────────────────────────────
@@ -1248,6 +1273,7 @@ Examples:
     )
     ps.add_argument("--format", choices=["table", "json"], default="table")
     ps.add_argument("--verbose", "-v", action="store_true", help="Show snippets and fixes")
+    ps.add_argument("--fast", action="store_true", help="V-native scanner (massively faster for large codebases)")
     ps.set_defaults(func=_cmd_scan)
 
     # ── fix ─────────────────────────────────────────────────────────────

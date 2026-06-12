@@ -92,6 +92,7 @@ Options:
 fn (app App) cmd_chat(_ App) int {
 	mut cfg_path := 'config.yaml'
 	mut verbose := false
+	mut prompt_arg := ''
 
 	args := os.args[2..]
 	for i := 0; i < args.len; i++ {
@@ -103,6 +104,12 @@ fn (app App) cmd_chat(_ App) int {
 				}
 			}
 			'--verbose' { verbose = true }
+			'--prompt' {
+				i++
+				if i < args.len {
+					prompt_arg = args[i]
+				}
+			}
 			else {}
 		}
 	}
@@ -120,6 +127,35 @@ fn (app App) cmd_chat(_ App) int {
 
 	mut pm := engine.new_prompt_manager(cfg)
 	mut mem := engine.new_conversation_memory(cfg)
+
+	if prompt_arg != '' {
+		mem.add_message('user', prompt_arg)
+		messages := mem.get_messages(false)
+		system_prompt := pm.current_prompt
+		result := engine.fit_chat_context(
+			eng.count_tokens,
+			eng.format_chat_prompt,
+			eng.context_length,
+			messages,
+			system_prompt,
+			cfg.context.reserve_tokens,
+		)
+		if eng.gen_stream {
+			ch := eng.chat_stream(result.messages, result.system_prompt)
+			for {
+				token := <-ch
+				if token == '' {
+					break
+				}
+				print(token)
+			}
+			println('')
+		} else {
+			response := eng.chat(result.messages, result.system_prompt)
+			println(response)
+		}
+		return 0
+	}
 
 	println('Mythos ${version} - Local AI Chat')
 	println('Model: ${cfg.model.name} | Backend: ${engine.get_backend_name(eng.n_gpu_layers)}')
@@ -219,6 +255,7 @@ fn (app App) cmd_chat(_ App) int {
 
 fn (app App) cmd_cloud(_ App) int {
 	mut cfg_path := 'config.yaml'
+	mut prompt_arg := ''
 
 	args := os.args[2..]
 	for i := 0; i < args.len; i++ {
@@ -227,6 +264,12 @@ fn (app App) cmd_cloud(_ App) int {
 				i++
 				if i < args.len {
 					cfg_path = args[i]
+				}
+			}
+			'--prompt' {
+				i++
+				if i < args.len {
+					prompt_arg = args[i]
 				}
 			}
 			else {}
@@ -241,6 +284,22 @@ fn (app App) cmd_cloud(_ App) int {
 
 	mut pm := engine.new_prompt_manager(cfg)
 	mut mem := engine.new_conversation_memory(cfg)
+
+	if prompt_arg != '' {
+		mem.add_message('user', prompt_arg)
+		messages := mem.get_messages(false)
+
+		ch := eng.chat_stream(messages, pm.current_prompt)
+		for {
+			token := <-ch
+			if token == '' {
+				break
+			}
+			print(token)
+		}
+		println('')
+		return 0
+	}
 
 	println('Mythos ${version} - Cloud AI Chat')
 	println('Provider: ${cfg.cloud.provider} | Model: ${cfg.cloud.model}')
@@ -310,9 +369,26 @@ fn (app App) cmd_scan(_ App) int {
 	}
 
 	println('Scanning: ${scan_path}')
-	// Static scanner implementation would go here
-	// This is a placeholder - the full static scanner port is future work
-	println('Static scan complete.')
+	
+	mut scanner := engine.new_static_scanner()
+	findings := if os.is_dir(scan_path) {
+		scanner.scan_directory(scan_path)
+	} else {
+		scanner.scan_file(scan_path)
+	}
+
+	if findings.len == 0 {
+		println('No security issues found (static scan).')
+	} else {
+		println('Found ${findings.len} potential security issues:')
+		for f in findings {
+			println('[${f.severity.to_upper()}] ${f.title} (${f.rule_id})')
+			println('  File: ${f.file_path}:${f.line_number}')
+			println('  Match: ${f.match_text}')
+			println('  Rec: ${f.recommend}\n')
+		}
+	}
+
 	if deep {
 		println('Deep scan requires model loading (not yet implemented in V port).')
 	}

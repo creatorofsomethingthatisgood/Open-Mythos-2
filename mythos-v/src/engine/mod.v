@@ -119,7 +119,7 @@ fn (m ModelManager) download_aria2c(url string, dest string) ! {
 // Gets the remote file size first, then downloads N chunks in parallel
 // using curl range requests, then concatenates them.
 fn (m ModelManager) download_parallel_curl(url string, dest string) ! {
-	n_chunks := 8
+	n_chunks := 16
 
 	// Get remote file size via HEAD request
 	println('Getting file size...')
@@ -132,14 +132,14 @@ fn (m ModelManager) download_parallel_curl(url string, dest string) ! {
 		return
 	}
 
-	file_size := size_output.output.int()
+	file_size := size_output.output.i64()
 	if file_size <= 0 {
 		m.download_curl_simple(url, dest)!
 		return
 	}
 
 	println('Remote file: ${file_size / 1024 / 1024} MB')
-	println('Using ${n_chunks} parallel curl connections')
+	println('Using ${n_chunks} parallel curl connections (native V orchestrator)')
 
 	chunk_size := file_size / n_chunks
 	// Round up to avoid gaps
@@ -148,7 +148,6 @@ fn (m ModelManager) download_parallel_curl(url string, dest string) ! {
 	}
 
 	// Download chunks in parallel
-	mut pids := []int{}
 	for i in 0 .. n_chunks {
 		start := i * chunk_size
 		mut end := (i + 1) * chunk_size - 1
@@ -167,16 +166,9 @@ fn (m ModelManager) download_parallel_curl(url string, dest string) ! {
 			}
 		}
 
+		// Run curl in background
 		cmd := 'curl -sL -C - --range ${start}-${end} -o "' + chunk_file + '" "' + url + '" &'
-		ret := os.system(cmd)
-		_ = ret
-
-		// Get the PID of the last background curl process
-		pid_cmd := 'echo $!'
-		pid_out := os.execute(pid_cmd)
-		if pid_out.exit_code == 0 {
-			pids << pid_out.output.trim_space().int()
-		}
+		os.system(cmd)
 	}
 
 	// Wait for all downloads to finish
@@ -184,54 +176,61 @@ fn (m ModelManager) download_parallel_curl(url string, dest string) ! {
 	mut spinner_idx := 0
 	spinners := [`|`, `/`, `-`, `\\`]
 	for {
-		// Check if all chunk files exist and have the right size
 		mut all_done := true
+		mut total_downloaded := i64(0)
 		for i in 0 .. n_chunks {
 			chunk_file := '${dest}.part${i}'
 			if !os.exists(chunk_file) {
 				all_done = false
-				break
+				continue
 			}
-			// Check if file is still being written (size changing)
-			s1 := os.file_size(chunk_file)
-			time.sleep(500 * time.millisecond)
-			s2 := os.file_size(chunk_file)
-			if s1 != s2 {
+			
+			start := i * chunk_size
+			mut end := (i + 1) * chunk_size - 1
+			if end >= file_size {
+				end = file_size - 1
+			}
+			expected_chunk_size := end - start + 1
+			
+			cs := os.file_size(chunk_file)
+			total_downloaded += cs
+			if cs < expected_chunk_size {
 				all_done = false
 			}
 		}
 
+		pct := (f64(total_downloaded) / f64(file_size)) * 100.0
+		print('\r  ${spinners[spinner_idx % 4]} Progress: ${pct:5.1f}% (${total_downloaded / 1024 / 1024} / ${file_size / 1024 / 1024} MB)')
+		
 		if all_done {
 			break
 		}
 
-		// Progress spinner
-		print('\r  ${spinners[spinner_idx % 4]} Downloading...')
 		spinner_idx++
 		time.sleep(500 * time.millisecond)
 	}
-	println('\r  Download complete.     ')
+	println('\n  Download complete.     ')
 
-	// Concatenate chunks
+	// Concatenate chunks using system 'cat' for speed if available, otherwise native
 	println('Assembling chunks...')
-	mut out_file := os.create(dest)!
+	cat_cmd := 'cat '
+	mut cat_args := []string{}
 	for i in 0 .. n_chunks {
-		chunk_file := '${dest}.part${i}'
-		if !os.exists(chunk_file) {
-			out_file.close()
-			os.rm(dest) or {}
-			return error('Missing chunk: ${chunk_file}')
-		}
-		chunk_data := os.read_file(chunk_file) or {
-			out_file.close()
-			return error('Failed to read chunk ${i}: ${err}')
-		}
-		out_file.write_string(chunk_data) or {
-			out_file.close()
-			return error('Failed to write chunk ${i}: ${err}')
-		}
+		cat_args << '"${dest}.part${i}"'
 	}
-	out_file.close()
+	
+	full_cat := 'cat ' + cat_args.join(' ') + ' > "' + dest + '"'
+	ret := os.system(full_cat)
+	if ret != 0 {
+		println('Native assembly fallback...')
+		mut out_file := os.create(dest)!
+		for i in 0 .. n_chunks {
+			chunk_file := '${dest}.part${i}'
+			chunk_data := os.read_file(chunk_file)!
+			out_file.write_string(chunk_data)!
+		}
+		out_file.close()
+	}
 }
 
 // download_curl_simple is the basic single-connection fallback.

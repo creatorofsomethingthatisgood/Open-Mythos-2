@@ -766,9 +766,10 @@ class AgentLoop:
 
         for iteration in range(self.max_iterations):
             # Trim context to fit
-            messages = fit_chat_context(
+            messages, system_prompt, _ = fit_chat_context(
+                self.engine,
                 messages,
-                max_context=self.engine.context_length if hasattr(self.engine, "context_length") else 8192,
+                system_prompt,
                 reserve_tokens=reserve,
             )
 
@@ -789,6 +790,8 @@ class AgentLoop:
                         messages, system_prompt=system_prompt,
                         temperature=temperature, max_tokens=max_tokens,
                     )
+                    if self.on_response:
+                        self.on_response(response_text)
                 elif hasattr(self.engine, "generate"):
                     prompt = self.engine.format_chat_prompt(messages, system_prompt)
                     response_text = self.engine.generate(
@@ -796,6 +799,8 @@ class AgentLoop:
                         temperature=temperature,
                         max_tokens=max_tokens,
                     )
+                    if self.on_response:
+                        self.on_response(response_text)
                 else:
                     return "Error: engine has no supported generate method"
             except Exception as exc:

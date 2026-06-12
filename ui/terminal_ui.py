@@ -1663,20 +1663,20 @@ class TerminalUI:
                 self.console.print(f"[red]Failed to generate title: {e}[/red]")
 
         elif cmd == "/skill" or cmd == "/skills":
-            self._handle_skill_command(arg_text)
+            self._handle_skill_command(args)
 
         elif cmd == "/marketplace":
-            self._handle_skill_command(f"marketplace {arg_text}")
+            self._handle_skill_command(f"marketplace {args}")
 
         elif cmd == "/operative":
             valid_tiers = ("safe", "elevated", "unleashed")
-            if arg_text.strip() in valid_tiers:
-                self.operative_tier = arg_text.strip()
+            if args.strip() in valid_tiers:
+                self.operative_tier = args.strip()
                 self.operative_mode = True
-            elif arg_text.strip() == "off":
+            elif args.strip() == "off":
                 self.operative_mode = False
-            elif arg_text.strip():
-                self.console.print(f"[red]Unknown tier: {arg_text.strip()}. Use: safe, elevated, unleashed, or off[/red]")
+            elif args.strip():
+                self.console.print(f"[red]Unknown tier: {args.strip()}. Use: safe, elevated, unleashed, or off[/red]")
                 return True
             else:
                 self.operative_mode = not self.operative_mode
@@ -1936,7 +1936,11 @@ class TerminalUI:
                 self.console.print(f"[dim yellow]{msg}[/dim yellow]")
 
             def _on_response(text: str):
-                self.console.print(text, style="grey70")
+                # If text is likely a token (short, no newline at end), don't add newline
+                if len(text) <= 5 and not text.endswith(("\n", " ")):
+                    self.console.print(text, style="grey70", end="")
+                else:
+                    self.console.print(text, style="grey70")
 
             def _on_tool_result(result):
                 icon = "[green]OK[/green]" if result.success else "[red]FAIL[/red]"
@@ -1965,6 +1969,8 @@ class TerminalUI:
             try:
                 result = loop.run(user_input, history=operative_messages)
                 response_text = result or ""
+                if response_text:
+                    self.console.print(Panel(response_text, title="Operative Summary", border_style="#EA580C"))
                 self.console.print()
             except KeyboardInterrupt:
                 self.console.print("\n[yellow]Operative interrupted[/yellow]")

@@ -17,6 +17,19 @@ if [ -z "${MYTHOS_ROOT:-}" ]; then
   MYTHOS_ROOT="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 fi
 
+# Ensure MYTHOS_PROJECT_ROOT is set so the CLI knows where the project lives
+export MYTHOS_PROJECT_ROOT="$MYTHOS_ROOT"
+
+# If the V binary exists and is executable, delegate to it instead of Python
+V_BINARY="$MYTHOS_ROOT/mythos-v/build/mythos"
+if [ -x "$V_BINARY" ]; then
+  if [ $# -eq 0 ]; then
+    exec "$V_BINARY" chat
+  else
+    exec "$V_BINARY" "$@"
+  fi
+fi
+
 VENV_PYTHON="$MYTHOS_ROOT/venv/bin/python3"
 
 if [ ! -x "$VENV_PYTHON" ]; then
@@ -24,9 +37,6 @@ if [ ! -x "$VENV_PYTHON" ]; then
   echo "Run the setup script first: $MYTHOS_ROOT/setup.sh" >&2
   exit 1
 fi
-
-# Ensure MYTHOS_PROJECT_ROOT is set so the CLI knows where the project lives
-export MYTHOS_PROJECT_ROOT="$MYTHOS_ROOT"
 
 # If no arguments, default to chat (like claude does)
 if [ $# -eq 0 ]; then

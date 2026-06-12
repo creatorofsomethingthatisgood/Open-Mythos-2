@@ -220,7 +220,56 @@ except Exception as e:
  print('You may need to check your configuration.')
 "
 else
- echo -e "${YELLOW}No model found, skipping inference test.${NC}"
+	echo -e "${YELLOW}No model found, skipping inference test.${NC}"
+fi
+
+# ===================================================================
+# Native V Engine Build
+# ===================================================================
+echo ""
+echo "==================================================================="
+echo " Setting up native V compiler and compiling mythos-v"
+echo " (Enables instant startup, fast responses, and parallel downloads)"
+echo "==================================================================="
+echo ""
+
+# Detect/Setup V Compiler
+if command -v v &> /dev/null; then
+	echo -e "${GREEN}V compiler found globally in PATH.${NC}"
+	V_COMPILER="v"
+elif [ -f "mythos-v/v/v" ]; then
+	echo -e "${GREEN}V compiler found locally at mythos-v/v/v.${NC}"
+	V_COMPILER="v/v"
+else
+	echo "V compiler not found. Setting up local V compiler..."
+	if git clone https://github.com/vlang/v mythos-v/v 2>/dev/null; then
+		echo "Compiling V compiler locally..."
+		if (cd mythos-v/v && make) &>/dev/null; then
+			echo -e "${GREEN}Local V compiler built successfully!${NC}"
+			V_COMPILER="v/v"
+		else
+			echo -e "${YELLOW}Warning: Failed to compile local V compiler.${NC}"
+			V_COMPILER=""
+		fi
+	else
+		echo -e "${YELLOW}Warning: Failed to clone V compiler repository.${NC}"
+		V_COMPILER=""
+	fi
+fi
+
+# Build mythos-v if V compiler is available
+if [ -n "$V_COMPILER" ]; then
+	echo "Compiling mythos-v application..."
+	# Clean previous builds
+	(cd mythos-v && rm -rf build) &>/dev/null || true
+	if (cd mythos-v && make V="$V_COMPILER" prod) &>/dev/null || (cd mythos-v && make V="$V_COMPILER") &>/dev/null; then
+		echo -e "${GREEN}mythos-v compiled successfully at mythos-v/build/mythos!${NC}"
+		echo -e "${GREEN}All subcommands will automatically run with native performance speed.${NC}"
+	else
+		echo -e "${YELLOW}Warning: Failed to compile mythos-v binary. Bypassing native V speedup.${NC}"
+	fi
+else
+	echo -e "${YELLOW}Bypassing mythos-v compilation. Open-Mythos-2 will run on Python fallback.${NC}"
 fi
 
 # Final instructions
