@@ -12,6 +12,11 @@ pub fn is_linux() bool {
 	return C.__linux__ != 0
 }
 
+// is_container returns true if running inside a Docker/Podman container.
+pub fn is_container() bool {
+	return os.exists('/.dockerenv') || os.exists('/run/.containerenv')
+}
+
 // get_default_gpu_layers returns effective GPU layer count.
 // On Apple Silicon, 0 in config means "use Metal" (-1).
 // On Linux AMD, 0 means CPU-only unless user sets explicitly.

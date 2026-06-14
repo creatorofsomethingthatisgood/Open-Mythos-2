@@ -95,6 +95,41 @@ const rules = [
 		pattern: r'(?i)verify\s*=\s*False|VERIFY_SSL\s*=\s*False|rejectUnauthorized\s*:\s*false'
 		recommend: 'Enable certificate verification in production.'
 	},
+	Rule{
+		id: 'SEC011'
+		severity: 'medium'
+		title: 'Permissive CORS'
+		pattern: r'(?i)Access-Control-Allow-Origin[\'"]?\s*[:=]\s*[\'"]\*[\'"]'
+		recommend: 'Restrict origins to trusted domains.'
+	},
+	Rule{
+		id: 'SEC012'
+		severity: 'medium'
+		title: 'Debug mode enabled'
+		pattern: r'(?i)(DEBUG|FLASK_DEBUG|NODE_ENV)\s*[=:]\s*(true|1|development)'
+		recommend: 'Disable debug in production deployments.'
+	},
+	Rule{
+		id: 'SEC013'
+		severity: 'medium'
+		title: 'Webhook without auth hint'
+		pattern: r'(?i)@(?:app|router)\.(?:post|get)\s*\(\s*[\'"][^\'"]*webhook[^\'"]*[\'"]'
+		recommend: 'Verify webhook signatures (HMAC) and reject replayed requests.'
+	},
+	Rule{
+		id: 'SEC014'
+		severity: 'high'
+		title: 'Potential secret in log output'
+		pattern: r'(?i)(logger|console)\.(log|info|debug|error)\([^)]*(?:password|token|secret)'
+		recommend: 'Redact sensitive values before logging.'
+	},
+	Rule{
+		id: 'SEC015'
+		severity: 'info'
+		title: 'Environment file in tree'
+		pattern: r'^\.env$'
+		recommend: 'Ensure .env is gitignored; never commit production secrets.'
+	},
 ]
 
 const scan_extensions = [
@@ -123,8 +158,22 @@ pub fn new_static_scanner() StaticScanner {
 pub fn (mut s StaticScanner) scan_file(path string) []Finding {
 	mut findings := []Finding{}
 	
+	filename := os.base(path)
+	if filename == '.env' {
+		findings << Finding{
+			rule_id: 'SEC016'
+			severity: 'high'
+			title: '.env file present in project'
+			file_path: path
+			line_number: 1
+			match_text: '.env'
+			recommend: 'Confirm it is not committed; use .env.example for templates only.'
+		}
+		return findings
+	}
+
 	ext := os.file_ext(path).lower()
-	if ext !in scan_extensions {
+	if ext !in scan_extensions && filename != '.env' {
 		return findings
 	}
 
@@ -132,7 +181,12 @@ pub fn (mut s StaticScanner) scan_file(path string) []Finding {
 	lines := content.split_into_lines()
 
 	for line_idx, line in lines {
+		stripped := line.trim_space()
+		if stripped == '' || stripped.starts_with('#') || stripped.starts_with('//') {
+			continue
+		}
 		for i, mut re in s.compiled_rules {
+			if rules[i].id == 'SEC015' { continue } // Handled by filename check
 			if re.matches_string(line) {
 				rule := rules[i]
 				findings << Finding{
@@ -150,18 +204,38 @@ pub fn (mut s StaticScanner) scan_file(path string) []Finding {
 	return findings
 }
 
-// scan_directory recursively scans a directory.
+// scan_directory recursively scans a directory using native parallel execution.
 pub fn (mut s StaticScanner) scan_directory(path string) []Finding {
-	mut findings := []Finding{}
+	mut all_findings := []Finding{}
 	
 	files := os.walk_ext(path, '')
+	mut threads := []thread []Finding{}
+
 	for file in files {
 		// Skip common ignored dirs
-		if file.contains('.git') || file.contains('node_modules') || file.contains('venv') || file.contains('__pycache__') {
+		if file.contains('.git') || file.contains('node_modules') || file.contains('venv') || 
+		   file.contains('__pycache__') || file.contains('.venv') || file.contains('dist') ||
+		   file.contains('build') || file.contains('models') {
 			continue
 		}
-		findings << s.scan_file(file)
+		
+		// Spawn a thread for each file scan (V lightweight threads)
+		// For very small files this might be overkill, but V threads are cheap
+		threads << spawn s.scan_file(file)
+		
+		// Batching threads to avoid OS limits if there are thousands of files
+		if threads.len >= 32 {
+			for t in threads {
+				all_findings << t.wait()
+			}
+			threads.clear()
+		}
 	}
 	
-	return findings
+	// Wait for remaining
+	for t in threads {
+		all_findings << t.wait()
+	}
+	
+	return all_findings
 }

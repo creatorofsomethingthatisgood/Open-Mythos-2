@@ -160,18 +160,14 @@ def _cmd_cloud_clear(_args: argparse.Namespace) -> int:
 # ── chat / web ──────────────────────────────────────────────────────────
 
 def _cmd_chat(args: argparse.Namespace) -> int:
-    if args.fast:
-        v_binary = Path("mythos-v/build/mythos")
-        if v_binary.exists():
-            import subprocess
-            cmd = [str(v_binary), "chat"]
-            if args.config != "config.yaml":
-                cmd += ["--config", args.config]
-            return subprocess.run(cmd).returncode
-        else:
-            from mythos_cli.console import console, STYLE_WARN
-            console.print(f"[{STYLE_WARN}]V-native binary not found at {v_binary}. Falling back to Python engine.[/{STYLE_WARN}]")
-            console.print("[dim]Build it first: cd mythos-v && make prod[/dim]\n")
+    # Use V-native by default if binary exists
+    v_binary = Path("mythos-v/build/mythos")
+    if v_binary.exists():
+        import subprocess
+        cmd = [str(v_binary), "chat"]
+        if args.config != "config.yaml":
+            cmd += ["--config", args.config]
+        return subprocess.run(cmd).returncode
 
     from mythos_cli.chat import launch_chat
     launch_chat(
@@ -337,16 +333,12 @@ def _cmd_path_remove(args: argparse.Namespace) -> int:
 
 
 def _cmd_scan(args: argparse.Namespace) -> int:
-    if args.fast:
-        v_binary = Path("mythos-v/build/mythos")
-        if v_binary.exists():
-            import subprocess
-            cmd = [str(v_binary), "scan", args.path or "."]
-            return subprocess.run(cmd).returncode
-        else:
-            from mythos_cli.console import console, STYLE_WARN
-            console.print(f"[{STYLE_WARN}]V-native binary not found at {v_binary}. Falling back to Python engine.[/{STYLE_WARN}]")
-            console.print("[dim]Build it first: cd mythos-v && make prod[/dim]\n")
+    # Use V-native by default if binary exists
+    v_binary = Path("mythos-v/build/mythos")
+    if v_binary.exists() and not args.deep:
+        import subprocess
+        cmd = [str(v_binary), "scan", args.path or "."]
+        return subprocess.run(cmd).returncode
 
     from mythos_cli.console import console
     from mythos_cli.spinner import spinner
@@ -441,6 +433,30 @@ def _cmd_fix(args: argparse.Namespace) -> int:
 
     show_suggestions(after_fix(applied_count, dry_run))
     return rc
+
+
+def _cmd_net(_args: argparse.Namespace) -> int:
+    """Run V-native network scanner."""
+    v_binary = Path("mythos-v/build/mythos")
+    if v_binary.exists():
+        import subprocess
+        return subprocess.run([str(v_binary), "net"]).returncode
+    
+    # Fallback to Python network scanner (slower)
+    from mythos_cli.console import console, STYLE_WARN
+    from mythos_cli.network_scanner import scan_network
+    
+    console.print(f"[{STYLE_WARN}]V-native binary not found. Using slower Python scanner.[/{STYLE_WARN}]")
+    console.print("[dim]cd mythos-v && make prod for 50x faster scans.[/dim]\n")
+    
+    result = scan_network()
+    
+    console.print(f"\nFound {len(result.hosts)} hosts in {result.scan_time_ms:.1f}ms (method: {result.method})")
+    console.print("[bold]IP Address       MAC Address       Vendor[/bold]")
+    for host in result.hosts:
+        console.print(f"{host.ip.ljust(15)}  {host.mac.ljust(17)}  {host.vendor}")
+    
+    return 0
 
 
 def _cmd_explore(args: argparse.Namespace) -> int:
@@ -1275,6 +1291,10 @@ Examples:
     ps.add_argument("--verbose", "-v", action="store_true", help="Show snippets and fixes")
     ps.add_argument("--fast", action="store_true", help="V-native scanner (massively faster for large codebases)")
     ps.set_defaults(func=_cmd_scan)
+
+    # ── net ─────────────────────────────────────────────────────────────
+    pn = sub.add_parser("net", help="Run fast network discovery (V-native preferred)")
+    pn.set_defaults(func=_cmd_net)
 
     # ── fix ─────────────────────────────────────────────────────────────
     pf = sub.add_parser(

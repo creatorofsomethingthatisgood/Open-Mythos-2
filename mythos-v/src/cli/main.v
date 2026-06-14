@@ -27,6 +27,7 @@ pub fn new_app() App {
 		'chat':   app.cmd_chat
 		'cloud':  app.cmd_cloud
 		'scan':   app.cmd_scan
+		'net':    app.cmd_net
 		'model':  app.cmd_model
 		'doctor': app.cmd_doctor
 		'status': app.cmd_status
@@ -75,6 +76,7 @@ Usage:
   mythos chat         Chat with local GGUF model
   mythos cloud        Chat with cloud API (OpenAI-compatible)
   mythos scan <path>  Static security scan
+  mythos net          Network scanner (fast ping sweep)
   mythos model        Model management
   mythos doctor       Diagnose setup issues
   mythos status       Show config/model status
@@ -392,6 +394,46 @@ fn (app App) cmd_scan(_ App) int {
 	if deep {
 		println('Deep scan requires model loading (not yet implemented in V port).')
 	}
+	return 0
+}
+
+// ── net ──
+
+fn (app App) cmd_net(_ App) int {
+	println('Mythos Network Scanner (Native V Parallel Orchestrator)')
+	
+	interfaces := engine.get_interfaces()
+	if interfaces.len == 0 {
+		println('No network interfaces found.')
+		return 1
+	}
+	
+	mut target_subnet := ''
+	for iface in interfaces {
+		if iface.ip != '127.0.0.1' && iface.ip != '' {
+			target_subnet = iface.ip
+			println('Using interface: ${iface.name} (${iface.ip})')
+			break
+		}
+	}
+	
+	if target_subnet == '' {
+		println('Could not determine local subnet.')
+		return 1
+	}
+	
+	result := engine.scan_network(target_subnet)
+	
+	println('\nFound ${result.hosts.len} hosts in ${result.scan_time_ms}ms:')
+	println('IP Address       MAC Address       Vendor')
+	println('--------------   -----------------   ------------------')
+	for host in result.hosts {
+		ip := host.ip.ljust(14)
+		mac := host.mac.ljust(17)
+		vendor := host.vendor
+		println('${ip}   ${mac}   ${vendor}')
+	}
+	
 	return 0
 }
 
