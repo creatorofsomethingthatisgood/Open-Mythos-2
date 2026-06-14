@@ -64,6 +64,7 @@ pip install -e .
 ## 🏛 Specialized Modes
 Open-Mythos-2 supports various "System Modes" via prompt injection:
 - `coding`: ELITE 5-pass verification mode.
+- `open-2`: SOVEREIGN 7-pass verification mode for elite engineering.
 - `security_fix`: Default mode for finding and fixing vulnerabilities using `MYTHOS_PATCH` blocks.
 - `analytical`: Deep reasoning and analysis.
 - `operative`: The autonomous agent loop capable of using terminal tools.

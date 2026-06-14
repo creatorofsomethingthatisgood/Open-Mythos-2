@@ -14,7 +14,7 @@ import yaml
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LLM_CONFIG = PACKAGE_ROOT / "config.yaml"
 PROMPTS_DIR = PACKAGE_ROOT / "prompts"
-DEFAULT_PROMPT_FILE = PROMPTS_DIR / "security_fix.txt"
+DEFAULT_PROMPT_FILE = PROMPTS_DIR / "open-2.txt"
 
 
 def mythos_home() -> Path:

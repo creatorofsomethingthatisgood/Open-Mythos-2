@@ -234,7 +234,9 @@ config.*.local.yaml
 # Dev/scratch files from AI coding sessions
 CODING_ACTIVATED.txt
 CODING_GUIDE.md
-ELITE_CODING_MODE.txt
+ELITE_CODING_MODE.tx
+database.sql
+t
 FINAL_INSTRUCTIONS.txt
 FINAL_SUMMARY.md
 FIXED_README.txt

@@ -388,6 +388,7 @@ class TerminalUI:
 
         mode_emoji = {
             'Default': '🚀',
+            'Open-2': '🚀',
             'Coding': '💻',
             'Code Review': '🔍',
             'Debugging': '🐛',
@@ -504,6 +505,7 @@ class TerminalUI:
 [yellow]/quit[/yellow] - Exit the chat
 
 [bold #EA580C]🔥 Enhanced Coding Modes:[/bold #EA580C]
+[yellow]/system open-2[/yellow] - Sovereign Engineering Specialist (7-pass)
 [yellow]/system coding[/yellow] - ELITE 5-pass code verification mode
 [yellow]/system code_review[/yellow] - Systematic code review mode
 [yellow]/system debugging[/yellow] - Methodical debugging mode

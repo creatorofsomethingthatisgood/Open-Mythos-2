@@ -19,6 +19,11 @@ gradio>=4.0
 numpy>=1.24.0
 tqdm>=4.65.0
 
+# Database
+# sqlite3 is built-in to Python
+# For PostgreSQL: pip install psycopg2-binary
+# For MySQL: pip install mysql-connector-python
+
 # RAG (Retrieval-Augmented Generation) — install with: pip install -e ".[rag]"
 # or: pip install -r requirements-rag.txt
 # chromadb>=0.4.0

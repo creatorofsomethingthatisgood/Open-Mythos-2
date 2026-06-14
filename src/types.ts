@@ -35,7 +35,8 @@ export type CodingMode =
  | "debug"
  | "architect"
  | "chat"
- | "security";
+ | "security"
+ | "open2";
 
 export const MODE_CONFIG: Record<
  CodingMode,
@@ -46,6 +47,12 @@ export const MODE_CONFIG: Record<
  icon: "</>",
  promptFile: "prompts/coding.txt",
  temp: 0.2,
+ },
+ open2: {
+ label: "Open-2",
+ icon: "🚀",
+ promptFile: "prompts/open-2.txt",
+ temp: 0.1,
  },
  review: {
  label: "Review",
@@ -111,7 +118,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
  { name: "tokens", description: "Show token and generation stats", usage: "/tokens" },
 
  /* Mode & persona */
- { name: "mode", description: "Switch coding mode (code, review, debug, architect, chat, security)", usage: "/mode <mode>", args: "<mode>" },
+ { name: "mode", description: "Switch coding mode (code, open2, review, debug, architect, chat, security)", usage: "/mode <mode>", args: "<mode>" },
  { name: "persona", description: "Switch persona or set a custom description", usage: "/persona <name>", args: "<name>" },
  { name: "system", description: "Change system prompt template", usage: "/system <template>", args: "<template>" },
 
@@ -176,7 +183,7 @@ You are not just an assistant - you are a thinking partner who elevates every in
  useReflection: false,
  useRag: false,
  useThinking: true,
- mode: "code",
+ mode: "open2",
  fontSize: 13,
  lineWrap: true,
  showLineNumbers: true,
@@ -186,6 +193,7 @@ You are not just an assistant - you are a thinking partner who elevates every in
 export const SYSTEM_PROMPTS: Record<string, string> = {
  default: "prompts/default.txt",
  coding: "prompts/coding.txt",
+ "open-2": "prompts/open-2.txt",
  "code-review": "prompts/code_review.txt",
  debugging: "prompts/debugging.txt",
  creative: "prompts/creative.txt",

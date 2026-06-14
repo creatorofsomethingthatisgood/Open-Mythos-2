@@ -96,8 +96,12 @@ class InferenceEngine:
         
         # Determine number of threads
         n_threads = model_config.get('n_threads', 0)
+        cpu_count = os.cpu_count() or 4
         if n_threads == 0:
-            n_threads = max(1, os.cpu_count() // 2)  # Use half of CPU cores
+            n_threads = max(1, cpu_count // 2)  # Use half of CPU cores for generation
+        
+        # Batch threads (more aggressive for prompt processing)
+        n_threads_batch = cpu_count # Use all cores for initial prompt processing
         
         # GPU layers (auto-enable Metal on Apple Silicon when config is 0)
         n_gpu_layers = get_default_gpu_layers(model_config.get('n_gpu_layers', 0))
@@ -121,16 +125,34 @@ class InferenceEngine:
         logger.info(f"  - Memory mapping: {use_mmap}")
         
         try:
-            model = Llama(
-                model_path=str(self.model_path),
-                n_ctx=n_ctx,
-                n_threads=n_threads,
-                n_gpu_layers=n_gpu_layers,
-                n_batch=n_batch,
-                use_mmap=use_mmap,
-                use_mlock=use_mlock,
-                verbose=False,
-            )
+            # Try to load with Flash Attention (performance boost on supported hardware)
+            try:
+                model = Llama(
+                    model_path=str(self.model_path),
+                    n_ctx=n_ctx,
+                    n_threads=n_threads,
+                    n_threads_batch=n_threads_batch,
+                    n_gpu_layers=n_gpu_layers,
+                    n_batch=n_batch,
+                    use_mmap=use_mmap,
+                    use_mlock=use_mlock,
+                    verbose=False,
+                    flash_attn=True,
+                )
+                logger.info("Model loaded with Flash Attention enabled.")
+            except (TypeError, Exception):
+                # Fallback to standard loading if flash_attn is not supported
+                model = Llama(
+                    model_path=str(self.model_path),
+                    n_ctx=n_ctx,
+                    n_threads=n_threads,
+                    n_threads_batch=n_threads_batch,
+                    n_gpu_layers=n_gpu_layers,
+                    n_batch=n_batch,
+                    use_mmap=use_mmap,
+                    use_mlock=use_mlock,
+                    verbose=False,
+                )
             
             logger.info("Model loaded successfully!")
             
@@ -146,12 +168,13 @@ class InferenceEngine:
             logger.error(f"Failed to load model: {e}")
             
             # Try fallback without GPU
-            if n_gpu_layers > 0:
+            if n_gpu_layers != 0:
                 logger.warning("Retrying without GPU acceleration...")
                 return Llama(
                     model_path=str(self.model_path),
                     n_ctx=n_ctx,
                     n_threads=n_threads,
+                    n_threads_batch=n_threads_batch,
                     n_gpu_layers=0,
                     n_batch=n_batch,
                     use_mmap=use_mmap,

@@ -2,8 +2,8 @@
 # Edit these settings to customize your LLM experience
 
 model:
-  # Primary model configuration: Open-1 (Optimized for 4GB RAM)
-  name: "Open-1"
+  # Primary model configuration: Open-2 (Sovereign Engineering Specialist)
+  name: "Open-2"
   huggingface_id: "Qwen/Qwen2.5-Coder-3B-Instruct"
   path: "models/Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf"
   repo_id: "bartowski/Qwen2.5-Coder-3B-Instruct-GGUF"
@@ -22,18 +22,18 @@ model:
       repo_id: "bartowski/Qwen2.5-7B-Instruct-GGUF"
       filename: "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
 
-  # Context and performance settings for Open-1
-  context_length: 4096
-  n_gpu_layers: 0
-  n_threads: 0
-  n_batch: 256
+  # Context and performance settings for Open-2
+  context_length: 8192
+  n_gpu_layers: -1 # Auto-detect GPU (Metal/Vulkan)
+  n_threads: 0    # Auto-detect (optimized for physical cores)
+  n_batch: 512
   use_mmap: true
-  use_mlock: false
+  use_mlock: true
   rope_freq_base: 0.0
 
 generation:
   # Generation parameters
-  temperature: 0.3 # Precision-focused for Open-1
+  temperature: 0.3 # Precision-focused for Open-2
   top_p: 0.9
   top_k: 40
   repeat_penalty: 1.1
@@ -45,7 +45,7 @@ generation:
        - "</s>"
 
 system:
-  prompt_file: "prompts/open1.txt"
+  prompt_file: "prompts/open-2.txt"
   self_reflect: true
   thinking_mode: true
 
