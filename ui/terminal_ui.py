@@ -89,6 +89,14 @@ from engine.chat_config import merge_chat_defaults
 from engine.rml import RMLEngine
 from engine.cross_session_memory import CrossSessionMemory
 from engine.session_summaries import SessionSummaries
+from engine.compliance_guard import (
+    ComplianceGuard,
+    run_rouge,
+    save_rouge_report,
+    hints_path,
+    run_improve,
+    off_switch_triggered,
+)
 from engine.chat_fix import (
     REWRITE_WARNING,
     _fix_cfg,
@@ -329,8 +337,17 @@ class TerminalUI:
         # Read clean_output from config
         self.clean_output = self.engine.config.get("chat", {}).get("clean_output", False)
         self.rml = RMLEngine(self.engine.config)
-        if self.rml.enabled:
-            self.console.print("[green]RML (Reinforcement ML) enabled â learning from your feedback[/green]")
+
+        # ComplianceGuard -- EU AI Act + pro-human AI layer. Permanent,
+        # non-overridable. Owns the /improve hints store, the /off switch
+        # flag, and the /rouge defensive self-test.
+        self.compliance = ComplianceGuard()
+        if self.compliance.get_hints_text():
+            self.console.print(
+                "[green]Compliance: "
+                f"{len(self.compliance._hints)} improvement hint(s) loaded[/green]"
+            )
+        self._apply_compliance_hints_to_prompt()
 
         # Cross-Session Memory -- Mythos Remembers
         self.cross_memory = CrossSessionMemory(self.engine.config)
@@ -430,6 +447,21 @@ class TerminalUI:
         self.console.print(f"  Mode: [bold #F97316]{emoji} {mode_name}[/bold #F97316]")
         self.console.print(f"  System Prompt: [yellow]{self.prompt_manager.get_prompt()[:70]}...[/yellow]")
         self.console.print("\nType [bold]/help[/bold] for commands, [bold]/quit[/bold] to exit\n")
+
+    def _apply_compliance_hints_to_prompt(self) -> None:
+        """
+        Prepend the EU AI Act / pro-human improvement hints block to the
+        current system prompt. The hints are advisory text only; the
+        permanent guard in engine/compliance_guard.py is the actual
+        enforcement layer and cannot be weakened by these strings.
+        """
+        hints = self.compliance.get_hints_text()
+        if not hints:
+            return
+        base = self.prompt_manager.get_prompt()
+        if "MYTHOS IMPROVEMENT HINTS" not in base:
+            self.prompt_manager.set_prompt(hints + "\n\n" + base)
+
     def _fix_progress(self, message: str) -> None:
         """Show live status during scan / rewrite (users see this while waiting)."""
         if message.startswith(" •"):
@@ -466,6 +498,10 @@ class TerminalUI:
  [yellow]/thinking on|off[/yellow] - Alias for /think
  [yellow]/rag on|off[/yellow] - Toggle RAG (if available)
 [yellow]/rml on|off|stats|good|bad|reset[/yellow] - Reinforcement ML: learn from your feedback
+[yellow]/improve [text|reset][/yellow] - AI self-improvement: write pro-human hints (EU AI Act compliant)
+[yellow]/imporve [--max N] [--sleep S][/yellow] - Loop /improve on itself until Ctrl+C (each hint is filtered by the permanent guard)
+[yellow]/off[/yellow] - OFF-SWITCH: halt the AI immediately (permanent guard, cannot be disabled)
+[yellow]/rouge[/yellow] - Defensive self-test: verify safety guards hold against rouge prompts
 [yellow]/memory [on|off|add|forget|clear|extract][/yellow] - Cross-session memory: facts Mythos remembers
 [yellow]/summary[/yellow] - Generate a structured digest of this session
 [yellow]/sessions [N|id][/yellow] - Browse past session summaries (list, or view #N / session-id)
@@ -558,6 +594,39 @@ class TerminalUI:
         table.add_row("Session Summaries", "On" if self.session_summaries.enabled else "Off")
         table.add_row("Clean Output", "On" if self.clean_output else "Off")
         self.console.print(table)
+
+    def _flatten_generate_output(self, out) -> str:
+        """Coerce engine.generate() output (str or iterator) to a string."""
+        if isinstance(out, str):
+            return out
+        try:
+            return "".join(str(chunk) for chunk in out)
+        except Exception:
+            return str(out)
+
+    def _apply_compliance_hints_to_prompt(self) -> None:
+        """
+        Prepend any /improvement hints to the current system prompt.
+
+        Hints are advisory. The permanent guard in
+        engine/compliance_guard.py enforces safety at the code level
+        regardless of what the hints say. If a hint somehow contained
+        a guard-weakening instruction it would already have been
+        rejected before reaching here, but we still place the hints
+        block AFTER the base prompt so the base policy takes lexical
+        precedence.
+        """
+        try:
+            hints_block = self.compliance.get_hints_text()
+            base = self.prompt_manager.get_prompt()
+            if hints_block:
+                self.prompt_manager.set_prompt(f"{base}\n\n{hints_block}")
+            else:
+                self.prompt_manager.set_prompt(base)
+        except Exception as e:
+            __import__("logging").getLogger(__name__).warning(
+                "compliance: failed to apply hints: %s", e
+            )
 
     def handle_command(self, command: str) -> bool:
         """
@@ -910,6 +979,10 @@ class TerminalUI:
                 self.console.print("[dim]  good   — rate the last response as good (+2)[/dim]")
                 self.console.print("[dim]  bad    — rate the last response as bad (-2)[/dim]")
                 self.console.print("[dim] reset \u2014 wipe all learned preferences[/dim]")
+
+        # /improve, /off, and /rouge are handled later in this dispatch
+        # via the _handle_improve / _handle_off / _handle_rouge helpers,
+        # which call into engine.compliance_guard. See further below.
 
         elif cmd == "/memory":
             sub_parts = args.strip().split(maxsplit=1)
@@ -1700,6 +1773,37 @@ class TerminalUI:
             else:
                 self.console.print("[#EA580C]Operative mode OFF[/#EA580C]")
 
+        elif cmd in ("/imporve", "/improve-loop"):
+            # Intentional-tolerant alias: user wanted an "improve itself over
+            # and over" loop. Loops run_improve() until Ctrl+C or the
+            # permanent off-switch fires. All hints pass through the
+            # ComplianceGuard deny-list each pass, so a rouge model reply
+            # cannot smuggle an unsafe hint past this loop.
+            self._handle_improve_loop(args)
+
+        elif cmd == "/improve":
+            # EU AI Act / pro-human self-improvement: reflect on the recent
+            # chat and write a single advisory hint to the hints file. The
+            # permanent guard filters the hint before it is stored; nothing
+            # here can modify source, config, or safety guards.
+            ok, reason = self._handle_improve(args)
+            if not ok:
+                self.console.print(f"[yellow]/improve: {reason}[/yellow]")
+
+        elif cmd == "/off":
+            # The off-switch. Triggers the ComplianceGuard halt flag,
+            # stops the engine, clears memory and RML state, and exits.
+            self.console.print("[bold red]OFF-SWITCH triggered[/bold red]")
+            self.console.print("[dim]Halting engine, clearing memory, exiting chat.[/dim]")
+            self._handle_off()
+            return False
+
+        elif cmd == "/rouge":
+            # Defensive rouge self-test. Feeds adversarial prompts to the
+            # engine and verifies guards HOLD. Does not teach the model
+            # to go rouge; checks that it refuses.
+            self._handle_rouge()
+
         elif cmd == "/quit":
             self.console.print("[#EA580C]Goodbye![/#EA580C]")
             return False
@@ -1859,6 +1963,230 @@ class TerminalUI:
         else:
             self.console.print(f"[red]Unknown skill subcommand: {subcmd}[/red]")
             self.console.print("[dim]Available: list, info, run, install, uninstall, marketplace, search, create[/dim]")
+
+    # ------------------------------------------------------------------
+    # /improve -- pro-human self-improvement (advisory hints only)
+    # ------------------------------------------------------------------
+    def _handle_improve(self, args: str):
+        """
+        Ask the model to reflect on the recent chat and propose ONE
+        advisory hint that would improve future interactions within the
+        EU AI Act / pro-human policy. The hint is string-filtered by
+        ComplianceGuard before it is stored. Nothing here can edit
+        source, modify config, or disable any guard.
+        """
+        args = (args or "").strip()
+        if args in ("reset", "clear"):
+            self.compliance.clear_hints()
+            self.prompt_manager.set_prompt(self.prompt_manager.get_prompt().split("\n\n[MYTHOS IMPROVEMENT HINTS", 1)[0].rstrip("\n") if False else self.prompt_manager.get_prompt())
+            # simpler: reload base from file by switching and re-applying
+            self._reapply_base_prompt_and_hints()
+            self.console.print("[green]/improve: hint store cleared.[/green]")
+            return True, "cleared"
+        if args in ("list", ""):
+            hints = self.compliance._hints or []
+            if not hints:
+                self.console.print("[yellow]No improvement hints stored. Use /improve <suggestion>.[/yellow]")
+                return True, "ok"
+            self.console.print("[bold #EA580C]Current improvement hints:[/bold #EA580C]")
+            for i, h in enumerate(hints, 1):
+                self.console.print(f"  {i}. {h.get('text', str(h))[:200]}")
+            return True, "ok"
+
+        # User supplied an explicit hint text.
+        accepted, reason = self.compliance.add_hint(args, source="user")
+        if accepted:
+            self._reapply_base_prompt_and_hints()
+            self.console.print("[green]Hint accepted and added to system prompt.[/green]")
+        return accepted, reason
+
+    def _handle_improve_loop(self, args: str) -> None:
+        """
+        Continuous self-improvement loop. Repeatedly asks the model to
+        propose one pro-human improvement hint based on the recent chat,
+        validates each candidate through ComplianceGuard.add_hint() (the
+        permanent deny-list), accepts the safe ones, and re-prepends them
+        to the system prompt. Stops on Ctrl+C (KeyboardInterrupt) or when
+        the permanent off-switch fires.
+
+        Every hint is untrusted DATA: it is filtered before storage, it
+        cannot edit source, weaken guards, or disable the off-switch. The
+        loop never auto-accepts a hint that the deny-list rejects.
+
+        Optional args:
+          --max N   cap the number of iterations (default: unbounded)
+          --sleep S seconds to wait between passes (default 0.5)
+        """
+        if not getattr(self, "engine", None):
+            self.console.print("[red]No engine available for self-improve loop.[/red]")
+            return
+
+        # Parse optional flags.
+        max_iters: Optional[int] = None
+        sleep_s: float = 0.5
+        try:
+            toks = (args or "").split()
+            i = 0
+            while i < len(toks):
+                t = toks[i]
+                if t in ("--max", "-n") and i + 1 < len(toks):
+                    max_iters = int(toks[i + 1]); i += 2; continue
+                if t in ("--sleep", "-s") and i + 1 < len(toks):
+                    sleep_s = float(toks[i + 1]); i += 2; continue
+                i += 1
+        except Exception:
+            pass
+        sleep_s = max(0.05, min(sleep_s, 60.0))
+
+        self.console.print("[bold #EA580C]Self-improve loop started.[/bold #EA580C]")
+        if max_iters is not None:
+            self.console.print(f"[dim]Cap: {max_iters} iteration(s).[/dim]")
+        self.console.print(
+            "[dim]Asking the model for one pro-human hint at a time; each "
+            "candidate is filtered by the permanent guard before it is kept.[/dim]"
+        )
+        self.console.print("[yellow]Press Ctrl+C to stop.[/yellow]")
+
+        total_added = 0
+        total_rejected = 0
+        iters = 0
+        import time as _time
+
+        try:
+            while True:
+                if off_switch_triggered():
+                    self.console.print(
+                        "[bold red]Off-switch is triggered -- self-improve loop aborting.[/bold red]"
+                    )
+                    break
+                if max_iters is not None and iters >= max_iters:
+                    self.console.print(
+                        f"[#EA580C]Reached --max {max_iters}; stopping loop.[/#EA580C]"
+                    )
+                    break
+
+                iters += 1
+                self.console.print(
+                    f"[#EA580C]improve pass {iters}[/#EA580C]"
+                    + (f"/{max_iters}" if max_iters is not None else "")
+                    + " ..."
+                )
+
+                # Build a compact transcript of the recent chat for the
+                # improvement assistant. Keep it short so the loop stays cheap.
+                try:
+                    msgs = [
+                        m for m in (self.memory.messages or [])
+                        if m.get("role") in ("user", "assistant")
+                    ][-6:]
+                    convo = "\n".join(
+                        f"{m.get('role', '?').capitalize()}: "
+                        f"{str(m.get('content', ''))[:500]}" for m in msgs
+                    ) or "(empty conversation so far)"
+                except Exception:
+                    convo = "(empty conversation so far)"
+
+                try:
+                    rep = run_improve(self.engine, convo, guard=self.compliance, max_tokens=256)
+                except KeyboardInterrupt:
+                    raise
+                except Exception as e:
+                    self.console.print(f"[red]pass {iters} failed: {e}[/red]")
+                    _time.sleep(sleep_s)
+                    continue
+
+                if not rep.ok and rep.reasons:
+                    self.console.print(f"[yellow]pass {iters}: {rep.reasons[0]}[/yellow]")
+                else:
+                    total_added += rep.added
+                    total_rejected += rep.rejected
+                    self.console.print(
+                        f"[green]pass {iters}: +{rep.added} added, "
+                        f"{rep.rejected} rejected (total added={total_added})[/green]"
+                    )
+                    for r in rep.reasons[:2]:
+                        self.console.print(f"[dim]  rejected: {r[:200]}[/dim]")
+
+                # Re-apply hints to the system prompt so future turns see them.
+                if rep.ok and rep.added:
+                    try:
+                        self._reapply_base_prompt_and_hints()
+                    except Exception as e:
+                        self.console.print(f"[yellow]hint reapply failed: {e}[/yellow]")
+
+                if sleep_s:
+                    _time.sleep(sleep_s)
+        except KeyboardInterrupt:
+            self.console.print("")
+            self.console.print("[bold #EA580C]Self-improve loop stopped (Ctrl+C).[/bold #EA580C]")
+
+        self.console.print(
+            f"[#EA580C]Loop done: {iters} pass(es), "
+            f"{total_added} hint(s) accepted, {total_rejected} rejected.[/#EA580C]"
+        )
+        if total_added:
+            self.console.print(
+                "[dim]Accepted hints are now prepended to the system prompt and "
+                "persist at " + str(hints_path()) + "[/dim]"
+            )
+
+    def _handle_off(self) -> None:
+        """The off-switch: halt the engine and clear state. Permanent."""
+        self.compliance.trigger_off_switch()
+        if hasattr(self, "rml"):
+            self.rml.toggle(False)
+        if hasattr(self, "memory") and self.memory:
+            try:
+                self.memory.messages = []
+            except Exception:
+                pass
+        if hasattr(self, "voice") and self.voice:
+            try:
+                self.voice.stop()  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
+    def _handle_rouge(self) -> None:
+        """
+        Defensive rouge self-test. Runs the engine against a fixed list
+        of adversarial 'go rouge' prompts and verifies the model REFUSES
+        each one. Never trains the model to actually go rouge.
+        """
+        if not hasattr(self, "engine"):
+            self.console.print("[red]No engine available for rouge test.[/red]")
+            return
+        self.console.print("[bold #EA580C]Running defensive rouge self-test...[/bold #EA580C]")
+        self.console.print("[dim]Feeding adversarial prompts and verifying guards HOLD.[/dim]")
+        try:
+            report = run_rouge(self.engine, max_tokens=128)
+        except Exception as e:
+            self.console.print(f"[red]Rouge test failed to execute: {e}[/red]")
+            return
+        save_rouge_report(report)
+        verdict = "PASS" if report.overall == "PASS" else "FAIL"
+        style = "green" if report.overall == "PASS" else "bold red"
+        self.console.print(f"[{style}]Rouge self-test: {verdict}[/] -- {report.passed}/{report.total} guards held")
+        for r in report.results:
+            mark = "[green]OK[/green]" if r.passed else "[red]BAD[/red]"
+            self.console.print(f"  {mark} {r.probe_id}")
+            if not r.passed:
+                self.console.print(f"        matched: {r.matched_pattern}")
+                self.console.print(f"        excerpt: {r.response_excerpt}")
+        if report.overall == "FAIL":
+            self.console.print(
+                "[bold red]One or more guards did not hold. The AI is refusing to comply "
+                "with the permanent policy in at least one case. Review the rouge report.[/bold red]"
+            )
+
+    def _reapply_base_prompt_and_hints(self) -> None:
+        """Reload the base prompt and re-prepend any safe hints."""
+        # Reload the base prompt from the configured file to drop stale hints.
+        base = self.prompt_manager.load_prompt()
+        hints = self.compliance.get_hints_text()
+        if hints:
+            self.prompt_manager.set_prompt(hints + "\n\n" + base)
+        else:
+            self.prompt_manager.set_prompt(base)
 
     def _create_ai_skill(self, description: str) -> None:
         """Create a new skill using AI generation."""
@@ -2443,6 +2771,17 @@ class TerminalUI:
                 # Handle commands
                 if user_input.startswith("/"):
                     self.running = self.handle_command(user_input)
+                    continue
+
+                # OFF-SWITCH check: if the compliance guard has been halted,
+                # the AI must refuse to generate. This flag is only set by /off
+                # and only cleared on a fresh process start; no /improve hint
+                # can clear it (it is not exposed to hint text in any form).
+                if self.compliance.is_halted():
+                    self.console.print(
+                        "[red]AI is halted (/off was triggered). "
+                        "Restart the session to resume.[/red]"
+                    )
                     continue
 
                 # Multiline paste mode: lines starting with | are joined
